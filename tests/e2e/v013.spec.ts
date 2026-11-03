@@ -80,7 +80,10 @@ test('系统配置同步两后台，备案固定链接，备份可下载并恢�
 
 test('设备管理可保存和取消指定设备的服务器切换计划',async({page},info)=>{
   await adminLogin(page);await page.getByRole('link',{name:'设备管理',exact:true}).filter({visible:true}).first().click();
-  const row=page.locator('tbody tr').first();await row.getByRole('button',{name:'配置服务器'}).click();
+  // Refreshes can return a different row order. Follow the selected device ID.
+  const deviceID=await page.locator('tbody tr').first().locator('.person-cell small').innerText();
+  const row=page.locator('tbody tr').filter({has:page.getByText(deviceID,{exact:true})});
+  await expect(row).toHaveCount(1);await row.getByRole('button',{name:'配置服务器'}).click();
   let dialog=page.getByRole('dialog');
   await dialog.getByLabel('服务器地址').fill(`https://migration-${info.project.name}.example`);
   await dialog.getByRole('button',{name:'保存配置'}).click();

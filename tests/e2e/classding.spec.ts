@@ -81,11 +81,22 @@ test('真实绑定大屏、发送200字通知并更新送达回执',async({page,
   await screen.screenshot({path:testInfo.outputPath('screen-ready.png'),fullPage:true});
   await page.getByRole('button',{name:'关闭',exact:true}).first().click();
   await navigate(page,'/send','选择接收班级');
+  // Send to the class just bound above, regardless of the default list order.
+  const receivingClass=page.locator('.class-option').filter({hasText:'三年级（1）班'});
+  await expect(receivingClass).toBeVisible();
+  for(const option of await page.locator('.class-option').all()) {
+    const shouldSelect=await option.locator('strong').innerText()==='三年级（1）班';
+    if((await option.getAttribute('aria-pressed')==='true')!==shouldSelect) await option.click();
+  }
   const prefix=`验收${testInfo.project.name}${Date.now()}：`;
   const message=(prefix+'请同学们带上作业到办公室，认真检查书包并保持教室整洁。'.repeat(10)).slice(0,200);
   await page.getByLabel('通知内容').fill(message);
   await page.getByPlaceholder('例如：李沐阳').fill('李沐阳');
+  // Projects share this temporary class; respect its five-second send cooldown.
+  await page.waitForTimeout(5100);
+  const sending=page.waitForResponse(response=>response.url().endsWith('/api/v1/messages')&&response.request().method()==='POST');
   await page.getByRole('button',{name:'发送到 1 个班级',exact:true}).click();
+  expect((await sending).status()).toBe(200);
   await expect(screen.locator('.cd-notice-body p')).toHaveText(message);
   expect(await screen.locator('.cd-notice-body').evaluate(element=>{
     const body=element.getBoundingClientRect();
