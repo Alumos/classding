@@ -2,6 +2,7 @@ package app
 
 import (
 	"archive/zip"
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -21,6 +22,7 @@ import (
 )
 
 const (
+	backupFormat      = "classding-backup"
 	backupVersion     = 1
 	maxBackupBytes    = 256 << 20
 	maxBackupUnpacked = 512 << 20
@@ -46,9 +48,9 @@ type backupManifest struct {
 
 var safeAudioID = regexp.MustCompile(`^[A-Za-z0-9_-]{1,128}$`)
 
+// archiveAudioPath is where a recording lives inside a backup archive.
 func archiveAudioPath(audio Audio) (string, error) {
-	extensions := map[string]string{"audio/webm": ".webm", "video/webm": ".webm", "audio/mp4": ".m4a", "audio/mpeg": ".mp3", "audio/ogg": ".ogg", "audio/wav": ".wav"}
-	ext, exists := extensions[audio.MIME]
+	ext, exists := audioExtensions[audio.MIME]
 	if !exists || !safeAudioID.MatchString(audio.ID) {
 		return "", errors.New("invalid audio metadata")
 	}
@@ -68,7 +70,7 @@ func (a *App) createBackup(w io.Writer) error {
 	if err = json.Unmarshal(stateData, &state); err != nil {
 		return err
 	}
-	manifest := backupManifest{Format: "classding-backup", Version: backupVersion, CreatedAt: now(), State: state, Files: []backupFile{}}
+	manifest := backupManifest{Format: backupFormat, Version: backupVersion, CreatedAt: now(), State: state, Files: []backupFile{}}
 	archive := zip.NewWriter(w)
 	var unpacked int64
 	for key, audio := range state.Audio {
@@ -142,11 +144,7 @@ func (a *App) backup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.mu.Lock()
-	u, err := a.authenticate(r)
-	if err == nil && u.Role != "super_admin" {
-		err = forbidden()
-	}
-	if err != nil {
+	if _, err := a.authorize(r, superAdminOnly); err != nil {
 		a.mu.Unlock()
 		writeError(w, err)
 		return
@@ -204,11 +202,13 @@ func validateBackupState(s State) error {
 	usernames := map[string]bool{}
 	admin := false
 	for key, u := range s.Users {
-		if key == "" || u.ID != key || !validUsername(u.Username) || usernames[u.Username] || u.PasswordHash == "" || (u.Role != "user" && u.Role != "school_admin" && u.Role != "super_admin") || (u.Status != "active" && u.Status != "disabled") || u.TokenVersion < 0 {
+		validRole := u.Role == RoleTeacher || u.Role == RoleSchoolAdmin || u.Role == RoleSuperAdmin
+		validStatus := u.Status == AccountActive || u.Status == AccountDisabled
+		if key == "" || u.ID != key || !validUsername(u.Username) || usernames[u.Username] || u.PasswordHash == "" || !validRole || !validStatus || u.TokenVersion < 0 {
 			return errors.New("invalid user")
 		}
 		usernames[u.Username] = true
-		admin = admin || u.Role == "super_admin" && u.Status == "active"
+		admin = admin || u.IsSuperAdmin() && u.Active()
 	}
 	if !admin {
 		return errors.New("no active administrator")
@@ -220,7 +220,7 @@ func validateBackupState(s State) error {
 		if _, exists := s.Users[c.OwnerID]; !exists {
 			return errors.New("class owner missing")
 		}
-		if m, exists := s.Members[c.ID+"|"+c.OwnerID]; !exists || m.Role != "owner" {
+		if m, exists := s.Members[memberKey(c.ID, c.OwnerID)]; !exists || m.Role != MemberOwner {
 			return errors.New("class owner membership missing")
 		}
 		if code, exists := s.Codes[c.ActivationCode]; !exists || code.ClassID == nil || *code.ClassID != c.ID {
@@ -228,12 +228,12 @@ func validateBackupState(s State) error {
 		}
 	}
 	for key, m := range s.Members {
-		if key != m.ClassID+"|"+m.UserID {
+		if key != memberKey(m.ClassID, m.UserID) {
 			return errors.New("invalid membership")
 		}
 		c, classExists := s.Classes[m.ClassID]
 		_, userExists := s.Users[m.UserID]
-		if !classExists || !userExists || (m.Role != "owner" && m.Role != "collaborator") || (m.Role == "owner" && c.OwnerID != m.UserID) {
+		if !classExists || !userExists || m.Role != MemberOwner && m.Role != MemberCollaborator || m.Role == MemberOwner && c.OwnerID != m.UserID {
 			return errors.New("invalid membership relationship")
 		}
 	}
@@ -241,9 +241,9 @@ func validateBackupState(s State) error {
 	for key, item := range s.Homeworks {
 		c, classExists := s.Classes[item.ClassID]
 		_, teacherExists := s.Users[item.TeacherID]
-		created, createdErr := time.Parse(time.RFC3339Nano, item.CreatedAt)
-		updated, updatedErr := time.Parse(time.RFC3339Nano, item.UpdatedAt)
-		if key == "" || item.ID != key || !classExists || !teacherExists || c.HomeworkRevision < 1 || strings.TrimSpace(item.TeacherName) == "" || !validHomeworkText(item.Subject, item.Text) || createdErr != nil || updatedErr != nil || updated.Before(created) {
+		created, createdOK := parseTime(item.CreatedAt)
+		updated, updatedOK := parseTime(item.UpdatedAt)
+		if key == "" || item.ID != key || !classExists || !teacherExists || c.HomeworkRevision < 1 || strings.TrimSpace(item.TeacherName) == "" || !validHomeworkText(item.Subject, item.Text) || !createdOK || !updatedOK || updated.Before(created) {
 			return errors.New("invalid homework")
 		}
 		classHomeworkCounts[item.ClassID]++
@@ -365,62 +365,68 @@ func prepareRestore(zipPath, stage string) (State, error) {
 	if err != nil || closeErr != nil || len(data) > maxBackupManifest {
 		return empty, errors.New("cannot read manifest")
 	}
-	var manifest backupManifest
-	decoder := json.NewDecoder(strings.NewReader(string(data)))
+	// The envelope is strict; the state tolerates fields that older releases
+	// wrote but no longer use.
+	var manifest struct {
+		Format    string          `json:"format"`
+		Version   int             `json:"version"`
+		CreatedAt string          `json:"created_at"`
+		State     json.RawMessage `json:"state"`
+		Files     []backupFile    `json:"files"`
+	}
+	decoder := json.NewDecoder(bytes.NewReader(data))
 	decoder.DisallowUnknownFields()
 	if decoder.Decode(&manifest) != nil {
 		return empty, errors.New("invalid manifest")
 	}
 	var extra any
-	if decoder.Decode(&extra) != io.EOF || manifest.Format != "classding-backup" || manifest.Version != backupVersion || manifest.CreatedAt == "" || manifest.Files == nil {
+	if decoder.Decode(&extra) != io.EOF || manifest.Format != backupFormat || manifest.Version != backupVersion || manifest.Files == nil {
 		return empty, errors.New("unsupported or incomplete backup")
 	}
-	if _, err := time.Parse(time.RFC3339Nano, manifest.CreatedAt); err != nil {
+	if _, valid := parseTime(manifest.CreatedAt); !valid {
 		return empty, errors.New("invalid backup time")
 	}
-	var envelope struct {
-		State map[string]json.RawMessage `json:"state"`
-	}
-	if json.Unmarshal(data, &envelope) != nil {
+	var state State
+	var collections map[string]json.RawMessage
+	if json.Unmarshal(manifest.State, &state) != nil || json.Unmarshal(manifest.State, &collections) != nil {
 		return empty, errors.New("invalid state")
 	}
 	// Version 1 archives created before homework support do not have this
 	// collection. A null collection or a revision without a collection cannot
 	// be an old archive and must not silently discard homework.
-	if manifest.State.Homeworks == nil {
-		if _, exists := envelope.State["homeworks"]; exists {
+	if state.Homeworks == nil {
+		if _, exists := collections["homeworks"]; exists {
 			return empty, errors.New("invalid homework collection")
 		}
-		for _, c := range manifest.State.Classes {
+		for _, c := range state.Classes {
 			if c.HomeworkRevision != 0 {
 				return empty, errors.New("homework collection missing for revision")
 			}
 		}
-		manifest.State.Homeworks = map[string]Homework{}
+		state.Homeworks = map[string]Homework{}
 	} else {
 		// Boolean zero values alone cannot distinguish false from missing/null.
-		var rawItems map[string]map[string]json.RawMessage
-		if json.Unmarshal(envelope.State["homeworks"], &rawItems) != nil {
+		var items map[string]map[string]json.RawMessage
+		if json.Unmarshal(collections["homeworks"], &items) != nil {
 			return empty, errors.New("invalid homework collection")
 		}
-		for _, fields := range rawItems {
+		for _, fields := range items {
 			for _, key := range []string{"visible", "always_on_top"} {
-				value, exists := fields[key]
-				if !exists || string(value) == "null" {
+				if value, exists := fields[key]; !exists || string(value) == "null" {
 					return empty, errors.New("missing homework display option")
 				}
 			}
 		}
 	}
-	if err := validateBackupState(manifest.State); err != nil {
+	if err := validateBackupState(state); err != nil {
 		return empty, err
 	}
-	if len(manifest.Files) != len(manifest.State.Audio) || len(entries) != len(manifest.Files)+1 {
+	if len(manifest.Files) != len(state.Audio) || len(entries) != len(manifest.Files)+1 {
 		return empty, errors.New("missing or extra audio files")
 	}
 	seen := map[string]bool{}
 	for _, item := range manifest.Files {
-		audio, exists := manifest.State.Audio[item.AudioID]
+		audio, exists := state.Audio[item.AudioID]
 		expected, err := archiveAudioPath(audio)
 		if !exists || err != nil || seen[item.AudioID] || item.Path != expected || audio.Path != expected || item.Size < 1 || item.Size > maxBackupAudio {
 			return empty, errors.New("invalid audio manifest")
@@ -446,7 +452,7 @@ func prepareRestore(zipPath, stage string) (State, error) {
 			return empty, errors.New("audio checksum or write failed")
 		}
 	}
-	return manifest.State, nil
+	return state, nil
 }
 
 func (a *App) restore(w http.ResponseWriter, r *http.Request) {
@@ -456,10 +462,7 @@ func (a *App) restore(w http.ResponseWriter, r *http.Request) {
 	}
 	// Authenticate before accepting the potentially large request body.
 	a.mu.Lock()
-	u, err := a.authenticate(r)
-	if err == nil && u.Role != "super_admin" {
-		err = forbidden()
-	}
+	_, err := a.authorize(r, superAdminOnly)
 	a.mu.Unlock()
 	if err != nil {
 		writeError(w, err)
@@ -514,19 +517,11 @@ func (a *App) restore(w http.ResponseWriter, r *http.Request) {
 		state.Audio[key] = audio
 	}
 	state.Sessions = map[string]Session{}
-	state.Settings["_auth_epoch"] = random(32)
-	for key, device := range state.Devices {
-		device.Online = false
-		state.Devices[key] = device
-	}
+	state.Settings[authEpochKey] = random(32)
 
 	a.mu.Lock()
 	// A logout, account change or another restore may have happened while uploading.
-	u, err = a.authenticate(r)
-	if err == nil && u.Role != "super_admin" {
-		err = forbidden()
-	}
-	if err != nil {
+	if _, err = a.authorize(r, superAdminOnly); err != nil {
 		a.mu.Unlock()
 		writeError(w, err)
 		return

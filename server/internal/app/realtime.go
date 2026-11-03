@@ -1,19 +1,26 @@
 package app
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
+	"log/slog"
+	"net/http"
+	"slices"
+	"time"
+
 	"github.com/coder/websocket"
 	"github.com/coder/websocket/wsjson"
-	"log/slog"
-	"net"
-	"net/http"
-	"sort"
-	"strings"
-	"sync"
-	"time"
 )
 
+const (
+	helloTimeout = 5 * time.Second
+	readTimeout  = 60 * time.Second // Clients ping every 25 seconds.
+	writeTimeout = 8 * time.Second
+	maxPending   = 4096
+)
+
+// Frame is one realtime message. Notifications carry the delivery sequence.
 type Frame struct {
 	T   string `json:"t"`
 	ID  string `json:"id,omitempty"`
@@ -21,124 +28,49 @@ type Frame struct {
 	TS  int64  `json:"ts,omitempty"`
 	D   any    `json:"d"`
 }
-type Peer struct {
-	conn                *websocket.Conn
-	queue               chan Frame
-	ctx                 context.Context
-	cancel              context.CancelFunc
-	ID, ClassID, UserID string
+
+type wire struct {
+	T string          `json:"t"`
+	D json.RawMessage `json:"d"`
 }
 
-func (p *Peer) close() { p.cancel(); _ = p.conn.CloseNow() }
-func (p *Peer) send(f Frame) {
-	select {
-	case <-p.ctx.Done():
-		return
-	default:
+func pong() Frame { return Frame{T: "pong", D: map[string]any{"server_time": time.Now().Unix()}} }
+
+// accept upgrades the connection and waits briefly for the client's hello.
+func accept(w http.ResponseWriter, r *http.Request) (*Peer, wire, error) {
+	var hello wire
+	conn, err := websocket.Accept(w, r, nil)
+	if err != nil {
+		return nil, hello, err
 	}
-	select {
-	case p.queue <- f:
-	default:
+	conn.SetReadLimit(maxBodyBytes)
+	p := newPeer(r.Context(), conn)
+	deadline, done := context.WithTimeout(p.ctx, helloTimeout)
+	defer done()
+	if err = wsjson.Read(deadline, conn, &hello); err != nil || hello.T != "hello" {
 		p.close()
+		return nil, hello, context.Canceled
 	}
+	return p, hello, nil
 }
-func (p *Peer) write() {
+
+// readFrames calls handle for every frame until the client goes quiet,
+// disconnects, or handle returns false.
+func readFrames(p *Peer, handle func(wire) bool) {
 	for {
-		select {
-		case <-p.ctx.Done():
+		var frame wire
+		ctx, cancel := context.WithTimeout(p.ctx, readTimeout)
+		err := wsjson.Read(ctx, p.conn, &frame)
+		cancel()
+		if err != nil || !handle(frame) {
 			return
-		case f := <-p.queue:
-			ctx, cancel := context.WithTimeout(p.ctx, 8*time.Second)
-			err := wsjson.Write(ctx, p.conn, f)
-			cancel()
-			if err != nil {
-				p.close()
-				return
-			}
 		}
 	}
 }
 
-type Hub struct {
-	mu       sync.Mutex
-	devices  map[string]*Peer
-	teachers map[string]map[*Peer]bool
-}
-
-func NewHub() *Hub { return &Hub{devices: map[string]*Peer{}, teachers: map[string]map[*Peer]bool{}} }
-func (h *Hub) DeviceOnline(id string) bool {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	p := h.devices[id]
-	return p != nil && p.ctx.Err() == nil
-}
-func (h *Hub) DeviceCount() int { h.mu.Lock(); defer h.mu.Unlock(); return len(h.devices) }
-func (h *Hub) Device(id string, f Frame) {
-	h.mu.Lock()
-	p := h.devices[id]
-	h.mu.Unlock()
-	if p != nil {
-		p.send(f)
-	}
-}
-func (h *Hub) Class(id string, f Frame) {
-	h.mu.Lock()
-	peers := []*Peer{}
-	for _, p := range h.devices {
-		if p.ClassID == id {
-			peers = append(peers, p)
-		}
-	}
-	h.mu.Unlock()
-	for _, p := range peers {
-		p.send(f)
-	}
-}
-func (h *Hub) Teacher(id string, f Frame) {
-	h.mu.Lock()
-	peers := []*Peer{}
-	for p := range h.teachers[id] {
-		peers = append(peers, p)
-	}
-	h.mu.Unlock()
-	for _, p := range peers {
-		p.send(f)
-	}
-}
-func (h *Hub) RemoveDevice(id string) {
-	h.mu.Lock()
-	p := h.devices[id]
-	delete(h.devices, id)
-	h.mu.Unlock()
-	if p != nil {
-		p.close()
-	}
-}
-func (h *Hub) RemoveTeacher(id string) {
-	h.mu.Lock()
-	peers := h.teachers[id]
-	delete(h.teachers, id)
-	h.mu.Unlock()
-	for p := range peers {
-		p.close()
-	}
-}
-func (h *Hub) Close() {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	for _, p := range h.devices {
-		p.close()
-	}
-	for _, peers := range h.teachers {
-		for p := range peers {
-			p.close()
-		}
-	}
-	h.devices = map[string]*Peer{}
-	h.teachers = map[string]map[*Peer]bool{}
-}
+// notify builds the frame that shows message m on the screen of target t.
 func (a *App) notify(m Message, t Target) Frame {
-	volume := 75
+	volume := defaultVolume
 	if c, exists := a.state.Classes[t.ClassID]; exists {
 		volume = c.Volume
 	}
@@ -146,7 +78,21 @@ func (a *App) notify(m Message, t Target) Frame {
 	if clip, exists := a.state.Audio[m.AudioID]; m.Kind == "voice" && exists && clip.UserID == m.SenderID {
 		audio = a.audioURL(m.AudioID)
 	}
-	return Frame{T: "notify", ID: m.ID, Seq: t.Seq, TS: time.Now().Unix(), D: map[string]any{"message_id": m.ID, "style": m.Style, "text": m.Text, "student_name": m.StudentName, "signature": m.Signature, "class_name": t.ClassName, "audio_url": audio, "chime": m.Chime, "repeat": m.Repeat, "display_sec": m.DisplaySec, "volume": volume, "sent_at": m.CreatedAt, "expires_at": m.ExpiresAt}}
+	return Frame{T: "notify", ID: m.ID, Seq: t.Seq, TS: time.Now().Unix(), D: map[string]any{
+		"message_id":   m.ID,
+		"style":        m.Style,
+		"text":         m.Text,
+		"student_name": m.StudentName,
+		"signature":    m.Signature,
+		"class_name":   t.ClassName,
+		"audio_url":    audio,
+		"chime":        m.Chime,
+		"repeat":       m.Repeat,
+		"display_sec":  m.DisplaySec,
+		"volume":       volume,
+		"sent_at":      m.CreatedAt,
+		"expires_at":   m.ExpiresAt,
+	}}
 }
 
 type pendingStatus int
@@ -157,8 +103,9 @@ const (
 	pendingAvailable
 )
 
-// The normal reconnect treats missing messages as recalled; migration probes
-// instead reject them because their absence may mean the backup is stale.
+// pendingForDevice looks up a notification the screen still holds. A normal
+// reconnect treats a missing message as recalled; a migration check rejects
+// it instead, because its absence may mean the backup is stale.
 func (a *App) pendingForDevice(d Device, c Class, messageID string) (Message, Target, pendingStatus) {
 	m, exists := a.state.Messages[messageID]
 	if !exists {
@@ -168,201 +115,180 @@ func (a *App) pendingForDevice(d Device, c Class, messageID string) (Message, Ta
 		if target.DeviceID != d.ID || target.ClassID != d.ClassID {
 			continue
 		}
-		if m.RecalledAt != nil || elapsed(m.ExpiresAt) || !a.licensed(c) {
+		if !m.Live() || !a.licensed(c) {
 			return m, target, pendingRecalled
 		}
 		return m, target, pendingAvailable
 	}
 	return Message{}, Target{}, pendingMissing
 }
-func (a *App) teacherRecipients(classID string) []string {
+
+// queuedFor lists the notifications the screen has not finished, in order.
+func (a *App) queuedFor(d Device) []Frame {
+	frames := []Frame{}
+	for _, m := range a.state.Messages {
+		if !m.Live() {
+			continue
+		}
+		for _, t := range m.Targets {
+			if t.DeviceID == d.ID && t.Status.Pending() {
+				frames = append(frames, a.notify(m, t))
+			}
+		}
+	}
+	slices.SortFunc(frames, func(x, y Frame) int { return cmp.Compare(x.Seq, y.Seq) })
+	return frames
+}
+
+// teachers lists the active accounts that see the class.
+func (a *App) teachers(classID string) []string {
 	c, exists := a.state.Classes[classID]
 	if !exists {
 		return nil
 	}
 	out := []string{}
 	for _, u := range a.state.Users {
-		if u.Status == "active" && a.canClass(&u, c) {
+		if u.Active() && a.canClass(&u, c) {
 			out = append(out, u.ID)
 		}
 	}
 	return out
 }
+
+func (a *App) tellTeachers(classID string, f Frame) {
+	for _, userID := range a.teachers(classID) {
+		a.hub.Teacher(userID, f)
+	}
+}
+
 func (a *App) receipt(m Message, t Target) {
-	f := Frame{T: "receipt", D: map[string]any{"message_id": m.ID, "class_id": t.ClassID, "device_id": t.DeviceID, "status": t.Status, "at": now()}}
-	for _, uid := range a.teacherRecipients(t.ClassID) {
-		a.hub.Teacher(uid, f)
-	}
+	a.tellTeachers(t.ClassID, Frame{T: "receipt", D: map[string]any{"message_id": m.ID, "class_id": t.ClassID, "device_id": t.DeviceID, "status": t.Status, "at": now()}})
 }
+
 func (a *App) presence(d Device, online bool) {
-	f := Frame{T: "presence", D: map[string]any{"class_id": d.ClassID, "device_id": d.ID, "online": online}}
-	for _, uid := range a.teacherRecipients(d.ClassID) {
-		a.hub.Teacher(uid, f)
-	}
+	a.tellTeachers(d.ClassID, Frame{T: "presence", D: map[string]any{"class_id": d.ClassID, "device_id": d.ID, "online": online}})
 }
 
-type wire struct {
-	T string          `json:"t"`
-	D json.RawMessage `json:"d"`
-}
-
-func accept(w http.ResponseWriter, r *http.Request) (*Peer, wire, error) {
-	var hello wire
-	conn, err := websocket.Accept(w, r, nil)
-	if err != nil {
-		return nil, hello, err
-	}
-	conn.SetReadLimit(1 << 20)
-	ctx, cancel := context.WithCancel(r.Context())
-	p := &Peer{conn: conn, queue: make(chan Frame, 256), ctx: ctx, cancel: cancel}
-	deadline, done := context.WithTimeout(ctx, 5*time.Second)
-	defer done()
-	if err = wsjson.Read(deadline, conn, &hello); err != nil || hello.T != "hello" {
-		p.close()
-		return nil, hello, context.Canceled
-	}
-	return p, hello, nil
-}
 func (a *App) deviceWS(w http.ResponseWriter, r *http.Request) {
-	p, hello, err := accept(w, r)
+	p, raw, err := accept(w, r)
 	if err != nil {
 		return
 	}
 	defer p.close()
-	var in struct {
-		Token           string   `json:"token"`
-		LastSeq         int64    `json:"last_seq"`
-		PendingIDs      []string `json:"pending_ids"`
-		ClientVersion   string   `json:"client_version"`
-		OS              string   `json:"os"`
-		LANIPs          []string `json:"lan_ips"`
-		ServerURL       string   `json:"server_url"`
-		AppliedRevision string   `json:"applied_revision"`
-	}
-	if json.Unmarshal(hello.D, &in) != nil || len(in.PendingIDs) > 4096 {
+	var hello deviceHello
+	if json.Unmarshal(raw.D, &hello) != nil || len(hello.PendingIDs) > maxPending {
 		return
 	}
-	publicIP := a.clientIP(r)
+	d, queued, ok := a.connectDevice(p, hello, a.clientIP(r))
+	if !ok {
+		return
+	}
+	go p.write()
+	defer a.disconnectDevice(p, d.ID)
+	for _, frame := range queued {
+		if !p.enqueue(frame) {
+			return
+		}
+	}
+	readFrames(p, func(frame wire) bool {
+		a.mu.Lock()
+		defer a.mu.Unlock()
+		current, bound := a.state.Devices[d.ID]
+		if !bound || current.TokenHash != d.TokenHash {
+			return false
+		}
+		switch frame.T {
+		case "ping":
+			current.LastSeenAt = now()
+			a.state.Devices[d.ID] = current
+			p.send(pong())
+		case "ack":
+			a.ack(d, frame.D)
+		}
+		return true
+	})
+}
+
+// connectDevice authenticates the screen, takes over any older connection,
+// records its report and greets it. It returns the notifications to replay.
+func (a *App) connectDevice(p *Peer, hello deviceHello, publicIP string) (Device, []Frame, bool) {
 	a.mu.Lock()
-	d, err := a.deviceFromToken(in.Token)
+	defer a.mu.Unlock()
+	d, err := a.deviceFromToken(hello.Token)
 	if err != nil {
-		a.mu.Unlock()
 		_ = p.conn.Close(websocket.StatusPolicyViolation, "invalid device")
-		return
+		return d, nil, false
 	}
 	c, exists := a.state.Classes[d.ClassID]
 	if !exists {
-		a.mu.Unlock()
-		return
+		return d, nil, false
 	}
-	p.ID = d.ID
-	p.ClassID = d.ClassID
-	a.hub.mu.Lock()
-	old := a.hub.devices[d.ID]
-	a.hub.devices[d.ID] = p
-	a.hub.mu.Unlock()
-	if old != nil {
-		old.close()
-	}
+	p.ID, p.ClassID = d.ID, d.ClassID
+	a.hub.addDevice(p)
 	d.LastSeenAt = now()
-	recordDeviceHello(&d, in.ClientVersion, in.OS, in.LANIPs, in.ServerURL, in.AppliedRevision, publicIP)
+	hello.record(&d, publicIP)
 	a.state.Devices[d.ID] = d
 	if err = a.Save(); err != nil {
 		a.hub.RemoveDevice(d.ID)
-		a.mu.Unlock()
-		return
+		return d, nil, false
 	}
+
 	recalled := []string{}
-	for _, key := range in.PendingIDs {
-		_, _, status := a.pendingForDevice(d, c, key)
-		if status != pendingAvailable {
-			recalled = append(recalled, key)
+	for _, messageID := range hello.PendingIDs {
+		if _, _, status := a.pendingForDevice(d, c, messageID); status != pendingAvailable {
+			recalled = append(recalled, messageID)
 		}
 	}
-	welcome := map[string]any{"class": map[string]string{"id": c.ID, "name": c.Name}, "device": map[string]string{"id": d.ID, "name": d.Name, "class_id": d.ClassID}, "volume": c.Volume, "sequence": d.Sequence, "server_time": time.Now().Unix(), "recalled_ids": recalled, "homeworks": a.homeworkItems(c.ID), "homework_revision": c.HomeworkRevision}
+	welcome := map[string]any{
+		"class":             map[string]string{"id": c.ID, "name": c.Name},
+		"device":            map[string]string{"id": d.ID, "name": d.Name, "class_id": d.ClassID},
+		"volume":            c.Volume,
+		"sequence":          d.Sequence,
+		"server_time":       time.Now().Unix(),
+		"recalled_ids":      recalled,
+		"homeworks":         a.homeworkItems(c.ID),
+		"homework_revision": c.HomeworkRevision,
+	}
 	if d.RemoteConfig != nil {
 		welcome["remote_config"] = d.RemoteConfig
 	}
 	p.send(Frame{T: "welcome", D: welcome})
-	pending := []Frame{}
+	var queued []Frame
 	if a.licensed(c) {
-		for _, m := range a.state.Messages {
-			if m.RecalledAt != nil || elapsed(m.ExpiresAt) {
-				continue
-			}
-			for _, t := range m.Targets {
-				if t.DeviceID == d.ID && (t.Status == "queued" || t.Status == "delivered" || t.Status == "playing") {
-					pending = append(pending, a.notify(m, t))
-				}
-			}
-		}
+		queued = a.queuedFor(d)
 	}
-	sort.Slice(pending, func(i, j int) bool { return pending[i].Seq < pending[j].Seq })
 	a.presence(d, true)
-	a.mu.Unlock()
-	go p.write()
-	defer func() {
-		a.mu.Lock()
-		a.hub.mu.Lock()
-		current := a.hub.devices[d.ID]
-		if current == p {
-			delete(a.hub.devices, d.ID)
-		}
-		a.hub.mu.Unlock()
-		if current == p {
-			if currentD, exists := a.state.Devices[d.ID]; exists {
-				currentD.LastSeenAt = now()
-				a.state.Devices[d.ID] = currentD
-				_ = a.Save()
-				a.presence(currentD, false)
-			}
-		}
-		a.mu.Unlock()
-	}()
-	for _, frame := range pending {
-		select {
-		case p.queue <- frame:
-		case <-p.ctx.Done():
-			return
-		case <-time.After(8 * time.Second):
-			return
-		}
+	return d, queued, true
+}
+
+// disconnectDevice marks the screen offline unless a newer connection took over.
+func (a *App) disconnectDevice(p *Peer, deviceID string) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if !a.hub.removeDevicePeer(p) {
+		return
 	}
-	for {
-		var frame wire
-		ctx, cancel := context.WithTimeout(p.ctx, 60*time.Second)
-		err = wsjson.Read(ctx, p.conn, &frame)
-		cancel()
-		if err != nil {
-			return
-		}
-		a.mu.Lock()
-		current, stillBound := a.state.Devices[d.ID]
-		if !stillBound || current.TokenHash != d.TokenHash {
-			a.mu.Unlock()
-			return
-		}
-		if frame.T == "ping" {
-			current.LastSeenAt = now()
-			a.state.Devices[d.ID] = current
-			p.send(Frame{T: "pong", D: map[string]any{"server_time": time.Now().Unix()}})
-		} else if frame.T == "ack" {
-			a.ack(d, frame.D)
-		}
-		a.mu.Unlock()
+	if d, exists := a.state.Devices[deviceID]; exists {
+		d.LastSeenAt = now()
+		a.state.Devices[deviceID] = d
+		_ = a.Save()
+		a.presence(d, false)
 	}
 }
+
+// ack moves a delivery forward. Played notifications may still be dismissed;
+// otherwise a status never goes back.
 func (a *App) ack(d Device, raw json.RawMessage) {
 	var in struct {
-		MessageID string `json:"message_id"`
-		Status    string `json:"status"`
+		MessageID string         `json:"message_id"`
+		Status    DeliveryStatus `json:"status"`
 	}
 	if json.Unmarshal(raw, &in) != nil {
 		return
 	}
-	rank := map[string]int{"queued": 0, "delivered": 1, "playing": 2, "played": 3, "dismissed": 3, "failed": 3, "expired": 3}
-	next, allowed := rank[in.Status]
-	if !allowed || in.Status == "queued" || in.Status == "expired" {
+	switch in.Status {
+	case DeliveryDelivered, DeliveryPlaying, DeliveryPlayed, DeliveryDismissed, DeliveryFailed:
+	default:
 		return
 	}
 	m, exists := a.state.Messages[in.MessageID]
@@ -370,114 +296,77 @@ func (a *App) ack(d Device, raw json.RawMessage) {
 		return
 	}
 	before := m
-	before.Targets = append([]Target(nil), m.Targets...)
+	m.Targets = slices.Clone(m.Targets)
 	changed := -1
 	for i, t := range m.Targets {
-		if t.DeviceID != d.ID || rank[t.Status] >= next && !(t.Status == "played" && in.Status == "dismissed") {
+		advances := t.Status.progress() < in.Status.progress() || t.Status == DeliveryPlayed && in.Status == DeliveryDismissed
+		if t.DeviceID != d.ID || !advances {
 			continue
 		}
-		stamp := now()
+		at := now()
 		m.Targets[i].Status = in.Status
 		if t.DeliveredAt == nil {
-			m.Targets[i].DeliveredAt = &stamp
+			m.Targets[i].DeliveredAt = &at
 		}
-		if in.Status == "played" {
-			m.Targets[i].PlayedAt = &stamp
+		if in.Status == DeliveryPlayed {
+			m.Targets[i].PlayedAt = &at
 		}
 		changed = i
 	}
-	if changed >= 0 {
-		a.state.Messages[m.ID] = m
-		if err := a.Save(); err != nil {
-			a.state.Messages[m.ID] = before
-			slog.Error("save receipt", "error", err)
-			return
-		}
-		a.receipt(m, m.Targets[changed])
+	if changed < 0 {
+		return
 	}
+	a.state.Messages[m.ID] = m
+	if err := a.Save(); err != nil {
+		a.state.Messages[m.ID] = before
+		slog.Error("save receipt", "error", err)
+		return
+	}
+	a.receipt(m, m.Targets[changed])
 }
+
 func (a *App) teacherWS(w http.ResponseWriter, r *http.Request) {
-	p, hello, err := accept(w, r)
+	p, raw, err := accept(w, r)
 	if err != nil {
 		return
 	}
 	defer p.close()
-	var in struct {
+	var hello struct {
 		Token string `json:"token"`
 	}
-	if json.Unmarshal(hello.D, &in) != nil {
+	if json.Unmarshal(raw.D, &hello) != nil {
 		return
 	}
-	a.mu.Lock()
-	claims, err := a.verify(in.Token)
-	u, exists := a.state.Users[claims.Subject]
-	if err != nil || !exists || u.Status != "active" || claims.Version != u.TokenVersion {
-		a.mu.Unlock()
-		_ = p.conn.Close(websocket.StatusPolicyViolation, "invalid session")
+	// The socket lives only as long as the access token that opened it.
+	session, ok := a.connectTeacher(p, hello.Token)
+	if !ok {
 		return
 	}
-	p.UserID = u.ID
-	a.hub.mu.Lock()
-	if a.hub.teachers[u.ID] == nil {
-		a.hub.teachers[u.ID] = map[*Peer]bool{}
-	}
-	a.hub.teachers[u.ID][p] = true
-	a.hub.mu.Unlock()
-	p.send(Frame{T: "welcome", D: map[string]any{"server_time": time.Now().Unix()}})
-	a.mu.Unlock()
 	go p.write()
-	defer func() {
-		a.hub.mu.Lock()
-		delete(a.hub.teachers[u.ID], p)
-		if len(a.hub.teachers[u.ID]) == 0 {
-			delete(a.hub.teachers, u.ID)
-		}
-		a.hub.mu.Unlock()
-	}()
-	for {
-		var frame wire
-		ctx, cancel := context.WithTimeout(p.ctx, 60*time.Second)
-		err = wsjson.Read(ctx, p.conn, &frame)
-		cancel()
-		if err != nil {
-			return
-		}
+	defer a.hub.removeTeacherPeer(p)
+	readFrames(p, func(frame wire) bool {
 		a.mu.Lock()
-		current, exists := a.state.Users[u.ID]
-		valid := exists && current.Status == "active" && current.TokenVersion == claims.Version && time.Now().Unix() < claims.Expires
+		u, exists := a.state.Users[session.Subject]
+		valid := exists && u.Active() && u.TokenVersion == session.Version && time.Now().Unix() < session.Expires
 		a.mu.Unlock()
-		if !valid {
-			return
+		if valid && frame.T == "ping" {
+			p.send(pong())
 		}
-		if frame.T == "ping" {
-			p.send(Frame{T: "pong", D: map[string]any{"server_time": time.Now().Unix()}})
-		}
-	}
+		return valid
+	})
 }
 
-// recordDeviceHello stores what a classroom client reports about itself.
-// Values are bounded because they come straight from the device.
-func recordDeviceHello(d *Device, clientVersion, os string, lanIPs []string, serverURL, appliedRevision, publicIP string) {
-	if version := strings.TrimSpace(clientVersion); version != "" && len(version) <= 32 {
-		d.ClientVersion = version
+func (a *App) connectTeacher(p *Peer, token string) (claims, bool) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	c, err := a.verify(token)
+	u, exists := a.state.Users[c.Subject]
+	if err != nil || !exists || !u.Active() || c.Version != u.TokenVersion {
+		_ = p.conn.Close(websocket.StatusPolicyViolation, "invalid session")
+		return c, false
 	}
-	if name := strings.TrimSpace(os); name != "" && len(name) <= 32 {
-		d.OS = name
-	}
-	addresses := []string{}
-	for _, value := range lanIPs {
-		if ip := net.ParseIP(strings.TrimSpace(value)); ip != nil && ip.To4() != nil && len(addresses) < 8 {
-			addresses = append(addresses, ip.To4().String())
-		}
-	}
-	d.LANIPs = addresses
-	if validServerURL(serverURL) {
-		d.ServerURL = strings.TrimSuffix(serverURL, "/")
-	}
-	if len(appliedRevision) <= 128 {
-		d.AppliedRevision = appliedRevision
-	}
-	if ip := net.ParseIP(publicIP); ip != nil {
-		d.PublicIP = ip.String()
-	}
+	p.UserID = u.ID
+	a.hub.addTeacher(p)
+	p.send(Frame{T: "welcome", D: map[string]any{"server_time": time.Now().Unix()}})
+	return c, true
 }

@@ -1,22 +1,13 @@
-import type {components} from '@classding/api';
-export type User=components['schemas']['User'];
-export type Class=components['schemas']['Class'];
-export type Device=components['schemas']['Device'];
-export type Member=components['schemas']['Member'];
-export type Message=components['schemas']['Message'];
-export type Phrase=components['schemas']['Phrase'];
-export type AuthResponse=components['schemas']['AuthResponse'];
-export type BindCode=components['schemas']['BindCode'];
+import type { components } from '@classding/api';
 
-export interface Homework {
-  id:string;
-  class_id:string;
-  subject:string;
-  text:string;
-  teacher_id:string;
-  teacher_name:string;
-  visible:boolean;
-  always_on_top:boolean;
-  created_at:string;
-  updated_at:string;
-}
+type Schemas = components['schemas'];
+export type User = Schemas['User'];
+export type Class = Schemas['Class'];
+export type Device = Schemas['Device'];
+export type Member = Schemas['Member'];
+export type Message = Schemas['Message'];
+export type MessagePage = Schemas['MessageList'];
+export type Phrase = Schemas['Phrase'];
+export type Homework = Schemas['Homework'];
+export type AuthResponse = Schemas['AuthResponse'];
+export type BindCode = Schemas['BindCode'];

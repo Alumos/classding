@@ -1,68 +1,66 @@
+// Package app is the ClassDing service: accounts, classes, notifications,
+// homework and the realtime channel to classroom screens.
 package app
 
 import (
-	"bytes"
 	"classding/server/internal/repo"
 	"context"
-	"encoding/json"
 	"errors"
-	"fmt"
-	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/chi/v5/middleware"
-	"io"
-	"log/slog"
-	"maps"
 	"net/http"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 	"time"
 )
 
 type Config struct {
-	TrustedProxies                   []string
-	DataDir, JWTSecret, CookieSecure string
-	DevSeed                          bool
-	SendCooldown                     time.Duration
+	DataDir        string
+	JWTSecret      string
+	CookieSecure   string // "auto" (default), "true" or "false".
+	TrustedProxies []string
+	DevSeed        bool
+	SendCooldown   time.Duration
 }
-type bucket struct {
-	Count   int
-	Expires time.Time
+
+// App owns the whole state. Every handler runs with mu held; work that must
+// happen outside the lock, such as pushing frames, is queued with deferJob.
+type App struct {
+	mu     sync.Mutex
+	state  State
+	store  *repo.Store
+	config Config
+	router http.Handler
+	hub    *Hub
+	stop   chan struct{}
+
+	// Short-lived data that is never persisted.
+	bindings map[string]binding
+	limits   map[string]bucket
+	lastSent map[string]time.Time
+
+	jobs         []func()
+	rollbackJobs []func()
 }
+
+// binding is a six-digit code that pairs a classroom screen with a class.
 type binding struct {
 	ClassID string
 	Expires string
 }
-type App struct {
-	mu           sync.Mutex
-	state        State
-	store        *repo.Store
-	config       Config
-	router       http.Handler
-	hub          *Hub
-	bindings     map[string]binding
-	limits       map[string]bucket
-	lastSent     map[string]time.Time
-	stop         chan struct{}
-	jobs         []func()
-	rollbackJobs []func()
-}
-type apiError struct {
-	Status        int
-	Code, Message string
+
+// bucket counts attempts within a fixed window.
+type bucket struct {
+	Count   int
+	Expires time.Time
 }
 
-func (e *apiError) Error() string                 { return e.Message }
-func fail(status int, code, message string) error { return &apiError{status, code, message} }
-func bad(message string) error                    { return fail(400, "INVALID_INPUT", message) }
-func forbidden() error                            { return fail(403, "FORBIDDEN", "你没有权限执行此操作。") }
-func missing() error                              { return fail(404, "NOT_FOUND", "请求的内容不存在或已被移除。") }
 func New(c Config) (*App, error) {
 	if len(c.JWTSecret) < 32 {
 		return nil, errors.New("JWT_SECRET must contain at least 32 characters")
 	}
-	if c.CookieSecure != "" && c.CookieSecure != "auto" && c.CookieSecure != "true" && c.CookieSecure != "false" {
+	switch c.CookieSecure {
+	case "", "auto", "true", "false":
+	default:
 		return nil, errors.New("COOKIE_SECURE must be auto, true or false")
 	}
 	if c.DataDir == "" {
@@ -75,38 +73,25 @@ func New(c Config) (*App, error) {
 	if err != nil {
 		return nil, err
 	}
-	a := &App{config: c, state: newState(), store: store, hub: NewHub(), bindings: map[string]binding{}, limits: map[string]bucket{}, lastSent: map[string]time.Time{}, stop: make(chan struct{})}
+	a := &App{
+		config:   c,
+		state:    newState(),
+		store:    store,
+		hub:      NewHub(),
+		stop:     make(chan struct{}),
+		bindings: map[string]binding{},
+		limits:   map[string]bucket{},
+		lastSent: map[string]time.Time{},
+	}
 	if err = store.Load(context.Background(), &a.state); err != nil {
 		store.Close()
 		return nil, err
 	}
-	initializeSettings(&a.state)
-	for key, d := range a.state.Devices {
-		d.Online = false
-		a.state.Devices[key] = d
-	}
-	// Backfill licenses redeemed before they inherited their class organization.
-	for key, code := range a.state.Codes {
-		if code.OrgID == "" && code.ClassID != nil {
-			if class, exists := a.state.Classes[*code.ClassID]; exists {
-				code.OrgID = class.OrgID
-				a.state.Codes[key] = code
-			}
-		}
-	}
-	// Preserve the sequence of databases created before devices stored a counter.
-	for _, message := range a.state.Messages {
-		for _, target := range message.Targets {
-			if device, exists := a.state.Devices[target.DeviceID]; exists && target.Seq > device.Sequence {
-				device.Sequence = target.Seq
-				a.state.Devices[device.ID] = device
-			}
-		}
-	}
+	upgradeState(&a.state)
 	if c.DevSeed {
 		a.seed()
 	}
-	if err = store.Save(context.Background(), a.state); err != nil {
+	if err = a.Save(); err != nil {
 		store.Close()
 		return nil, err
 	}
@@ -114,7 +99,32 @@ func New(c Config) (*App, error) {
 	go a.maintenance()
 	return a, nil
 }
+
+// upgradeState fills in data that databases written by older releases lack.
+func upgradeState(s *State) {
+	initializeSettings(s)
+	// Licenses redeemed before they inherited their class organization.
+	for key, code := range s.Codes {
+		if code.OrgID == "" && code.ClassID != nil {
+			if class, exists := s.Classes[*code.ClassID]; exists {
+				code.OrgID = class.OrgID
+				s.Codes[key] = code
+			}
+		}
+	}
+	// Devices created before they stored their own notification counter.
+	for _, message := range s.Messages {
+		for _, target := range message.Targets {
+			if device, exists := s.Devices[target.DeviceID]; exists && target.Seq > device.Sequence {
+				device.Sequence = target.Seq
+				s.Devices[device.ID] = device
+			}
+		}
+	}
+}
+
 func (a *App) Handler() http.Handler { return a.router }
+
 func (a *App) Close() error {
 	close(a.stop)
 	a.hub.Close()
@@ -122,150 +132,14 @@ func (a *App) Close() error {
 	defer a.mu.Unlock()
 	return a.store.Close()
 }
+
+// Save writes the state through to the database. Callers hold a.mu.
 func (a *App) Save() error { return a.store.Save(context.Background(), a.state) }
 
-type endpoint func(http.ResponseWriter, *http.Request, *User) (any, error)
+func (a *App) deferJob(fn func())      { a.jobs = append(a.jobs, fn) }
+func (a *App) deferRollback(fn func()) { a.rollbackJobs = append(a.rollbackJobs, fn) }
 
-func (a *App) handle(auth, write bool, fn endpoint) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "GET" && r.Method != "HEAD" && !validOrigin(r) {
-			writeError(w, forbidden())
-			return
-		}
-
-		if r.Body != nil && r.Body != http.NoBody {
-			limit := int64(1 << 20)
-			if strings.HasSuffix(r.URL.Path, "/audio") {
-				limit = 9 << 20
-			}
-			if r.ContentLength > limit {
-				writeError(w, fail(413, "BODY_TOO_LARGE", "请求内容过大。"))
-				return
-			}
-			controller := http.NewResponseController(w)
-			_ = controller.SetReadDeadline(time.Now().Add(15 * time.Second))
-			raw, err := io.ReadAll(io.LimitReader(r.Body, limit+1))
-			_ = r.Body.Close()
-			_ = controller.SetReadDeadline(time.Time{})
-			if err != nil {
-				writeError(w, bad("读取请求超时或连接已中断。"))
-				return
-			}
-			if int64(len(raw)) > limit {
-				writeError(w, fail(413, "BODY_TOO_LARGE", "请求内容过大。"))
-				return
-			}
-			r.Body = io.NopCloser(bytes.NewReader(raw))
-		}
-		a.mu.Lock()
-		var u *User
-		if auth {
-			user, err := a.authenticate(r)
-			if err != nil {
-				a.mu.Unlock()
-				writeError(w, err)
-				return
-			}
-			u = &user
-		}
-		var backup []byte
-		var savedBindings map[string]binding
-		var savedLastSent map[string]time.Time
-		var savedHeaders http.Header
-		a.jobs = nil
-		a.rollbackJobs = nil
-		if write {
-			var err error
-			backup, err = json.Marshal(a.state)
-			if err != nil {
-				slog.Error("snapshot state", "error", err)
-				a.mu.Unlock()
-				writeError(w, fail(500, "STORAGE_ERROR", "保存失败，请稍后重试。"))
-				return
-			}
-			savedBindings = maps.Clone(a.bindings)
-			savedLastSent = maps.Clone(a.lastSent)
-			savedHeaders = w.Header().Clone()
-		}
-		result, err := fn(w, r, u)
-		storageFailed := false
-		if err == nil && write {
-			if err = a.Save(); err != nil {
-				slog.Error("persist state", "error", err)
-				storageFailed = true
-				err = fail(500, "STORAGE_ERROR", "保存失败，请稍后重试。")
-			}
-		}
-		if err != nil && write {
-			var restored State
-			if restoreErr := json.Unmarshal(backup, &restored); restoreErr != nil {
-				slog.Error("restore state", "error", restoreErr)
-			} else {
-				a.state = restored
-			}
-			a.bindings = savedBindings
-			a.lastSent = savedLastSent
-			if storageFailed {
-				clear(w.Header())
-				maps.Copy(w.Header(), savedHeaders)
-			}
-		}
-		jobs := a.jobs
-		rollbackJobs := a.rollbackJobs
-		a.jobs = nil
-		a.rollbackJobs = nil
-		a.mu.Unlock()
-		if err != nil {
-			for i := len(rollbackJobs) - 1; i >= 0; i-- {
-				rollbackJobs[i]()
-			}
-			writeError(w, err)
-			return
-		}
-		for _, job := range jobs {
-			job()
-		}
-		writeJSON(w, 200, result)
-	}
-}
-func validOrigin(r *http.Request) bool {
-	origin := r.Header.Get("Origin")
-	if origin == "" {
-		return true
-	}
-	scheme := "http"
-	if r.TLS != nil {
-		scheme = "https"
-	}
-	return origin == scheme+"://"+r.Host || origin == "https://"+r.Host
-}
-func writeJSON(w http.ResponseWriter, status int, value any) {
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.Header().Set("Cache-Control", "no-store")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(value)
-}
-func writeError(w http.ResponseWriter, err error) {
-	var e *apiError
-	if !errors.As(err, &e) {
-		slog.Error("request failed", "error", err)
-		e = &apiError{500, "INTERNAL_ERROR", "服务暂时不可用，请稍后重试。"}
-	}
-	writeJSON(w, e.Status, map[string]string{"code": e.Code, "message": e.Message})
-}
-func decode(r *http.Request, dst any) error {
-	defer r.Body.Close()
-	dec := json.NewDecoder(io.LimitReader(r.Body, 1<<20))
-	if err := dec.Decode(dst); err != nil {
-		return bad("请求格式不正确。")
-	}
-	var extra any
-	if err := dec.Decode(&extra); err != io.EOF {
-		return bad("请求包含多余内容。")
-	}
-	return nil
-}
-func ok() any { return map[string]bool{"ok": true} }
+// limit counts one attempt and reports whether it is still within max per window.
 func (a *App) limit(key string, max int, window time.Duration) bool {
 	b := a.limits[key]
 	if time.Now().After(b.Expires) {
@@ -275,310 +149,33 @@ func (a *App) limit(key string, max int, window time.Duration) bool {
 	a.limits[key] = b
 	return b.Count <= max
 }
+
 func (a *App) audit(u *User, action, target string) {
 	actor := "system"
 	if u != nil {
 		actor = u.Username
 	}
-	entry := Audit{id("a"), actor, action, target, now()}
+	entry := Audit{ID: id("a"), Actor: actor, Action: action, Target: target, At: now()}
 	a.state.Audit[entry.ID] = entry
 }
-func (a *App) authenticate(r *http.Request) (User, error) {
-	token := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
-	c, err := a.verify(token)
-	if err != nil {
-		return User{}, fail(401, "UNAUTHORIZED", "登录已过期，请重新登录。")
-	}
-	u, exists := a.state.Users[c.Subject]
-	if !exists || u.Status != "active" || u.TokenVersion != c.Version {
-		return User{}, fail(401, "UNAUTHORIZED", "账号已失效，请重新登录。")
-	}
-	return u, nil
-}
-func (a *App) isAdmin(u *User) bool {
-	return u != nil && (u.Role == "super_admin" || u.Role == "school_admin")
-}
-func (a *App) canClass(u *User, c Class) bool {
-	if u == nil {
-		return false
-	}
-	if a.isAdmin(u) {
-		return a.adminScope(u, c)
-	}
-	_, exists := a.state.Members[c.ID+"|"+u.ID]
-	return exists
-}
-func (a *App) owns(u *User, c Class) bool {
-	if u == nil {
-		return false
-	}
-	if a.isAdmin(u) {
-		return a.adminScope(u, c)
-	}
-	return c.OwnerID == u.ID
-}
-func (a *App) getClass(u *User, classID string, owner bool) (Class, error) {
-	c, exists := a.state.Classes[classID]
-	if !exists {
-		return c, missing()
-	}
-	if !a.canClass(u, c) || owner && !a.owns(u, c) {
-		return c, forbidden()
-	}
-	return c, nil
-}
-func (a *App) licensed(c Class) bool {
-	code, exists := a.state.Codes[c.ActivationCode]
-	return exists && code.ClassID != nil && *code.ClassID == c.ID && code.Status == "active" && (code.ExpiresAt == nil || !elapsed(*code.ExpiresAt))
-}
-func (a *App) classView(c Class, u *User) Class {
-	c.HomeworkRevision = 0
-	c.Role = "collaborator"
-	if a.owns(u, c) {
-		c.Role = "owner"
-	}
-	c.TeachersCount = 0
-	c.DevicesCount = 0
-	c.OnlineDevices = 0
-	for _, m := range a.state.Members {
-		if m.ClassID == c.ID {
-			c.TeachersCount++
+
+func (a *App) userByUsername(username string) (User, bool) {
+	for _, u := range a.state.Users {
+		if u.Username == username {
+			return u, true
 		}
 	}
-	for _, d := range a.state.Devices {
-		if d.ClassID == c.ID {
-			c.DevicesCount++
-			if a.hub.DeviceOnline(d.ID) {
-				c.OnlineDevices++
-			}
-		}
-	}
-	c.ActivationCode = ""
-	return c
-}
-func (a *App) routes() {
-	r := chi.NewRouter()
-	r.Use(middleware.Recoverer)
-	r.Use(middleware.RequestID)
-	r.Use(func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("X-Content-Type-Options", "nosniff")
-			w.Header().Set("Referrer-Policy", "same-origin")
-			next.ServeHTTP(w, r)
-		})
-	})
-	r.Get("/healthz", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, 200, map[string]string{"status": "ok", "version": "0.3.0"})
-	})
-	r.Get("/metrics", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/plain; version=0.0.4")
-		fmt.Fprintf(w, "classding_online_devices %d\n", a.hub.DeviceCount())
-	})
-	r.Route("/api/v1", func(r chi.Router) {
-		h := a.handle
-		r.Get("/config", h(false, false, func(w http.ResponseWriter, r *http.Request, u *User) (any, error) {
-			return map[string]any{"speech_enabled": false, "registration_enabled": true, "version": "0.3.0", "site_name": a.state.Settings["site_name"], "icp_number": a.state.Settings["icp_number"], "theme": a.state.Settings["theme"]}, nil
-		}))
-		r.Post("/auth/register", h(false, true, a.register))
-		r.Post("/auth/login", h(false, true, a.login))
-		r.Post("/auth/refresh", h(false, true, a.refresh))
-		r.Post("/auth/logout", h(false, true, a.logout))
-		r.Get("/me", h(true, false, func(w http.ResponseWriter, r *http.Request, u *User) (any, error) { return publicUser(*u), nil }))
-		r.Patch("/me", h(true, true, a.updateMe))
-		r.Put("/me/password", h(true, true, a.changePassword))
-		r.Get("/classes", h(true, false, a.listClasses))
-		r.Post("/classes", h(true, true, a.createClass))
-		r.Post("/classes/join", h(true, true, a.joinClass))
-		r.Patch("/classes/{id}", h(true, true, a.updateClass))
-		r.Delete("/classes/{id}", h(true, true, a.deleteClass))
-		r.Get("/classes/{id}/members", h(true, false, a.members))
-		r.Post("/classes/{id}/invites", h(true, true, a.invite))
-		r.Delete("/classes/{id}/members/{uid}", h(true, true, a.removeMember))
-		r.Post("/classes/{id}/transfer", h(true, true, a.transfer))
-		r.Post("/classes/{id}/leave", h(true, true, a.leave))
-		r.Get("/classes/{id}/devices", h(true, false, a.devices))
-		r.Post("/classes/{id}/bind-code", h(true, false, a.bindCode))
-		r.Post("/device/bind", h(false, true, a.bindDevice))
-		r.Get("/device/me", h(false, false, a.deviceMe))
-		r.Get("/device/homeworks", h(false, false, a.deviceHomeworks))
-		r.Post("/device/migration-check", h(false, false, a.deviceMigrationCheck))
-		r.Patch("/devices/{id}", h(true, true, a.renameDevice))
-		r.Delete("/devices/{id}", h(true, true, a.removeDevice))
-		r.Get("/homeworks", h(true, false, a.listHomeworks))
-		r.Post("/homeworks", h(true, true, a.createHomework))
-		r.Patch("/homeworks/{id}", h(true, true, a.updateHomework))
-		r.Delete("/homeworks/{id}", h(true, true, a.deleteHomework))
-		r.Get("/messages", h(true, false, a.listMessages))
-		r.Post("/messages", h(true, true, a.sendMessage))
-		r.Get("/messages/{id}", h(true, false, a.getMessage))
-		r.Delete("/messages/{id}", h(true, true, a.deleteMessage))
-		r.Post("/messages/{id}/recall", h(true, true, a.recallMessage))
-		r.Post("/messages/{id}/resend", h(true, true, a.resendMessage))
-		r.Get("/phrases", h(true, false, a.listPhrases))
-		r.Post("/phrases", h(true, true, a.addPhrase))
-		r.Patch("/phrases/{id}", h(true, true, a.editPhrase))
-		r.Delete("/phrases/{id}", h(true, true, a.deletePhrase))
-		r.Post("/audio", h(true, true, a.uploadAudio))
-		r.Get("/audio/{id}", a.downloadAudio)
-		for _, tool := range []string{"countdown", "rollcall", "stop"} {
-			r.Post("/classes/{id}/tools/"+tool, h(true, true, a.tool))
-		}
-		r.Get("/client/latest", h(false, false, func(w http.ResponseWriter, r *http.Request, u *User) (any, error) {
-			return map[string]string{"version": "0.3.0", "url": "https://github.com/Alumos/classding/releases/download/v0.3.0/ClassDingScreen-amd64-installer.exe", "sha256": "", "notes": "上报内网地址，收到新服务器地址后直接切换，SHA-256 校验文件见对应 GitHub Release。", "min_supported": "0.1.0"}, nil
-		}))
-		r.Get("/admin/overview", h(true, false, a.overview))
-		r.Get("/admin/activation-codes", h(true, false, a.listCodes))
-		r.Post("/admin/activation-codes", h(true, true, a.createCodes))
-		r.Patch("/admin/activation-codes/{code}", h(true, true, a.updateCode))
-		r.Get("/admin/users", h(true, false, a.adminUsers))
-		r.Post("/admin/users", h(true, true, a.adminCreateUser))
-		r.Post("/admin/users/{id}/unlock-login", h(true, true, a.adminUnlockLogin))
-		r.Patch("/admin/users/{id}", h(true, true, a.adminUpdateUser))
-		r.Delete("/admin/users/{id}", h(true, true, a.adminDeleteUser))
-		r.Get("/admin/classes", h(true, false, a.adminClasses))
-		r.Post("/admin/classes", h(true, true, a.adminCreateClass))
-		r.Patch("/admin/classes/{id}", h(true, true, a.adminUpdateClass))
-		r.Delete("/admin/classes/{id}", h(true, true, a.adminDeleteClass))
-		r.Get("/admin/devices", h(true, false, a.adminDevices))
-		r.Post("/admin/devices/{id}/config", h(true, true, a.configureDevice))
-		r.Get("/admin/settings", h(true, false, a.getSettings))
-		r.Put("/admin/settings", h(true, true, a.updateSettings))
-		r.Get("/admin/backup", a.backup)
-		r.Post("/admin/restore", a.restore)
-		r.Get("/admin/messages", h(true, true, a.adminMessages))
-		r.Delete("/admin/messages/{id}", h(true, true, a.adminDeleteMessage))
-		r.Get("/admin/audit-logs", h(true, false, a.auditLogs))
-	})
-	r.Get("/ws/device", a.deviceWS)
-	r.Get("/ws/teacher", a.teacherWS)
-	a.router = r
-}
-func (a *App) maintenance() {
-	ticker := time.NewTicker(30 * time.Second)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-a.stop:
-			return
-		case <-ticker.C:
-			a.mu.Lock()
-			if err := a.maintenanceSweep(time.Now()); err != nil {
-				slog.Error("maintenance save", "error", err)
-			}
-			a.mu.Unlock()
-		}
-	}
+	return User{}, false
 }
 
-// maintenanceSweep is called with a.mu held. Durable changes are committed
-// before deleting files or sending receipts.
-func (a *App) maintenanceSweep(at time.Time) error {
-	expired := func(value string) bool {
-		stamp, err := time.Parse(time.RFC3339Nano, value)
-		return err != nil || at.After(stamp)
-	}
-	for code, b := range a.bindings {
-		if expired(b.Expires) {
-			delete(a.bindings, code)
-		}
-	}
-	for key, b := range a.limits {
-		if at.After(b.Expires) {
-			delete(a.limits, key)
-		}
-	}
-	if !a.hasDurableExpirations(at, expired) {
-		// Skip the full snapshot and rewrite while holding a.mu when nothing durable has expired.
-		return nil
-	}
-	backup, err := json.Marshal(a.state)
-	if err != nil {
-		return fmt.Errorf("snapshot state: %w", err)
-	}
-
-	type pendingReceipt struct {
-		message Message
-		target  Target
-	}
-	var receipts []pendingReceipt
-	var audioPaths []string
+// revokeSessions signs the account out everywhere, including open sockets.
+func (a *App) revokeSessions(u *User) {
+	u.TokenVersion++
 	for key, session := range a.state.Sessions {
-		if expired(session.ExpiresAt) || session.RotationUntil != "" && expired(session.RotationUntil) {
+		if session.UserID == u.ID {
 			delete(a.state.Sessions, key)
 		}
 	}
-	for key, message := range a.state.Messages {
-		created, _ := time.Parse(time.RFC3339Nano, message.CreatedAt)
-		if at.Sub(created) > 90*24*time.Hour {
-			delete(a.state.Messages, key)
-			continue
-		}
-		if expired(message.ExpiresAt) {
-			for i := range message.Targets {
-				switch message.Targets[i].Status {
-				case "queued", "delivered", "playing":
-					message.Targets[i].Status = "expired"
-					receipts = append(receipts, pendingReceipt{message, message.Targets[i]})
-				}
-			}
-			a.state.Messages[key] = message
-		}
-	}
-	for key, audio := range a.state.Audio {
-		created, _ := time.Parse(time.RFC3339Nano, audio.CreatedAt)
-		if at.Sub(created) > 7*24*time.Hour {
-			audioPaths = append(audioPaths, audio.Path)
-			delete(a.state.Audio, key)
-		}
-	}
-	if err := a.Save(); err != nil {
-		var restored State
-		if restoreErr := json.Unmarshal(backup, &restored); restoreErr != nil {
-			return fmt.Errorf("save state: %v; restore state: %w", err, restoreErr)
-		}
-		a.state = restored
-		return err
-	}
-	for _, path := range audioPaths {
-		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
-			slog.Error("remove expired audio", "path", path, "error", err)
-		}
-	}
-	for _, receipt := range receipts {
-		a.receipt(receipt.message, receipt.target)
-	}
-	return nil
+	userID := u.ID
+	a.deferJob(func() { a.hub.RemoveTeacher(userID) })
 }
-
-// hasDurableExpirations mirrors the persisted cleanup rules of maintenanceSweep.
-func (a *App) hasDurableExpirations(at time.Time, expired func(string) bool) bool {
-	for _, session := range a.state.Sessions {
-		if expired(session.ExpiresAt) || session.RotationUntil != "" && expired(session.RotationUntil) {
-			return true
-		}
-	}
-	for _, message := range a.state.Messages {
-		created, _ := time.Parse(time.RFC3339Nano, message.CreatedAt)
-		if at.Sub(created) > 90*24*time.Hour {
-			return true
-		}
-		if expired(message.ExpiresAt) {
-			for _, target := range message.Targets {
-				switch target.Status {
-				case "queued", "delivered", "playing":
-					return true
-				}
-			}
-		}
-	}
-	for _, audio := range a.state.Audio {
-		created, _ := time.Parse(time.RFC3339Nano, audio.CreatedAt)
-		if at.Sub(created) > 7*24*time.Hour {
-			return true
-		}
-	}
-	return false
-}
-
-func (a *App) deferJob(fn func())      { a.jobs = append(a.jobs, fn) }
-func (a *App) deferRollback(fn func()) { a.rollbackJobs = append(a.rollbackJobs, fn) }

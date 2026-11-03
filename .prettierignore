@@ -1,0 +1,21 @@
+# Generated; scripts/generate-contract.mjs and the API generator own these.
+/api/
+web/packages/api/src/types.ts
+web/packages/api/src/ws-types.ts
+
+# Build output, dependencies and tooling.
+**/dist/
+server/static/
+node_modules/
+.pnpm-store/
+tools/
+.claude/
+playwright-report/
+test-results/
+pnpm-lock.yaml
+
+# Prose and data keep their hand-written layout.
+*.md
+*.yaml
+*.yml
+*.html

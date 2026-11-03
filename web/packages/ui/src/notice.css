@@ -1,29 +1,158 @@
 /* Classroom notice screen, shared by the Windows client and the teacher preview. */
-.cd-notice-screen{position:relative;display:flex;flex-direction:column;width:100%;height:100%;min-height:100dvh;background:#f7faef;color:#294e37;overflow:hidden;padding:4.8vh 5vw;font-size:2.5vh;container-type:inline-size}
-.cd-notice-top,.cd-notice-footer{display:flex;align-items:center;justify-content:space-between;gap:15px;flex-shrink:0}
-.cd-notice-top>span:first-child{display:flex;align-items:center;gap:.7em;font-size:.8em;font-weight:600;background:#e7efd9;border:1px solid #dce7cd;border-radius:.5em;padding:.6em .9em}
-.cd-notice-top>span:last-child{color:#708365;font-size:.85em}
-.cd-notice-top svg{width:1em;height:1em}
-.cd-notice-body{flex:1;min-height:0;display:flex;justify-content:center;flex-direction:column;padding:5vh 0;gap:1.2em;overflow:hidden}
-.cd-notice-body strong{display:block;flex-shrink:0;overflow-wrap:anywhere;color:#418340;font-size:clamp(24px,8vh,150px);font-weight:650}
-.cd-notice-body strong span{font-size:.58em;font-weight:500;margin-left:.4em;color:#617552}
-.cd-notice-body p{font-size:clamp(24px,7.8vh,150px);line-height:1.5;font-weight:550;overflow-wrap:anywhere;white-space:pre-wrap;flex-shrink:0;max-height:none;overflow:visible}
-.cd-notice-footer{font-size:.8em;color:#7f8e72}
-.cd-notice-footer>span:first-child{display:flex;gap:.8em;align-items:center}
-.cd-notice-footer b{font-weight:400;color:#bec9b1}
-.cd-notice-watermark{display:flex;align-items:center;gap:.5em;opacity:.65}
-.cd-notice-watermark svg{width:1.1em;height:1.1em}
-.cd-notice-progress{position:absolute;bottom:0;left:0;right:0;height:.55vh;background:#e4ecd7}
-.cd-notice-progress i{height:100%;background:#87ac64;display:block;transition:width .5s linear}
-.cd-notice-praise{background:#fff9e8;color:#745b22}
-.cd-notice-praise .cd-notice-body strong{color:#b08a32}
-.cd-notice-urgent{background:#fff1ed;color:#933e31}
-.cd-notice-urgent .cd-notice-body strong{color:#bb4f3e}
-.cd-notice-compact{min-height:0;padding:20px 23px;font-size:12px;aspect-ratio:16/10}
-.cd-notice-compact .cd-notice-body{padding:24px 0;gap:12px}
-.cd-notice-compact .cd-notice-body strong{font-size:24px}
-.cd-notice-compact .cd-notice-body p{font-size:21px;line-height:1.6;max-height:none}
-.cd-notice-compact .cd-notice-top>span:first-child{font-size:9px;padding:5px 7px}
-.cd-notice-compact .cd-notice-top>span:last-child{font-size:10px}
-.cd-notice-compact .cd-notice-footer{font-size:10px}
-.cd-notice-compact .cd-notice-progress{height:3px}
+.cd-notice-screen {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  min-height: 100dvh;
+  background: #f7faef;
+  color: #294e37;
+  overflow: hidden;
+  padding: 4.8vh 5vw;
+  font-size: 2.5vh;
+  container-type: inline-size;
+}
+.cd-notice-top,
+.cd-notice-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 15px;
+  flex-shrink: 0;
+}
+.cd-notice-top > span:first-child {
+  display: flex;
+  align-items: center;
+  gap: 0.7em;
+  font-size: 0.8em;
+  font-weight: 600;
+  background: #e7efd9;
+  border: 1px solid #dce7cd;
+  border-radius: 0.5em;
+  padding: 0.6em 0.9em;
+}
+.cd-notice-top > span:last-child {
+  color: #708365;
+  font-size: 0.85em;
+}
+.cd-notice-top svg {
+  width: 1em;
+  height: 1em;
+}
+.cd-notice-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  justify-content: center;
+  flex-direction: column;
+  padding: 5vh 0;
+  gap: 1.2em;
+  overflow: hidden;
+}
+.cd-notice-body strong {
+  display: block;
+  flex-shrink: 0;
+  overflow-wrap: anywhere;
+  color: #418340;
+  font-size: clamp(24px, 8vh, 150px);
+  font-weight: 650;
+}
+.cd-notice-body strong span {
+  font-size: 0.58em;
+  font-weight: 500;
+  margin-left: 0.4em;
+  color: #617552;
+}
+.cd-notice-body p {
+  font-size: clamp(24px, 7.8vh, 150px);
+  line-height: 1.5;
+  font-weight: 550;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  flex-shrink: 0;
+  max-height: none;
+  overflow: visible;
+}
+.cd-notice-footer {
+  font-size: 0.8em;
+  color: #7f8e72;
+}
+.cd-notice-footer > span:first-child {
+  display: flex;
+  gap: 0.8em;
+  align-items: center;
+}
+.cd-notice-footer b {
+  font-weight: 400;
+  color: #bec9b1;
+}
+.cd-notice-watermark {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  opacity: 0.65;
+}
+.cd-notice-watermark svg {
+  width: 1.1em;
+  height: 1.1em;
+}
+.cd-notice-progress {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 0.55vh;
+  background: #e4ecd7;
+}
+.cd-notice-progress i {
+  height: 100%;
+  background: #87ac64;
+  display: block;
+  transition: width 0.5s linear;
+}
+.cd-notice-praise {
+  background: #fff9e8;
+  color: #745b22;
+}
+.cd-notice-praise .cd-notice-body strong {
+  color: #b08a32;
+}
+.cd-notice-urgent {
+  background: #fff1ed;
+  color: #933e31;
+}
+.cd-notice-urgent .cd-notice-body strong {
+  color: #bb4f3e;
+}
+.cd-notice-compact {
+  min-height: 0;
+  padding: 20px 23px;
+  font-size: 12px;
+  aspect-ratio: 16/10;
+}
+.cd-notice-compact .cd-notice-body {
+  padding: 24px 0;
+  gap: 12px;
+}
+.cd-notice-compact .cd-notice-body strong {
+  font-size: 24px;
+}
+.cd-notice-compact .cd-notice-body p {
+  font-size: 21px;
+  line-height: 1.6;
+  max-height: none;
+}
+.cd-notice-compact .cd-notice-top > span:first-child {
+  font-size: 9px;
+  padding: 5px 7px;
+}
+.cd-notice-compact .cd-notice-top > span:last-child {
+  font-size: 10px;
+}
+.cd-notice-compact .cd-notice-footer {
+  font-size: 10px;
+}
+.cd-notice-compact .cd-notice-progress {
+  height: 3px;
+}

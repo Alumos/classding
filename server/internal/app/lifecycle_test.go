@@ -37,7 +37,7 @@ func TestDeviceSequenceSurvivesHistoryCleanupAndRestart(t *testing.T) {
 		if next := service.nextSeq("device"); next != 59 {
 			t.Fatalf("restart reset sequence: %d", next)
 		}
-		if publicDevice(service.state.Devices["device"]).Sequence != 0 {
+		if publicDevice(service.state.Devices["device"], false).Sequence != 0 {
 			t.Fatal("internal counter exposed")
 		}
 	})

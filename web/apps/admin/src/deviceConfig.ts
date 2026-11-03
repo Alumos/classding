@@ -13,7 +13,10 @@ export async function saveDeviceConfigurations<T extends { id: string }>(devices
       });
       saved++;
     } catch (error) {
-      errors.push({ device, message: error instanceof Error ? error.message : '无法连接服务，请检查网络或稍后重试。' });
+      errors.push({
+        device,
+        message: error instanceof Error ? error.message : '无法连接服务，请检查网络或稍后重试。',
+      });
     }
   }
   return { errors, saved, url };

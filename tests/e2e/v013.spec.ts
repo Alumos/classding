@@ -1,116 +1,180 @@
-import {test,expect,type Page} from '@playwright/test';
-const adminURL='http://127.0.0.1:15174/admin/';
-const teacherURL='http://127.0.0.1:15173';
-async function adminLogin(page:Page){
-  await page.goto(adminURL);await page.getByLabel('管理员账号').fill('admin');
-  await page.getByLabel('密码',{exact:true}).fill('AdminDing2026!');
-  await page.getByRole('button',{name:'登录管理后台'}).click();
-  await expect(page.getByRole('heading',{name:'工作概览',exact:true})).toBeVisible();
+import { test, expect, type Page } from '@playwright/test';
+const adminURL = 'http://127.0.0.1:15174/admin/';
+const teacherURL = 'http://127.0.0.1:15173';
+async function adminLogin(page: Page) {
+  await page.goto(adminURL);
+  await page.getByLabel('管理员账号').fill('admin');
+  await page.getByLabel('密码', { exact: true }).fill('AdminDing2026!');
+  await page.getByRole('button', { name: '登录管理后台' }).click();
+  await expect(page.getByRole('heading', { name: '工作概览', exact: true })).toBeVisible();
 }
-async function teacherLogin(page:Page){
-  await page.goto(teacherURL+'/login');await page.getByLabel('用户名',{exact:true}).fill('teacher');
-  await page.getByLabel('密码',{exact:true}).fill('ClassDing2026!');
-  await page.getByRole('button',{name:'进入工作台'}).click();
-  await expect(page.getByRole('heading',{name:'选择接收班级'})).toBeVisible();
+async function teacherLogin(page: Page) {
+  await page.goto(teacherURL + '/login');
+  await page.getByLabel('用户名', { exact: true }).fill('teacher');
+  await page.getByLabel('密码', { exact: true }).fill('ClassDing2026!');
+  await page.getByRole('button', { name: '进入工作台' }).click();
+  await expect(page.getByRole('heading', { name: '选择接收班级' })).toBeVisible();
 }
-async function choose(page:Page,label:string,option:string){await page.getByRole('combobox',{name:label,exact:true}).click();await page.getByRole('option',{name:option,exact:true}).click();}
-async function noOverflow(page:Page){expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);}
+async function choose(page: Page, label: string, option: string) {
+  await page.getByRole('combobox', { name: label, exact: true }).click();
+  await page.getByRole('option', { name: option, exact: true }).click();
+}
+async function noOverflow(page: Page) {
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+}
 
-test('教师可直接选择时长，紧急提示音需手动打开且切换样式会复位',async({page},info)=>{
+test('教师可直接选择时长，紧急提示音需手动打开且切换样式会复位', async ({ page }, info) => {
   await teacherLogin(page);
-  if(info.project.name==='mobile'){await page.locator('.class-option').nth(0).click();await page.locator('.class-option').nth(1).click();}
-  await choose(page,'通知显示时长','10 分钟');
-  await expect(page.getByText('快捷短语',{exact:true})).toHaveCount(0);
-  await expect(page.getByLabel('老师落款',{exact:true})).toHaveValue('林老师');
-  await expect(page.getByLabel('老师落款',{exact:true})).toHaveAttribute('readonly','');
+  if (info.project.name === 'mobile') {
+    await page.locator('.class-option').nth(0).click();
+    await page.locator('.class-option').nth(1).click();
+  }
+  await choose(page, '通知显示时长', '10 分钟');
+  await expect(page.getByText('快捷短语', { exact: true })).toHaveCount(0);
+  await expect(page.getByLabel('老师落款', { exact: true })).toHaveValue('林老师');
+  await expect(page.getByLabel('老师落款', { exact: true })).toHaveAttribute('readonly', '');
   await expect(page.getByRole('option')).toHaveCount(0);
-  await expect(page.getByRole('switch',{name:'紧急事项提示音'})).toHaveCount(0);
-  await choose(page,'通知样式','紧急提醒');
-  const chime=page.getByRole('switch',{name:'紧急事项提示音'});
-  await expect(chime).not.toBeChecked();await chime.click();await expect(chime).toBeChecked();
-  await choose(page,'通知样式','日常通知');
-  await choose(page,'通知样式','紧急提醒');await expect(chime).not.toBeChecked();
+  await expect(page.getByRole('switch', { name: '紧急事项提示音' })).toHaveCount(0);
+  await choose(page, '通知样式', '紧急提醒');
+  const chime = page.getByRole('switch', { name: '紧急事项提示音' });
+  await expect(chime).not.toBeChecked();
+  await chime.click();
+  await expect(chime).toBeChecked();
+  await choose(page, '通知样式', '日常通知');
+  await choose(page, '通知样式', '紧急提醒');
+  await expect(chime).not.toBeChecked();
   await chime.click();
   await page.getByLabel('通知内容').fill(`时长与提示音验收 ${info.project.name}`);
-  const sent=page.waitForResponse(r=>r.url().endsWith('/api/v1/messages')&&r.request().method()==='POST');
-  await page.getByRole('button',{name:'发送到 1 个班级',exact:true}).click();
-  const response=await sent;expect(response.status()).toBe(200);
-  expect(response.request().postDataJSON()).toMatchObject({display_sec:600,chime:true,style:'urgent'});
-  expect(await response.json()).toMatchObject({display_sec:600,chime:true});
-  expect(await page.getByLabel('通知内容').evaluate(e=>parseFloat(getComputedStyle(e).fontSize))).toBeGreaterThanOrEqual(16);
-  await noOverflow(page);await page.screenshot({path:info.outputPath('teacher-readable.png'),fullPage:true});
+  const sent = page.waitForResponse(
+    (r) => r.url().endsWith('/api/v1/messages') && r.request().method() === 'POST',
+  );
+  await page.getByRole('button', { name: '发送到 1 个班级', exact: true }).click();
+  const response = await sent;
+  expect(response.status()).toBe(200);
+  expect(response.request().postDataJSON()).toMatchObject({ display_sec: 600, chime: true, style: 'urgent' });
+  expect(await response.json()).toMatchObject({ display_sec: 600, chime: true });
+  expect(
+    await page.getByLabel('通知内容').evaluate((e) => parseFloat(getComputedStyle(e).fontSize)),
+  ).toBeGreaterThanOrEqual(16);
+  await noOverflow(page);
+  await page.screenshot({ path: info.outputPath('teacher-readable.png'), fullPage: true });
 });
 
-test('系统配置同步两后台，备案固定链接，备份可下载并恢复',async({page,context},info)=>{
+test('系统配置同步两后台，备案固定链接，备份可下载并恢复', async ({ page, context }, info) => {
   await adminLogin(page);
-  await page.getByRole('link',{name:'系统配置',exact:true}).filter({visible:true}).first().click();
-  await expect(page.getByRole('heading',{name:'系统配置',exact:true})).toBeVisible();
+  await page.getByRole('link', { name: '系统配置', exact: true }).filter({ visible: true }).first().click();
+  await expect(page.getByRole('heading', { name: '系统配置', exact: true })).toBeVisible();
   await page.getByLabel('站点名称').fill('阳光学校课堂通知');
   await page.getByLabel('备案号').fill('京ICP备12345678号-1');
-  await choose(page,'主题','海洋蓝');
-  await page.getByRole('button',{name:'保存站点配置'}).click();
+  await choose(page, '主题', '海洋蓝');
+  await page.getByRole('button', { name: '保存站点配置' }).click();
   await expect(page.locator('.app-footer')).toContainText('阳光学校课堂通知');
-  const icp=page.getByRole('link',{name:'京ICP备12345678号-1',exact:true});
-  await expect(icp).toHaveAttribute('href','https://beian.miit.gov.cn/');
-  await expect(page.locator('html')).toHaveAttribute('data-cd-theme','blue');
-  expect(await page.getByLabel('站点名称').evaluate(e=>parseFloat(getComputedStyle(e).fontSize))).toBeGreaterThanOrEqual(14);
-  await noOverflow(page);await page.screenshot({path:info.outputPath('system-settings.png'),fullPage:true});
-  const teacher=await context.newPage();await teacherLogin(teacher);
+  const icp = page.getByRole('link', { name: '京ICP备12345678号-1', exact: true });
+  await expect(icp).toHaveAttribute('href', 'https://beian.miit.gov.cn/');
+  await expect(page.locator('html')).toHaveAttribute('data-cd-theme', 'blue');
+  expect(
+    await page.getByLabel('站点名称').evaluate((e) => parseFloat(getComputedStyle(e).fontSize)),
+  ).toBeGreaterThanOrEqual(14);
+  await noOverflow(page);
+  await page.screenshot({ path: info.outputPath('system-settings.png'), fullPage: true });
+  const teacher = await context.newPage();
+  await teacherLogin(teacher);
   await expect(teacher.locator('.workspace-footer')).toContainText('阳光学校课堂通知');
-  await expect(teacher.getByRole('link',{name:'京ICP备12345678号-1'})).toHaveAttribute('href','https://beian.miit.gov.cn/');
+  await expect(teacher.getByRole('link', { name: '京ICP备12345678号-1' })).toHaveAttribute(
+    'href',
+    'https://beian.miit.gov.cn/',
+  );
   await teacher.close();
-  const download=page.waitForEvent('download');await page.getByRole('button',{name:'下载备份'}).click();
-  const backup=await download;const backupPath=info.outputPath('site-backup.zip');await backup.saveAs(backupPath);
-  await page.getByLabel('站点名称').fill('恢复前临时站点');await page.getByRole('button',{name:'保存站点配置'}).click();
+  const download = page.waitForEvent('download');
+  await page.getByRole('button', { name: '下载备份' }).click();
+  const backup = await download;
+  const backupPath = info.outputPath('site-backup.zip');
+  await backup.saveAs(backupPath);
+  await page.getByLabel('站点名称').fill('恢复前临时站点');
+  await page.getByRole('button', { name: '保存站点配置' }).click();
   await expect(page.locator('.app-footer')).toContainText('恢复前临时站点');
-  await page.getByRole('button',{name:'导入并恢复',exact:true}).click();
-  const dialog=page.getByRole('dialog');await dialog.getByLabel('选择备份文件').setInputFiles(backupPath);
-  await expect(dialog.getByRole('button',{name:'确认覆盖恢复',exact:true})).toBeDisabled();
+  await page.getByRole('button', { name: '导入并恢复', exact: true }).click();
+  const dialog = page.getByRole('dialog');
+  await dialog.getByLabel('选择备份文件').setInputFiles(backupPath);
+  await expect(dialog.getByRole('button', { name: '确认覆盖恢复', exact: true })).toBeDisabled();
   await dialog.getByLabel('输入“覆盖恢复”确认').fill('覆盖恢复');
-  await dialog.getByRole('button',{name:'确认覆盖恢复',exact:true}).click();
+  await dialog.getByRole('button', { name: '确认覆盖恢复', exact: true }).click();
   await expect(page.getByLabel('管理员账号')).toBeVisible();
-  await adminLogin(page);await expect(page.locator('.app-footer')).toContainText('阳光学校课堂通知');
-  await page.getByRole('link',{name:'系统配置',exact:true}).filter({visible:true}).first().click();
+  await adminLogin(page);
+  await expect(page.locator('.app-footer')).toContainText('阳光学校课堂通知');
+  await page.getByRole('link', { name: '系统配置', exact: true }).filter({ visible: true }).first().click();
   await expect(page.getByLabel('站点名称')).toHaveValue('阳光学校课堂通知');
   // Keep the shared temporary test server in its original appearance for later projects.
-  await page.getByLabel('站点名称').fill('课堂叮咚');await page.getByLabel('备案号').fill('');
-  await choose(page,'主题','森林绿');await page.getByRole('button',{name:'保存站点配置'}).click();
+  await page.getByLabel('站点名称').fill('课堂叮咚');
+  await page.getByLabel('备案号').fill('');
+  await choose(page, '主题', '森林绿');
+  await page.getByRole('button', { name: '保存站点配置' }).click();
   await expect(page.locator('.app-footer')).toContainText('课堂叮咚');
 });
 
-test('设备管理可二次确认后下发新服务器地址并撤销',async({page},info)=>{
-  await adminLogin(page);await page.getByRole('link',{name:'设备管理',exact:true}).filter({visible:true}).first().click();
+test('设备管理可二次确认后下发新服务器地址并撤销', async ({ page }, info) => {
+  await adminLogin(page);
+  await page.getByRole('link', { name: '设备管理', exact: true }).filter({ visible: true }).first().click();
   // Refreshes can return a different row order. Follow the selected device ID.
-  const deviceID=await page.locator('tbody tr[data-device-id]').first().getAttribute('data-device-id');
-  const row=page.locator(`tbody tr[data-device-id="${deviceID}"]`);
-  await expect(row).toHaveCount(1);await row.getByRole('button',{name:'切换服务器'}).click();
-  const dialog=page.getByRole('dialog');
-  const url=`https://migration-${info.project.name}.example`;
+  const deviceID = await page.locator('tbody tr[data-device-id]').first().getAttribute('data-device-id');
+  const row = page.locator(`tbody tr[data-device-id="${deviceID}"]`);
+  await expect(row).toHaveCount(1);
+  await row.getByRole('button', { name: '切换服务器' }).click();
+  const dialog = page.getByRole('dialog');
+  const url = `https://migration-${info.project.name}.example`;
   await dialog.getByLabel('新服务器地址').fill(`${url}/`);
-  await dialog.getByRole('button',{name:'下一步'}).click();
+  await dialog.getByRole('button', { name: '下一步' }).click();
   await expect(dialog.getByTestId('confirm-server-url')).toHaveText(url);
-  await dialog.getByRole('button',{name:'确认切换 1 台设备'}).click();
-  await expect(row).toContainText(url);await expect(row).toContainText(/等待设备切换|已切换/);
-  await row.getByRole('button',{name:'撤销'}).click();
-  await page.getByRole('alertdialog').getByRole('button',{name:'确认撤销'}).click();
-  await expect(row).toContainText('未设置');await noOverflow(page);
+  await dialog.getByRole('button', { name: '确认切换 1 台设备' }).click();
+  await expect(row).toContainText(url);
+  await expect(row).toContainText(/等待设备切换|已切换/);
+  await row.getByRole('button', { name: '撤销' }).click();
+  await page.getByRole('alertdialog').getByRole('button', { name: '确认撤销' }).click();
+  await expect(row).toContainText('未设置');
+  await noOverflow(page);
 });
 
-test('两后台在明暗模式下保持清晰文字和可用布局',async({page},info)=>{
-  for(const scheme of ['light','dark'] as const){
-    await page.emulateMedia({colorScheme:scheme});
-    for(const entry of [{url:teacherURL+'/login',text:'登录后，让每一次沟通都及时抵达。'},{url:adminURL,text:'登录管理后台，继续今天的工作。'}]){
-      await page.goto(entry.url);const text=page.getByText(entry.text,{exact:true});await expect(text).toBeVisible();
-      const contrast=await text.evaluate(element=>{
-        const rgb=(color:string)=>{const canvas=document.createElement('canvas');canvas.width=canvas.height=1;const context=canvas.getContext('2d')!;context.fillStyle=color;context.fillRect(0,0,1,1);return Array.from(context.getImageData(0,0,1,1).data).slice(0,3);};
-        const lum=(c:number[])=>c.map(v=>v/255).map(v=>v<=.04045?v/12.92:((v+.055)/1.055)**2.4).reduce((a,v,i)=>a+v*[.2126,.7152,.0722][i],0);
-        let parent:Element|null=element;let bg='';
-        while(parent){const color=getComputedStyle(parent).backgroundColor;if(color!=='rgba(0, 0, 0, 0)'&&color!=='transparent'){bg=color;break;}parent=parent.parentElement;}
-        const a=lum(rgb(getComputedStyle(element).color)),b=lum(rgb(bg));
-        return (Math.max(a,b)+.05)/(Math.min(a,b)+.05);
+test('两后台在明暗模式下保持清晰文字和可用布局', async ({ page }, info) => {
+  for (const scheme of ['light', 'dark'] as const) {
+    await page.emulateMedia({ colorScheme: scheme });
+    for (const entry of [
+      { url: teacherURL + '/login', text: '登录后，让每一次沟通都及时抵达。' },
+      { url: adminURL, text: '登录管理后台，继续今天的工作。' },
+    ]) {
+      await page.goto(entry.url);
+      const text = page.getByText(entry.text, { exact: true });
+      await expect(text).toBeVisible();
+      const contrast = await text.evaluate((element) => {
+        const rgb = (color: string) => {
+          const canvas = document.createElement('canvas');
+          canvas.width = canvas.height = 1;
+          const context = canvas.getContext('2d')!;
+          context.fillStyle = color;
+          context.fillRect(0, 0, 1, 1);
+          return Array.from(context.getImageData(0, 0, 1, 1).data).slice(0, 3);
+        };
+        const lum = (c: number[]) =>
+          c
+            .map((v) => v / 255)
+            .map((v) => (v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4))
+            .reduce((a, v, i) => a + v * [0.2126, 0.7152, 0.0722][i], 0);
+        let parent: Element | null = element;
+        let bg = '';
+        while (parent) {
+          const color = getComputedStyle(parent).backgroundColor;
+          if (color !== 'rgba(0, 0, 0, 0)' && color !== 'transparent') {
+            bg = color;
+            break;
+          }
+          parent = parent.parentElement;
+        }
+        const a = lum(rgb(getComputedStyle(element).color)),
+          b = lum(rgb(bg));
+        return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
       });
-      expect(contrast).toBeGreaterThanOrEqual(4.5);await noOverflow(page);
+      expect(contrast).toBeGreaterThanOrEqual(4.5);
+      await noOverflow(page);
     }
-    await page.screenshot({path:info.outputPath(`admin-login-${scheme}.png`),fullPage:true});
+    await page.screenshot({ path: info.outputPath(`admin-login-${scheme}.png`), fullPage: true });
   }
 });

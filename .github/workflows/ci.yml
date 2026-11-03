@@ -19,6 +19,7 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm check:toolchain
+      - run: pnpm format:check
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm build
@@ -34,6 +35,8 @@ jobs:
         with:
           go-version: 1.27.3
           cache-dependency-path: server/go.sum
+      - name: Check Go formatting
+        run: test -z "$(gofmt -l server screen)"
       - working-directory: server
         run: go vet ./...
       - working-directory: server

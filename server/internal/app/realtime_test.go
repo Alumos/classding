@@ -41,6 +41,7 @@ func rtRequest(t *testing.T, base, method, path, token string, body any, status 
 		}
 	}
 }
+
 func rtSetup(t *testing.T) (*App, *httptest.Server, string) {
 	t.Helper()
 	a, err := New(Config{DataDir: t.TempDir(), JWTSecret: strings.Repeat("k", 40), DevSeed: true})
@@ -55,6 +56,7 @@ func rtSetup(t *testing.T) (*App, *httptest.Server, string) {
 	rtRequest(t, s.URL, "POST", "/auth/login", "", map[string]string{"username": "teacher", "password": "ClassDing2026!"}, 200, &auth)
 	return a, s, auth.Token
 }
+
 func rtBind(t *testing.T, base, token, cid string) string {
 	t.Helper()
 	var code struct{ Code string }
@@ -69,6 +71,7 @@ func rtBind(t *testing.T, base, token, cid string) string {
 	rtRequest(t, base, "POST", "/device/bind", "", map[string]string{"code": code.Code}, 400, nil)
 	return bound.Token
 }
+
 func rtRead(t *testing.T, conn *websocket.Conn, kind string) Frame {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
@@ -83,6 +86,7 @@ func rtRead(t *testing.T, conn *websocket.Conn, kind string) Frame {
 		}
 	}
 }
+
 func rtConnect(t *testing.T, base, token string, pending []string) (*websocket.Conn, map[string]any) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
@@ -97,9 +101,11 @@ func rtConnect(t *testing.T, base, token string, pending []string) (*websocket.C
 	}
 	return conn, rtRead(t, conn, "welcome").D.(map[string]any)
 }
+
 func rtInput(ids ...string) messageInput {
 	return messageInput{ClassIDs: ids, Kind: "text", Text: "请带上作业到办公室", StudentName: "李沐阳", Style: "notice", DisplaySec: 15, Repeat: 1, Chime: true, PlayMode: "tts"}
 }
+
 func TestRealtimeTwoClassDeliveryAndReplay(t *testing.T) {
 	_, s, token := rtSetup(t)
 	var classes []Class
@@ -151,6 +157,7 @@ func TestRealtimeTwoClassDeliveryAndReplay(t *testing.T) {
 		t.Fatal("offline recall failed", welcome)
 	}
 }
+
 func TestCollaborationPermissionAndFilteredReceipts(t *testing.T) {
 	_, s, owner := rtSetup(t)
 	var classes []Class

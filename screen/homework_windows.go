@@ -59,11 +59,13 @@ type hwPaint struct {
 	Restore, IncUpdate int32
 	Reserved           [32]byte
 }
+
 type hwMouseTrack struct {
 	size, flags uint32
 	hwnd        uintptr
 	hoverTime   uint32
 }
+
 type homeworkNativeWindow struct {
 	owner      *nativeHomeworkWindows
 	card       HomeworkCard
@@ -76,6 +78,7 @@ type homeworkNativeWindow struct {
 	dwmCorners bool
 	regionSize [2]int
 }
+
 type nativeHomeworkWindows struct {
 	mu        sync.Mutex
 	display   string
@@ -97,6 +100,7 @@ func newHomeworkWindows(onAction func(string, string)) (homeworkWindowManager, e
 	}
 	return m, nil
 }
+
 func (m *nativeHomeworkWindows) run(ready chan error) {
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
@@ -136,6 +140,7 @@ func (m *nativeHomeworkWindows) run(ready chan error) {
 	}
 	hwWindows.Delete(hwnd)
 }
+
 func (m *nativeHomeworkWindows) update(display string, items []HomeworkCard, suspended bool) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -150,6 +155,7 @@ func (m *nativeHomeworkWindows) update(display string, items []HomeworkCard, sus
 	}
 	return nil
 }
+
 func (m *nativeHomeworkWindows) close() {
 	m.mu.Lock()
 	if m.closed {
@@ -161,6 +167,7 @@ func (m *nativeHomeworkWindows) close() {
 	m.mu.Unlock()
 	<-m.done
 }
+
 func (m *nativeHomeworkWindows) layout() {
 	m.mu.Lock()
 	display := m.display
@@ -261,6 +268,7 @@ func (m *nativeHomeworkWindows) layout() {
 		}
 	}
 }
+
 func homeworkWndProc(hwnd, message, wParam, lParam uintptr) uintptr {
 	if value, ok := hwWindows.Load(hwnd); ok {
 		switch target := value.(type) {
@@ -346,6 +354,7 @@ func homeworkWndProc(hwnd, message, wParam, lParam uintptr) uintptr {
 	result, _, _ := defWindowProc.Call(hwnd, message, wParam, lParam)
 	return result
 }
+
 func hwColor(r, g, b uint32) uintptr { return uintptr(r | g<<8 | b<<16) }
 func hwRGB(c [3]uint8) uintptr       { return hwColor(uint32(c[0]), uint32(c[1]), uint32(c[2])) }
 
@@ -357,16 +366,19 @@ func hwMix(c [3]uint8, keep int) [3]uint8 {
 	}
 	return out
 }
+
 func hwText(dc uintptr, text string, rect *displayRect, flags uintptr) {
 	text = strings.ReplaceAll(text, "\x00", "")
 	ptr := syscall.StringToUTF16Ptr(text)
 	hwDrawText.Call(dc, uintptr(unsafe.Pointer(ptr)), ^uintptr(0), uintptr(unsafe.Pointer(rect)), flags|0x0800) // DT_NOPREFIX
 }
+
 func hwTextWidth(dc uintptr, text string) int {
 	rect := displayRect{}
 	hwText(dc, text, &rect, 0x0020|0x0400) // SINGLELINE / CALCRECT
 	return int(rect.right)
 }
+
 func hwFont(size, weight int) uintptr { return hwFontFace(size, weight, "Microsoft YaHei UI") }
 func hwFontFace(size, weight int, name string) uintptr {
 	face := syscall.StringToUTF16Ptr(name)
@@ -401,6 +413,7 @@ func (c *homeworkNativeWindow) applyRoundedFrame() {
 	hwDWMAttribute.Call(c.hwnd, 34, uintptr(unsafe.Pointer(&border)), 4) // DWMWA_BORDER_COLOR
 	c.dwmCorners = true
 }
+
 func (c *homeworkNativeWindow) fitRegion() {
 	g := c.geometry
 	if c.dwmCorners || c.regionSize == [2]int{g.Width, g.Height} {
@@ -417,6 +430,7 @@ func (c *homeworkNativeWindow) fitRegion() {
 	}
 	c.regionSize = [2]int{g.Width, g.Height} // The window now owns the region.
 }
+
 func (c *homeworkNativeWindow) hitTest(x, y int) string {
 	g := c.geometry
 	m := homeworkCardMetrics(g, c.maxOffset > 0)
@@ -432,6 +446,7 @@ func (c *homeworkNativeWindow) hitTest(x, y int) string {
 	}
 	return ""
 }
+
 func (c *homeworkNativeWindow) setHover(area string) {
 	if area == "body" {
 		area = ""
@@ -441,6 +456,7 @@ func (c *homeworkNativeWindow) setHover(area string) {
 		hwInvalidate.Call(c.hwnd, 0, 0)
 	}
 }
+
 func (c *homeworkNativeWindow) pageStep() int {
 	m := homeworkCardMetrics(c.geometry, true)
 	if step := m.BodyBottom - m.BodyTop - c.geometry.Font; step > 0 {
@@ -448,6 +464,7 @@ func (c *homeworkNativeWindow) pageStep() int {
 	}
 	return c.geometry.Font
 }
+
 func (c *homeworkNativeWindow) paint() {
 	var paint hwPaint
 	screen, _, _ := hwBeginPaint.Call(c.hwnd, uintptr(unsafe.Pointer(&paint)))
@@ -472,6 +489,7 @@ func (c *homeworkNativeWindow) paint() {
 	c.draw(dc)
 	hwBitBlt.Call(screen, 0, 0, uintptr(g.Width), uintptr(g.Height), dc, 0, 0, 0x00CC0020) // SRCCOPY
 }
+
 func (c *homeworkNativeWindow) draw(dc uintptr) {
 	g := c.geometry
 	s := g.Scale

@@ -4,13 +4,13 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.tsx",
-    "./styles.css": "./src/styles.css",
     "./globals.css": "./src/styles/globals.css",
+    "./notice": "./src/notice.tsx",
     "./notice.css": "./src/notice.css",
     "./components/*": "./src/components/*.tsx",
     "./lib/*": "./src/lib/*.ts",
-    "./hooks/*": "./src/hooks/*.ts"
+    "./hooks/*": "./src/hooks/*.ts",
+    "./version": "./src/version.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json"

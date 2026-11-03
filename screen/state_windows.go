@@ -42,5 +42,6 @@ func dpapi(input []byte, protectData bool) ([]byte, error) {
 	}
 	return append([]byte(nil), unsafe.Slice(out.Data, int(out.Size))...), nil
 }
+
 func protect(data []byte) ([]byte, error)   { return dpapi(data, true) }
 func unprotect(data []byte) ([]byte, error) { return dpapi(data, false) }

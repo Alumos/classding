@@ -1,6 +1,6 @@
-@import "tailwindcss";
-@import "tw-animate-css";
-@import "./shadcn.css";
+@import 'tailwindcss';
+@import 'tw-animate-css';
+@import './shadcn.css';
 
 /* Scan both web apps and this package for utility classes. */
 @source "../../../../apps";
@@ -46,8 +46,12 @@
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
 }
-:root[data-cd-theme="blue"] { --primary: oklch(0.5 0.15 258); }
-:root[data-cd-theme="slate"] { --primary: oklch(0.4 0.04 257); }
+:root[data-cd-theme='blue'] {
+  --primary: oklch(0.5 0.15 258);
+}
+:root[data-cd-theme='slate'] {
+  --primary: oklch(0.4 0.04 257);
+}
 
 .dark {
   --background: oklch(0.145 0 0);
@@ -75,11 +79,19 @@
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
 }
-:root.dark[data-cd-theme="blue"] { --primary: oklch(0.76 0.12 258); --primary-foreground: oklch(0.22 0.05 258); }
-:root.dark[data-cd-theme="slate"] { --primary: oklch(0.82 0.03 257); --primary-foreground: oklch(0.22 0.03 257); }
+:root.dark[data-cd-theme='blue'] {
+  --primary: oklch(0.76 0.12 258);
+  --primary-foreground: oklch(0.22 0.05 258);
+}
+:root.dark[data-cd-theme='slate'] {
+  --primary: oklch(0.82 0.03 257);
+  --primary-foreground: oklch(0.22 0.03 257);
+}
 
 @theme inline {
-  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --font-sans:
+    'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC',
+    'Microsoft YaHei', sans-serif;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);

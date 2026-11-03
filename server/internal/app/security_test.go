@@ -74,6 +74,7 @@ func (f *securityFixture) token(who string) string {
 	u := f.users[who]
 	return f.app.access(u)
 }
+
 func (f *securityFixture) request(t *testing.T, method, path, token string, body any, cookie *http.Cookie) *httptest.ResponseRecorder {
 	t.Helper()
 	var payload []byte
@@ -98,12 +99,14 @@ func (f *securityFixture) request(t *testing.T, method, path, token string, body
 	f.app.Handler().ServeHTTP(w, r)
 	return w
 }
+
 func expectStatus(t *testing.T, response *httptest.ResponseRecorder, status int) {
 	t.Helper()
 	if response.Code != status {
 		t.Fatalf("status = %d, want %d; body = %s", response.Code, status, response.Body.String())
 	}
 }
+
 func securityText(classes ...string) map[string]any {
 	return map[string]any{"class_ids": classes, "kind": "text", "text": "请到办公室", "style": "notice", "display_sec": 60, "repeat": 1, "chime": true, "play_mode": "tts"}
 }
@@ -310,6 +313,7 @@ func (b *securityGatedBody) Read(_ []byte) (int, error) {
 	<-b.release
 	return 0, io.EOF
 }
+
 func (b *securityGatedBody) Close() error { return nil }
 
 func TestSecuritySlowRequestBodyDoesNotBlockOtherRequests(t *testing.T) {

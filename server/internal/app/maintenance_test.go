@@ -12,10 +12,10 @@ func TestMaintenanceRollbackAndRecovery(t *testing.T) {
 	f := newSecurityFixture(t)
 	when := time.Now().UTC()
 	format := func(t time.Time) string { return t.Format(time.RFC3339Nano) }
-	statuses := []string{"queued", "delivered", "playing", "played", "dismissed", "failed", "expired"}
+	statuses := []DeliveryStatus{"queued", "delivered", "playing", "played", "dismissed", "failed", "expired"}
 	targets := make([]Target, len(statuses))
 	for i, status := range statuses {
-		targets[i] = Target{ClassID: "class_a", DeviceID: status, Status: status}
+		targets[i] = Target{ClassID: "class_a", DeviceID: string(status), Status: status}
 	}
 	f.app.state.Messages["expire_me"] = Message{ID: "expire_me", CreatedAt: format(when.Add(-time.Hour)), ExpiresAt: format(when.Add(-time.Minute)), Targets: targets}
 	f.app.state.Messages["old_message"] = Message{ID: "old_message", CreatedAt: format(when.Add(-91 * 24 * time.Hour)), ExpiresAt: format(when.Add(-time.Hour))}
@@ -87,7 +87,7 @@ func TestMaintenanceRollbackAndRecovery(t *testing.T) {
 	if _, exists := f.app.state.Messages["old_message"]; exists {
 		t.Fatal("successful maintenance retained an old message")
 	}
-	want := []string{"expired", "expired", "expired", "played", "dismissed", "failed", "expired"}
+	want := []DeliveryStatus{"expired", "expired", "expired", "played", "dismissed", "failed", "expired"}
 	for i, status := range want {
 		if got := f.app.state.Messages["expire_me"].Targets[i].Status; got != status {
 			t.Fatalf("target %d status = %q, want %q", i, got, status)
@@ -99,7 +99,7 @@ func TestMaintenanceRollbackAndRecovery(t *testing.T) {
 	for len(peer.queue) > 0 {
 		frame := <-peer.queue
 		data, ok := frame.D.(map[string]any)
-		if !ok || frame.T != "receipt" || data["message_id"] != "expire_me" || data["status"] != "expired" {
+		if !ok || frame.T != "receipt" || data["message_id"] != "expire_me" || data["status"] != DeliveryExpired {
 			t.Fatalf("unexpected receipt: %+v", frame)
 		}
 	}

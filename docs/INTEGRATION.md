@@ -57,10 +57,10 @@ GET admin/devices => Device[]；GET admin/messages => {items:Message[],next_curs
 
 作业列表和快照均包含隐藏作业，设备只展示 `visible=true` 的项目。每班最多 12 条，科目 1–24 字、内容 1–300 字；作者、班主任和有该班管理权限的管理员可以修改或删除，其他协同教师仅可查看他人的作业。班级成员均可发布自己的作业。更改在持久化成功后推送给该班设备及教师，教师可据此刷新列表。设备断线后由 welcome 补全快照，并可定期调用 device/homeworks 兜底；客户端应忽略修订号低于已采用快照的响应。
 
-## 前端共享包（主 Agent 提供）
-@ classding/ui (实际包名 @classding/ui): 导出 cn, Button(variant default|secondary|ghost|outline|destructive, size default|sm|icon), Input, Textarea, Card, Badge(variant default|secondary|outline|success|warning|destructive), Dialog({open,onClose,title,description?,children,footer?}), Switch({checked,onCheckedChange,aria-label?}), NoticeScreen({text,studentName?,signature?,className?,style?,progress?,compact?,sentAt?}), Brand({compact?})。
-共享 CSS 从 @classding/ui/styles.css 引入。所有组件支持 className。
-@classding/api: api<T>(path,RequestInit?) 自动加当前 access token；setAccessToken(token),getAccessToken(),ApiError；types.ts 从 api/openapi.yaml 生成。api('/classes') 自动加 /api/v1。admin/app 可独立本地写结构类型等待生成，但最终须改为生成类型引用。
+## 前端共享包
+- `@classding/ui`：shadcn/ui 组件（`components/ui/*`）、项目自有组件（`components/classding`）、站点设置、`lib/delivery`（投递状态的统一文案与配色）、`notice`（教室通知画面，大屏与教师端预览共用，样式为 `notice.css`）、`version`（读取根目录 `package.json` 的版本号）。
+- 大屏客户端的按钮、输入框等轻量控件位于 `screen/frontend/src/ui.tsx` 与 `ui.css`，不进入共享包。
+- `@classding/api`：`api<T>(path, RequestInit?)` 自动加 `/api/v1` 前缀与当前 access token，遇到 401 刷新一次后重试；`setAccessToken`、`getAccessToken`、`ApiError`；`types.ts` 与 `ws-types.ts` 由 `pnpm api:generate` 生成，页面类型一律引用生成类型。
 
 ## 工作边界
 主 Agent：仓库根配置、web/packages/ui、教师端、部署和 CI、整体验证。

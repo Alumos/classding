@@ -88,6 +88,7 @@ func powershell(script string, extra ...string) (string, error) {
 	}
 	return strings.TrimSpace(string(output)), nil
 }
+
 func audioGet() (*volumeSnapshot, error) {
 	output, err := powershell(audioScript, "CLASSDING_AUDIO_ACTION=get")
 	if err != nil {
@@ -107,6 +108,7 @@ func audioGet() (*volumeSnapshot, error) {
 	}
 	return &volumeSnapshot{DeviceID: parts[0], Volume: volume, Muted: muted}, nil
 }
+
 func audioSet(s *volumeSnapshot) error {
 	_, err := powershell(audioScript, "CLASSDING_AUDIO_ACTION=set", "CLASSDING_AUDIO_DEVICE="+s.DeviceID, "CLASSDING_AUDIO_VOLUME="+strconv.FormatFloat(s.Volume, 'f', -1, 64), "CLASSDING_AUDIO_MUTED="+strconv.FormatBool(s.Muted))
 	return err
@@ -121,6 +123,7 @@ func startupShortcut() (string, error) {
 	}
 	return filepath.Join(appData, "Microsoft", "Windows", "Start Menu", "Programs", "Startup", "ClassDing.lnk"), nil
 }
+
 func setAutostart(enabled bool) error {
 	shortcut, err := startupShortcut()
 	if err != nil {
@@ -151,6 +154,7 @@ func setAutostart(enabled bool) error {
 	}
 	return nil
 }
+
 func getAutostart() (bool, error) {
 	return hiddenCommand("reg.exe", "query", runKey, "/v", "ClassDing").Run() == nil, nil
 }

@@ -54,6 +54,7 @@ func listDisplays() ([]ScreenDisplay, error) {
 	}
 	return result, nil
 }
+
 func moveToDisplay(id string) error {
 	if id == "" {
 		return nil

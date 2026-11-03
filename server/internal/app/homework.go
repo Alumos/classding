@@ -4,9 +4,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"net/http"
-	"sort"
+	"slices"
 	"strings"
-	"time"
 	"unicode/utf8"
 
 	"github.com/go-chi/chi/v5"
@@ -18,8 +17,7 @@ const (
 	maxHomeworkRevision int64 = 1<<53 - 1
 )
 
-// homeworkItems always returns a complete, stable snapshot, including hidden work.
-// Callers hold a.mu.
+// homeworkItems returns every homework of the class, hidden ones included.
 func (a *App) homeworkItems(classID string) []Homework {
 	items := []Homework{}
 	for _, item := range a.state.Homeworks {
@@ -27,18 +25,20 @@ func (a *App) homeworkItems(classID string) []Homework {
 			items = append(items, item)
 		}
 	}
-	sort.Slice(items, func(i, j int) bool {
-		if items[i].AlwaysOnTop != items[j].AlwaysOnTop {
-			return items[i].AlwaysOnTop
-		}
-		if items[i].CreatedAt != items[j].CreatedAt {
-			left, _ := time.Parse(time.RFC3339Nano, items[i].CreatedAt)
-			right, _ := time.Parse(time.RFC3339Nano, items[j].CreatedAt)
-			if !left.Equal(right) {
-				return left.After(right)
+	// Pinned first, then newest first, then by ID so the order never flickers.
+	slices.SortFunc(items, func(x, y Homework) int {
+		if x.AlwaysOnTop != y.AlwaysOnTop {
+			if x.AlwaysOnTop {
+				return -1
 			}
+			return 1
 		}
-		return items[i].ID < items[j].ID
+		left, _ := parseTime(x.CreatedAt)
+		right, _ := parseTime(y.CreatedAt)
+		if order := right.Compare(left); order != 0 {
+			return order
+		}
+		return strings.Compare(x.ID, y.ID)
 	})
 	return items
 }
@@ -85,13 +85,9 @@ func (a *App) listHomeworks(_ http.ResponseWriter, r *http.Request, u *User) (an
 }
 
 func (a *App) deviceHomeworks(_ http.ResponseWriter, r *http.Request, _ *User) (any, error) {
-	d, err := a.deviceFromToken(strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer "))
+	_, c, err := a.boundDevice(r)
 	if err != nil {
 		return nil, err
-	}
-	c, exists := a.state.Classes[d.ClassID]
-	if !exists {
-		return nil, fail(401, "DEVICE_REVOKED", "班级已被删除。")
 	}
 	return map[string]any{"items": a.homeworkItems(c.ID), "homework_revision": c.HomeworkRevision}, nil
 }
@@ -202,9 +198,9 @@ func (a *App) deleteHomework(_ http.ResponseWriter, r *http.Request, u *User) (a
 	return ok(), nil
 }
 
-// Called while the transaction is locked; broadcasting is deferred until save
-// succeeds. Building and queuing under a.mu prevents older snapshots overtaking
-// newer ones when several requests commit concurrently.
+// homeworkChanged bumps the class revision and, once the change is saved,
+// broadcasts a fresh snapshot. The snapshot is built under a.mu when the job
+// runs, so a slower job can never deliver an older list after a newer one.
 func (a *App) homeworkChanged(classID string) error {
 	c := a.state.Classes[classID]
 	if c.HomeworkRevision >= maxHomeworkRevision {
@@ -221,9 +217,7 @@ func (a *App) homeworkChanged(classID string) error {
 		}
 		frame := Frame{T: "homework", D: map[string]any{"items": a.homeworkItems(classID), "homework_revision": c.HomeworkRevision}}
 		a.hub.Class(classID, frame)
-		for _, userID := range a.teacherRecipients(classID) {
-			a.hub.Teacher(userID, frame)
-		}
+		a.tellTeachers(classID, frame)
 	})
 	return nil
 }

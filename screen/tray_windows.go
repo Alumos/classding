@@ -65,6 +65,7 @@ type trayWindowClass struct {
 	classExtra, windowExtra                                            int32
 	instance, icon, cursor, background, menuName, className, smallIcon uintptr
 }
+
 type trayPoint struct{ x, y int32 }
 type trayMessageData struct {
 	window         uintptr
@@ -74,6 +75,7 @@ type trayMessageData struct {
 	point          trayPoint
 	private        uint32
 }
+
 type trayIconData struct {
 	size                uint32
 	window              uintptr
@@ -88,6 +90,7 @@ type trayIconData struct {
 	guid                [16]byte
 	balloonIcon         uintptr
 }
+
 type trayHandle struct {
 	window         uintptr
 	icon           uintptr
@@ -106,6 +109,7 @@ func (t *trayHandle) notify(action uintptr) bool {
 	ok, _, _ := shellNotifyIcon.Call(action, uintptr(unsafe.Pointer(&data)))
 	return ok != 0
 }
+
 func (t *trayHandle) menu() {
 	menu, _, _ := createPopupMenu.Call()
 	if menu == 0 {
@@ -128,6 +132,7 @@ func (t *trayHandle) menu() {
 		go t.onQuit()
 	}
 }
+
 func windowProc(hwnd, message, wParam, lParam uintptr) uintptr {
 	value, found := trayWindows.Load(hwnd)
 	if found {
@@ -160,6 +165,7 @@ func windowProc(hwnd, message, wParam, lParam uintptr) uintptr {
 	result, _, _ := defWindowProc.Call(hwnd, message, wParam, lParam)
 	return result
 }
+
 func startTray(onShow, onQuit, onUnavailable func()) (*trayHandle, error) {
 	type result struct {
 		tray *trayHandle
@@ -218,6 +224,7 @@ func startTray(onShow, onQuit, onUnavailable func()) (*trayHandle, error) {
 	r := <-ready
 	return r.tray, r.err
 }
+
 func (t *trayHandle) close() {
 	if t != nil {
 		postMessage.Call(t.window, wmClose, 0, 0)

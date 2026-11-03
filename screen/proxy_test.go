@@ -1,13 +1,6 @@
 package main
 
-import (
-	"net/http"
-	"testing"
-)
-
-type roundTripFunc func(*http.Request) (*http.Response, error)
-
-func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
+import "testing"
 
 func TestServerURLValidation(t *testing.T) {
 	for _, value := range []string{"http://example.com", "https://example.com:443/", "http://[::1]:8080"} {

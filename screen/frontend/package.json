@@ -9,11 +9,13 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@base-ui/react": "1.9.0",
+    "@classding/api": "workspace:*",
     "@classding/ui": "workspace:*",
+    "class-variance-authority": "0.7.1",
     "lucide-react": "1.66.0",
     "react": "19.3.1",
-    "react-dom": "19.3.1",
-    "@classding/api": "workspace:*"
+    "react-dom": "19.3.1"
   },
   "devDependencies": {
     "@tailwindcss/vite": "4.3.4",

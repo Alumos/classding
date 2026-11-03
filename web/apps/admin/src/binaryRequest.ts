@@ -17,14 +17,20 @@ export async function binaryRequest(path: string, options: RequestInit = {}): Pr
   let response = await request(token);
   if (response.status === 401 && token) {
     // Do not replay a request under another account if the session changed.
-    if (getAccessToken() !== token) throw new ApiError('SESSION_CHANGED', '登录状态已变化，请重新操作。', 401);
+    if (getAccessToken() !== token)
+      throw new ApiError('SESSION_CHANGED', '登录状态已变化，请重新操作。', 401);
     const refreshed = await refreshSession();
-    if (getAccessToken() !== refreshed.access_token) throw new ApiError('SESSION_CHANGED', '登录状态已变化，请重新操作。', 401);
+    if (getAccessToken() !== refreshed.access_token)
+      throw new ApiError('SESSION_CHANGED', '登录状态已变化，请重新操作。', 401);
     response = await request(refreshed.access_token);
   }
   if (!response.ok) {
-    const body = await response.json().catch(() => ({})) as { code?: string; message?: string };
-    throw new ApiError(body.code ?? 'REQUEST_FAILED', body.message ?? `请求失败（${response.status}）`, response.status);
+    const body = (await response.json().catch(() => ({}))) as { code?: string; message?: string };
+    throw new ApiError(
+      body.code ?? 'REQUEST_FAILED',
+      body.message ?? `请求失败（${response.status}）`,
+      response.status,
+    );
   }
   return response;
 }

@@ -3,8 +3,10 @@ package main
 import (
 	"encoding/json"
 	"errors"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 
@@ -21,19 +23,34 @@ type HomeworkCard struct {
 	AlwaysOnTop bool   `json:"always_on_top"`
 	UpdatedAt   string `json:"updated_at"`
 }
+
+// HomeworkPreference is a local override; Revision is the card's updated_at
+// when the override was made.
 type HomeworkPreference struct {
 	Revision    string `json:"revision"`
 	Visible     *bool  `json:"visible,omitempty"`
 	AlwaysOnTop *bool  `json:"always_on_top,omitempty"`
 }
+
+func (p HomeworkPreference) equal(q HomeworkPreference) bool {
+	same := func(x, y *bool) bool { return x == nil && y == nil || x != nil && y != nil && *x == *y }
+	return p.Revision == q.Revision && same(p.Visible, q.Visible) && same(p.AlwaysOnTop, q.AlwaysOnTop)
+}
+
+func flag(value bool) *bool { return &value }
+
+const maxHomeworkCards = 12
+
 type HomeworkSettings struct {
 	Items       []HomeworkCard                `json:"items"`
 	Preferences map[string]HomeworkPreference `json:"preferences"`
 }
+
 type homeworkWindowManager interface {
 	update(string, []HomeworkCard, bool) error
 	close()
 }
+
 type homeworkState struct {
 	mu          sync.Mutex
 	items       []HomeworkCard
@@ -42,10 +59,11 @@ type homeworkState struct {
 	suspended   bool
 }
 
+// Local overrides live in homework-local.json, keyed by homework ID.
+func (a *App) homeworkFile() string { return filepath.Join(a.dataDir, "homework-local.json") }
+
 func (a *App) loadHomeworkPreferences() {
-	a.homework.preferences = map[string]HomeworkPreference{}
-	data, err := os.ReadFile(filepath.Join(a.dataDir, "homework-local.json"))
-	if err == nil {
+	if data, err := os.ReadFile(a.homeworkFile()); err == nil {
 		_ = json.Unmarshal(data, &a.homework.preferences)
 	}
 	if a.homework.preferences == nil {
@@ -53,11 +71,18 @@ func (a *App) loadHomeworkPreferences() {
 	}
 }
 
+func (a *App) saveHomeworkPreferences() error {
+	data, err := json.Marshal(a.homework.preferences)
+	if err != nil {
+		return err
+	}
+	return atomicWrite(a.homeworkFile(), data)
+}
+
 // UpdateHomeworks receives an authenticated server snapshot from the main WebView.
 func (a *App) UpdateHomeworks(value string) error {
-	<-a.initDone
-	if a.initErr != nil {
-		return a.initErr
+	if err := a.ready(); err != nil {
+		return err
 	}
 	var cards []HomeworkCard
 	if len(value) > 128*1024 {
@@ -66,16 +91,12 @@ func (a *App) UpdateHomeworks(value string) error {
 	if err := json.Unmarshal([]byte(value), &cards); err != nil {
 		return errors.New("作业数据无效")
 	}
-	if len(cards) > 12 {
+	if len(cards) > maxHomeworkCards {
 		return errors.New("作业数量超过上限")
 	}
 	a.homework.mu.Lock()
 	defer a.homework.mu.Unlock()
-	previousItems := a.homework.items
-	previousPreferences := map[string]HomeworkPreference{}
-	for id, pref := range a.homework.preferences {
-		previousPreferences[id] = pref
-	}
+	previousItems, previousPreferences := a.homework.items, maps.Clone(a.homework.preferences)
 	a.homework.items = cards
 	valid := map[string]bool{}
 	for _, card := range cards {
@@ -89,10 +110,9 @@ func (a *App) UpdateHomeworks(value string) error {
 			delete(a.homework.preferences, id)
 		}
 	}
-	before, _ := json.Marshal(previousPreferences)
-	after, err := json.Marshal(a.homework.preferences)
-	if err == nil && string(before) != string(after) {
-		err = atomicWrite(filepath.Join(a.dataDir, "homework-local.json"), after)
+	var err error
+	if !maps.EqualFunc(previousPreferences, a.homework.preferences, HomeworkPreference.equal) {
+		err = a.saveHomeworkPreferences()
 	}
 	if err != nil {
 		a.homework.items = previousItems
@@ -106,6 +126,7 @@ func (a *App) UpdateHomeworks(value string) error {
 	}
 	return a.renderHomeworkLocked()
 }
+
 func (a *App) renderHomeworkLocked() error {
 	if a.homework.windows == nil {
 		manager, err := newHomeworkWindows(func(id, action string) {
@@ -118,7 +139,7 @@ func (a *App) renderHomeworkLocked() error {
 		}
 		a.homework.windows = manager
 	}
-	cards := append([]HomeworkCard{}, a.homework.items...)
+	cards := slices.Clone(a.homework.items)
 	for i := range cards {
 		if pref, ok := a.homework.preferences[cards[i].ID]; ok && pref.Revision == cards[i].UpdatedAt {
 			if pref.Visible != nil {
@@ -129,35 +150,37 @@ func (a *App) renderHomeworkLocked() error {
 			}
 		}
 	}
-	a.displayMu.Lock()
-	display := a.displayID
-	a.displayMu.Unlock()
-	return a.homework.windows.update(display, cards, a.homework.suspended)
+	return a.homework.windows.update(a.selectedDisplay(), cards, a.homework.suspended)
 }
+
+// rerenderHomework redraws open cards, for example on another display.
+func (a *App) rerenderHomework() {
+	a.homework.mu.Lock()
+	defer a.homework.mu.Unlock()
+	if a.homework.windows != nil {
+		_ = a.renderHomeworkLocked()
+	}
+}
+
 func (a *App) GetHomeworkSettings() HomeworkSettings {
 	<-a.initDone
 	a.homework.mu.Lock()
 	defer a.homework.mu.Unlock()
-	copyPrefs := map[string]HomeworkPreference{}
-	for id, pref := range a.homework.preferences {
-		copyPrefs[id] = pref
-	}
-	return HomeworkSettings{Items: append([]HomeworkCard{}, a.homework.items...), Preferences: copyPrefs}
+	return HomeworkSettings{Items: slices.Clone(a.homework.items), Preferences: maps.Clone(a.homework.preferences)}
 }
+
+// SetHomeworkPreference overrides how this screen shows one card, or every
+// card when id is "*". The override lapses when a teacher edits the card.
 func (a *App) SetHomeworkPreference(id, action string) error {
-	<-a.initDone
-	if a.initErr != nil {
-		return a.initErr
+	if err := a.ready(); err != nil {
+		return err
 	}
 	a.homework.mu.Lock()
 	defer a.homework.mu.Unlock()
 	if a.homework.preferences == nil {
 		a.homework.preferences = map[string]HomeworkPreference{}
 	}
-	before := map[string]HomeworkPreference{}
-	for key, value := range a.homework.preferences {
-		before[key] = value
-	}
+	before := maps.Clone(a.homework.preferences)
 	found := false
 	for _, card := range a.homework.items {
 		if card.ID != id && id != "*" {
@@ -168,18 +191,11 @@ func (a *App) SetHomeworkPreference(id, action string) error {
 		if pref.Revision != card.UpdatedAt {
 			pref = HomeworkPreference{Revision: card.UpdatedAt}
 		}
-		flag := true
 		switch action {
-		case "show":
-			pref.Visible = &flag
-		case "hide":
-			flag = false
-			pref.Visible = &flag
-		case "pin":
-			pref.AlwaysOnTop = &flag
-		case "unpin":
-			flag = false
-			pref.AlwaysOnTop = &flag
+		case "show", "hide":
+			pref.Visible = flag(action == "show")
+		case "pin", "unpin":
+			pref.AlwaysOnTop = flag(action == "pin")
 		case "default":
 			delete(a.homework.preferences, card.ID)
 			continue
@@ -191,15 +207,11 @@ func (a *App) SetHomeworkPreference(id, action string) error {
 	if !found && id != "*" {
 		return errors.New("作业不存在或已被删除")
 	}
-	data, err := json.Marshal(a.homework.preferences)
-	if err == nil {
-		err = atomicWrite(filepath.Join(a.dataDir, "homework-local.json"), data)
-	}
-	if err != nil {
+	if err := a.saveHomeworkPreferences(); err != nil {
 		a.homework.preferences = before
 		return err
 	}
-	if err = a.renderHomeworkLocked(); err != nil {
+	if err := a.renderHomeworkLocked(); err != nil {
 		return err
 	}
 	if a.ctx != nil {
@@ -207,6 +219,7 @@ func (a *App) SetHomeworkPreference(id, action string) error {
 	}
 	return nil
 }
+
 func (a *App) suspendHomework(active bool) {
 	a.homework.mu.Lock()
 	defer a.homework.mu.Unlock()
@@ -215,6 +228,7 @@ func (a *App) suspendHomework(active bool) {
 		_ = a.renderHomeworkLocked()
 	}
 }
+
 func (a *App) closeHomework() {
 	a.homework.mu.Lock()
 	defer a.homework.mu.Unlock()

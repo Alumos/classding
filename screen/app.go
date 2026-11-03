@@ -2,63 +2,47 @@ package main
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
-	"net"
 	"net/http"
-	"net/http/httputil"
 	"net/url"
 	"os"
 	"path/filepath"
-	"strings"
+	"slices"
 	"sync"
-	"time"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
-type volumeSnapshot struct {
-	DeviceID string  `json:"device_id"`
-	Volume   float64 `json:"volume"`
-	Muted    bool    `json:"muted"`
-}
-type ScreenDisplay struct {
-	ID      string `json:"id"`
-	Name    string `json:"name"`
-	Primary bool   `json:"primary"`
-	Width   int    `json:"width"`
-	Height  int    `json:"height"`
-	rect    displayRect
-	work    displayRect
-}
-type DisplaySettings struct {
-	Selected string          `json:"selected"`
-	Displays []ScreenDisplay `json:"displays"`
-}
+// App is bound to the web view. Exported methods are callable from the
+// frontend; they wait for startup to finish before touching local data.
 type App struct {
-	homework  homeworkState
-	ctx       context.Context
-	dataDir   string
-	initErr   error
-	initDone  chan struct{}
-	trayErr   error
-	tray      *trayHandle
-	windowMu  sync.Mutex
-	hidden    bool
-	quitting  bool
+	ctx      context.Context
+	dataDir  string
+	initErr  error
+	initDone chan struct{}
+
+	windowMu sync.Mutex
+	tray     *trayHandle
+	trayErr  error
+	hidden   bool
+	quitting bool
+
 	displayMu sync.Mutex
 	displayID string
-	proxy     *http.Server
-	proxyURL  string
-	secret    string
-	target    *url.URL
-	targetMu  sync.RWMutex
-	audioMu   sync.Mutex
-	original  *volumeSnapshot
+
+	// Local reverse proxy that lets the web view reach the configured server.
+	proxy    *http.Server
+	proxyURL string
+	secret   string
+	targetMu sync.RWMutex
+	target   *url.URL
+
+	audioMu  sync.Mutex
+	original *volumeSnapshot
+
+	homework homeworkState
 }
 
 func NewApp() (*App, error) {
@@ -66,55 +50,36 @@ func NewApp() (*App, error) {
 	if err != nil {
 		return nil, err
 	}
-	dir := filepath.Join(filepath.Dir(executable), "data")
-	hidden := supportsTray() && hasSilentArg(os.Args)
-	return &App{dataDir: dir, initDone: make(chan struct{}), hidden: hidden}, nil
+	return &App{
+		dataDir:  filepath.Join(filepath.Dir(executable), "data"),
+		initDone: make(chan struct{}),
+		hidden:   supportsTray() && hasSilentArg(os.Args),
+	}, nil
 }
-func hasSilentArg(args []string) bool {
-	for _, arg := range args {
-		if arg == "--silent" {
-			return true
-		}
-	}
-	return false
+
+// hasSilentArg reports whether the app was started in the background, as the
+// autostart entry does.
+func hasSilentArg(args []string) bool { return slices.Contains(args, "--silent") }
+
+// ready waits for startup and reports whether local data is usable.
+func (a *App) ready() error {
+	<-a.initDone
+	return a.initErr
 }
+
 func (a *App) initialize() error {
 	if err := os.MkdirAll(a.dataDir, 0700); err != nil {
 		return fmt.Errorf("无法创建数据目录 %s: %w", a.dataDir, err)
 	}
-	if data, err := os.ReadFile(filepath.Join(a.dataDir, "display.json")); err == nil {
-		var settings struct {
-			Selected string `json:"selected"`
-		}
-		if json.Unmarshal(data, &settings) == nil {
-			a.displayID = settings.Selected
-		}
-	}
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		return err
-	}
-	secret := make([]byte, 24)
-	if _, err := rand.Read(secret); err != nil {
-		listener.Close()
-		return err
-	}
+	a.loadDisplayPreference()
 	a.loadHomeworkPreferences()
-	a.secret = hex.EncodeToString(secret)
-	a.proxyURL = "http://" + listener.Addr().String() + "/" + a.secret
-	a.proxy = &http.Server{Handler: http.HandlerFunc(a.proxyHandler), ReadHeaderTimeout: 10 * time.Second}
-	go func() {
-		if err := a.proxy.Serve(listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			log.Printf("local proxy: %v", err)
-		}
-	}()
-	return nil
+	return a.startProxy()
 }
+
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 	defer close(a.initDone)
-	a.initErr = a.initialize()
-	if a.initErr != nil {
+	if a.initErr = a.initialize(); a.initErr != nil {
 		log.Printf("初始化大屏失败: %v", a.initErr)
 	}
 	if supportsTray() {
@@ -132,16 +97,19 @@ func (a *App) startup(ctx context.Context) {
 		}
 	}
 }
+
+// domReady shows a window that started hidden when nothing else can reveal it.
 func (a *App) domReady(_ context.Context) {
 	<-a.initDone
 	a.windowMu.Lock()
-	hidden := a.hidden
-	hasTray := a.tray != nil
+	hidden, hasTray := a.hidden, a.tray != nil
 	a.windowMu.Unlock()
-	if hidden && (a.initErr != nil || (supportsTray() && !hasTray)) {
+	if hidden && (a.initErr != nil || supportsTray() && !hasTray) {
 		a.showWindow()
 	}
 }
+
+// beforeClose hides the window to the tray instead of quitting, when it can.
 func (a *App) beforeClose(ctx context.Context) bool {
 	<-a.initDone
 	a.windowMu.Lock()
@@ -154,6 +122,7 @@ func (a *App) beforeClose(ctx context.Context) bool {
 	runtime.WindowHide(ctx)
 	return true
 }
+
 func (a *App) showWindow() {
 	if a.ctx == nil {
 		return
@@ -164,6 +133,7 @@ func (a *App) showWindow() {
 	runtime.WindowShow(a.ctx)
 	runtime.WindowUnminimise(a.ctx)
 }
+
 func (a *App) quit() {
 	if a.ctx == nil {
 		return
@@ -173,6 +143,7 @@ func (a *App) quit() {
 	a.windowMu.Unlock()
 	runtime.Quit(a.ctx)
 }
+
 func (a *App) trayUnavailable() {
 	<-a.initDone
 	a.windowMu.Lock()
@@ -186,6 +157,7 @@ func (a *App) trayUnavailable() {
 	a.showWindow()
 	runtime.EventsEmit(a.ctx, "tray:unavailable")
 }
+
 func (a *App) shutdown(_ context.Context) {
 	a.closeHomework()
 	a.windowMu.Lock()
@@ -201,219 +173,7 @@ func (a *App) shutdown(_ context.Context) {
 		_ = a.proxy.Close()
 	}
 }
-func (a *App) LoadState() (string, error) {
-	<-a.initDone
-	if a.initErr != nil {
-		return "", a.initErr
-	}
-	data, err := os.ReadFile(filepath.Join(a.dataDir, "state.bin"))
-	if errors.Is(err, os.ErrNotExist) {
-		return "", nil
-	}
-	if err != nil {
-		return "", err
-	}
-	plain, err := unprotect(data)
-	if err != nil {
-		return "", fmt.Errorf("无法读取本机加密数据：%w", err)
-	}
-	return string(plain), nil
-}
-func (a *App) SaveState(value string) error {
-	<-a.initDone
-	if a.initErr != nil {
-		return a.initErr
-	}
-	if len(value) > 8*1024*1024 {
-		return errors.New("本地状态过大")
-	}
-	data, err := protect([]byte(value))
-	if err != nil {
-		return err
-	}
-	return atomicWrite(filepath.Join(a.dataDir, "state.bin"), data)
-}
-func atomicWrite(path string, data []byte) error {
-	temp, err := os.CreateTemp(filepath.Dir(path), ".classding-*")
-	if err != nil {
-		return err
-	}
-	name := temp.Name()
-	defer os.Remove(name)
-	if err = temp.Chmod(0600); err == nil {
-		_, err = temp.Write(data)
-	}
-	if err == nil {
-		err = temp.Sync()
-	}
-	if closeErr := temp.Close(); err == nil {
-		err = closeErr
-	}
-	if err != nil {
-		return err
-	}
-	return os.Rename(name, path)
-}
-func parseServer(server string) (*url.URL, error) {
-	if strings.ContainsAny(server, "?#\\") {
-		return nil, errors.New("服务器地址无效")
-	}
-	parsed, err := url.Parse(server)
-	if err != nil || parsed.Host == "" || parsed.Hostname() == "" || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.User != nil || parsed.Opaque != "" || parsed.RawPath != "" || (parsed.Path != "" && parsed.Path != "/") || parsed.RawQuery != "" || parsed.Fragment != "" {
-		return nil, errors.New("服务器地址无效")
-	}
-	return parsed, nil
-}
 
-func (a *App) ConfigureServer(server string) (string, error) {
-	<-a.initDone
-	if a.initErr != nil {
-		return "", a.initErr
-	}
-	var target *url.URL
-	if server != "" {
-		parsed, err := parseServer(server)
-		if err != nil {
-			return "", err
-		}
-		target = parsed
-	}
-	a.targetMu.Lock()
-	a.target = target
-	a.targetMu.Unlock()
-	return a.proxyURL, nil
-}
-func (a *App) proxyHandler(w http.ResponseWriter, r *http.Request) {
-	prefix := "/" + a.secret
-	if !strings.HasPrefix(r.URL.Path, prefix+"/") {
-		http.NotFound(w, r)
-		return
-	}
-	a.targetMu.RLock()
-	target := a.target
-	a.targetMu.RUnlock()
-	if target == nil {
-		http.Error(w, "请配置服务器地址", http.StatusBadGateway)
-		return
-	}
-	// The unguessable per-process path limits access to this local proxy. CORS is
-	// scoped to the requesting origin so the embedded WebView can use it.
-	origin := r.Header.Get("Origin")
-	if origin != "" {
-		w.Header().Set("Access-Control-Allow-Origin", origin)
-		w.Header().Set("Vary", "Origin")
-	}
-	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
-	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
-	w.Header().Set("Access-Control-Allow-Private-Network", "true")
-	if r.Method == http.MethodOptions {
-		w.WriteHeader(http.StatusNoContent)
-		return
-	}
-	r.URL.Path = strings.TrimPrefix(r.URL.Path, prefix)
-	proxy := httputil.NewSingleHostReverseProxy(target)
-	director := proxy.Director
-	proxy.Director = func(req *http.Request) {
-		director(req)
-		req.Host = target.Host
-		if req.Header.Get("Origin") != "" {
-			req.Header.Set("Origin", target.Scheme+"://"+target.Host)
-		}
-	}
-	proxy.ModifyResponse = func(resp *http.Response) error {
-		resp.Header.Del("Access-Control-Allow-Origin")
-		resp.Header.Del("Access-Control-Allow-Credentials")
-		return nil
-	}
-	proxy.ErrorHandler = func(w http.ResponseWriter, _ *http.Request, err error) {
-		http.Error(w, "连接服务器失败："+err.Error(), http.StatusBadGateway)
-	}
-	proxy.ServeHTTP(w, r)
-}
-func (a *App) SetPresentationActive(active bool) error {
-	if a.ctx == nil {
-		return nil
-	}
-	<-a.initDone
-	a.suspendHomework(active)
-	var displayErr error
-	if active {
-		runtime.WindowShow(a.ctx)
-		runtime.WindowUnminimise(a.ctx)
-		a.displayMu.Lock()
-		displayID := a.displayID
-		a.displayMu.Unlock()
-		displayErr = moveToDisplay(displayID)
-		runtime.WindowFullscreen(a.ctx)
-		runtime.WindowSetAlwaysOnTop(a.ctx, true)
-	} else {
-		runtime.WindowUnfullscreen(a.ctx)
-		runtime.WindowSetAlwaysOnTop(a.ctx, false)
-		a.windowMu.Lock()
-		hidden := a.hidden
-		a.windowMu.Unlock()
-		if hidden {
-			runtime.WindowHide(a.ctx)
-		}
-	}
-	return displayErr
-}
-func (a *App) GetDisplaySettings() (DisplaySettings, error) {
-	<-a.initDone
-	if a.initErr != nil {
-		return DisplaySettings{}, a.initErr
-	}
-	displays, err := listDisplays()
-	if err != nil {
-		return DisplaySettings{}, err
-	}
-	a.displayMu.Lock()
-	selected := a.displayID
-	a.displayMu.Unlock()
-	return DisplaySettings{Selected: selected, Displays: displays}, nil
-}
-func (a *App) SetSelectedDisplay(id string) error {
-	<-a.initDone
-	if a.initErr != nil {
-		return a.initErr
-	}
-	if id != "" {
-		displays, err := listDisplays()
-		if err != nil {
-			return err
-		}
-		found := false
-		for _, display := range displays {
-			if display.ID == id {
-				found = true
-				break
-			}
-		}
-		if !found {
-			return errors.New("显示器已断开，请重新选择")
-		}
-	}
-	data, err := json.Marshal(struct {
-		Selected string `json:"selected"`
-	}{Selected: id})
-	if err != nil {
-		return err
-	}
-	a.displayMu.Lock()
-	defer a.displayMu.Unlock()
-	if err = atomicWrite(filepath.Join(a.dataDir, "display.json"), data); err != nil {
-		return err
-	}
-	a.displayID = id
-	go func() {
-		a.homework.mu.Lock()
-		defer a.homework.mu.Unlock()
-		if a.homework.windows != nil {
-			_ = a.renderHomeworkLocked()
-		}
-	}()
-	return nil
-}
 func (a *App) GetTrayError() string {
 	<-a.initDone
 	a.windowMu.Lock()
@@ -423,66 +183,33 @@ func (a *App) GetTrayError() string {
 	}
 	return ""
 }
-func (a *App) PrepareAudio(volume int) error {
-	a.audioMu.Lock()
-	defer a.audioMu.Unlock()
-	if a.original != nil {
-		return errors.New("已有播报正在进行")
+
+// SetPresentationActive brings the window full screen on the chosen display
+// while a notification plays, and puts it back afterwards.
+func (a *App) SetPresentationActive(active bool) error {
+	if a.ctx == nil {
+		return nil
 	}
-	old, err := audioGet()
-	if err != nil {
-		return err
-	}
-	recovery, err := json.Marshal(old)
-	if err != nil {
-		return err
-	}
-	path := filepath.Join(a.dataDir, "volume-recovery.json")
-	if err = atomicWrite(path, recovery); err != nil {
-		return err
-	}
-	a.original = old
-	if volume < 0 {
-		volume = 0
-	}
-	if volume > 100 {
-		volume = 100
-	}
-	if err = audioSet(&volumeSnapshot{DeviceID: old.DeviceID, Volume: float64(volume) / 100, Muted: false}); err != nil {
-		if restoreErr := audioSet(old); restoreErr == nil {
-			_ = os.Remove(path)
-			a.original = nil
+	<-a.initDone
+	a.suspendHomework(active)
+	if !active {
+		runtime.WindowUnfullscreen(a.ctx)
+		runtime.WindowSetAlwaysOnTop(a.ctx, false)
+		a.windowMu.Lock()
+		hidden := a.hidden
+		a.windowMu.Unlock()
+		if hidden {
+			runtime.WindowHide(a.ctx)
 		}
-		return err
+		return nil
 	}
-	return nil
+	runtime.WindowShow(a.ctx)
+	runtime.WindowUnminimise(a.ctx)
+	err := moveToDisplay(a.selectedDisplay())
+	runtime.WindowFullscreen(a.ctx)
+	runtime.WindowSetAlwaysOnTop(a.ctx, true)
+	return err
 }
-func (a *App) RestoreAudio() error {
-	a.audioMu.Lock()
-	defer a.audioMu.Unlock()
-	path := filepath.Join(a.dataDir, "volume-recovery.json")
-	old := a.original
-	if old == nil {
-		data, err := os.ReadFile(path)
-		if errors.Is(err, os.ErrNotExist) {
-			return nil
-		}
-		if err != nil {
-			return err
-		}
-		old = new(volumeSnapshot)
-		if err := json.Unmarshal(data, old); err != nil {
-			return err
-		}
-	}
-	if err := audioSet(old); err != nil {
-		return err
-	}
-	if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
-		return err
-	}
-	a.original = nil
-	return nil
-}
+
 func (a *App) SetAutostart(enabled bool) error { return setAutostart(enabled) }
 func (a *App) GetAutostart() (bool, error)     { return getAutostart() }

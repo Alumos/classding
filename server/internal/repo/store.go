@@ -52,6 +52,7 @@ func Open(path string) (*Store, error) {
 	}
 	return s, nil
 }
+
 func (s *Store) Load(ctx context.Context, dst any) error {
 	state := map[string]map[string]json.RawMessage{}
 	for _, table := range tables {
@@ -81,6 +82,7 @@ func (s *Store) Load(ctx context.Context, dst any) error {
 	}
 	return json.Unmarshal(data, dst)
 }
+
 func (s *Store) Save(ctx context.Context, src any) error {
 	return s.save(ctx, src, false)
 }
@@ -142,4 +144,5 @@ func (s *Store) save(ctx context.Context, src any, replace bool) error {
 	s.saved = next
 	return nil
 }
+
 func (s *Store) Close() error { return s.db.Close() }

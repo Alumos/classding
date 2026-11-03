@@ -17,6 +17,7 @@ func (f *fakeHomeworkWindows) update(_ string, items []HomeworkCard, suspended b
 	f.suspended = suspended
 	return nil
 }
+
 func (*fakeHomeworkWindows) close() {}
 func TestHomeworkWorkAreaLayout(t *testing.T) {
 	for _, area := range []struct{ x, y, w, h int }{{0, 0, 1366, 728}, {0, 0, 1920, 1032}, {0, 0, 3840, 2072}, {-1920, -1080, 1920, 1040}, {80, 0, 1840, 1080}} {
@@ -44,6 +45,7 @@ func TestHomeworkWorkAreaLayout(t *testing.T) {
 		}
 	}
 }
+
 func TestHomeworkPreferencesPersistAndTeacherRevisionWins(t *testing.T) {
 	ready := make(chan struct{})
 	close(ready)

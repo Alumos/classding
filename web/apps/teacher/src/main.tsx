@@ -12,14 +12,18 @@ import { AuthProvider } from './auth';
 import App from './App';
 
 setAuthScope('teacher');
-const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: true, staleTime: 15000 } } });
+const queryClient = new QueryClient({
+  defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: true, staleTime: 15000 } },
+});
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <SiteSettingsProvider>
       <QueryClientProvider client={queryClient}>
         <TooltipProvider>
           <BrowserRouter>
-            <AuthProvider><App /></AuthProvider>
+            <AuthProvider>
+              <App />
+            </AuthProvider>
           </BrowserRouter>
           <Toaster position="top-center" richColors closeButton />
         </TooltipProvider>
@@ -27,4 +31,7 @@ createRoot(document.getElementById('root')!).render(
     </SiteSettingsProvider>
   </StrictMode>,
 );
-if (import.meta.env.PROD && 'serviceWorker' in navigator) window.addEventListener('load', () => { void navigator.serviceWorker.register('/sw.js'); });
+if (import.meta.env.PROD && 'serviceWorker' in navigator)
+  window.addEventListener('load', () => {
+    void navigator.serviceWorker.register('/sw.js');
+  });

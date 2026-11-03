@@ -1,1 +1,10 @@
-{"name":"课堂叮咚 ClassDing","short_name":"课堂叮咚","start_url":"/send","display":"standalone","background_color":"#f7f8f5","theme_color":"#186b50","lang":"zh-CN","icons":[{"src":"/icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any"}]}
+{
+  "name": "课堂叮咚 ClassDing",
+  "short_name": "课堂叮咚",
+  "start_url": "/send",
+  "display": "standalone",
+  "background_color": "#f7f8f5",
+  "theme_color": "#186b50",
+  "lang": "zh-CN",
+  "icons": [{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}

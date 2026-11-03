@@ -1,6 +1,6 @@
 # Web 界面重构说明（shadcn/ui）
 
-v0.2.0 起，教师工作台（`web/apps/teacher`）和管理后台（`web/apps/admin`）改用 [shadcn/ui](https://ui.shadcn.com/) 的 Base UI 版本重写。旧版的自定义 `.cd-*` 样式只保留给 Windows 大屏客户端（`screen/frontend`）。本文记录重写时必须保持的行为，供后续维护参考。
+v0.2.0 起，教师工作台（`web/apps/teacher`）和管理后台（`web/apps/admin`）改用 [shadcn/ui](https://ui.shadcn.com/) 的 Base UI 版本重写。旧版的自定义 `.cd-*` 控件已移入 Windows 大屏客户端（`screen/frontend/src/ui.tsx`、`ui.css`）。本文记录重写时必须保持的行为，供后续维护参考。
 
 ## 组件库结构
 
@@ -11,8 +11,9 @@ v0.2.0 起，教师工作台（`web/apps/teacher`）和管理后台（`web/apps/
 | `web/packages/ui/src/components/classding.tsx` | 项目自有组件：品牌、页脚、复制按钮、页面标题、加载与空状态 |
 | `web/packages/ui/src/styles/globals.css` | shadcn 主题变量；站点主题（绿 / 蓝 / 灰）只替换 `--primary` |
 | `web/packages/ui/src/styles/shadcn.css` | 从 `shadcn@4.23.0` 内联的 Base UI 状态变体，避免把 CLI 装进运行依赖 |
-| `web/packages/ui/src/notice.css` | 教室大屏通知样式，大屏客户端和教师端预览共用 |
-| `web/packages/ui/src/index.tsx`、`styles.css` | 旧组件，仅大屏客户端使用 |
+| `web/packages/ui/src/notice.tsx`、`notice.css` | 教室通知画面，大屏客户端和教师端预览共用 |
+| `web/packages/ui/src/lib/delivery.ts` | 投递状态的文案与徽标配色，两端统一 |
+| `web/packages/ui/src/version.ts` | 版本号，唯一来源是根目录 `package.json` |
 
 新增组件：在仓库根目录运行 `npx shadcn@4.23.0 add <组件> -c web/packages/ui`。CLI 会把工具函数引用写成 `from "cn"`，添加后需改为 `from "@classding/ui/lib/utils"`。
 
