@@ -94,9 +94,8 @@ test('管理员可创建、编辑和删除教师及其班级',async({page},testI
   dialog=page.getByRole('dialog');
   await dialog.getByLabel('班级名称').fill(className);
   await dialog.getByLabel('年级').fill('测试年级');
-  const owner=await dialog.getByLabel('负责人').locator('option').filter({hasText:username}).getAttribute('value');
-  expect(owner).toBeTruthy();
-  await dialog.getByLabel('负责人').selectOption(owner!);
+  await dialog.getByRole('combobox',{name:'负责人'}).click();
+  await page.getByRole('option').filter({hasText:username}).click();
   await dialog.getByLabel('教师上限').fill('4');
   await dialog.getByLabel('设备上限').fill('2');
   await dialog.getByRole('button',{name:'创建班级'}).click();
@@ -109,13 +108,13 @@ test('管理员可创建、编辑和删除教师及其班级',async({page},testI
   row=page.locator('tbody tr').filter({hasText:updatedClass});
   await expect(row).toBeVisible();
   await row.getByRole('button',{name:'删除'}).click();
-  await page.getByRole('dialog').getByRole('button',{name:'确认删除'}).click();
+  await page.getByRole('alertdialog').getByRole('button',{name:'确认删除'}).click();
   await expect(row).toHaveCount(0);
 
   await adminNavigate(page,'教师管理');
   row=page.locator('tbody tr').filter({hasText:username});
   await row.getByRole('button',{name:'删除'}).click();
-  await page.getByRole('dialog').getByRole('button',{name:'确认删除'}).click();
+  await page.getByRole('alertdialog').getByRole('button',{name:'确认删除'}).click();
   await expect(row).toHaveCount(0);
 });
 
@@ -166,7 +165,7 @@ test('教师协同码复制失败时可在班级弹窗内手动复制',async({pa
   await page.locator('a[href="/classes"]').filter({visible:true}).first().click();
   const card=page.locator('.class-management-card').filter({has:page.getByRole('heading',{name:'三年级（1）班',exact:true})});
   await card.getByRole('button',{name:'连接大屏'}).click();
-  await page.getByRole('button',{name:'协同老师'}).click();
+  await page.getByRole('tab',{name:'协同老师'}).click();
   await page.getByRole('button',{name:'生成协同码'}).click();
   const invite=(await page.locator('.invite-result code').innerText()).trim();
   await page.locator('.invite-result').getByRole('button',{name:'复制',exact:true}).click();
@@ -199,7 +198,7 @@ test('并发授权失败只发起一次刷新并重试请求',async({page})=>{
   const card=page.locator('.class-management-card').filter({has:page.getByRole('heading',{name:'三年级（1）班',exact:true})});
   await card.getByRole('button',{name:'连接大屏'}).click();
   await expect.poll(()=>failed.size).toBe(2);
-  await page.getByRole('button',{name:'协同老师'}).click();
+  await page.getByRole('tab',{name:'协同老师'}).click();
   await expect(page.getByText('林老师（你）')).toBeVisible();
   expect(refreshes).toBe(1);
 });

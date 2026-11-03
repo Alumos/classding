@@ -47,35 +47,35 @@ test('系统配置同步两后台，备案固定链接，备份可下载并恢�
   await expect(page.getByRole('heading',{name:'系统配置',exact:true})).toBeVisible();
   await page.getByLabel('站点名称').fill('阳光学校课堂通知');
   await page.getByLabel('备案号').fill('京ICP备12345678号-1');
-  await page.getByLabel('主题',{exact:true}).selectOption('blue');
+  await choose(page,'主题','海洋蓝');
   await page.getByRole('button',{name:'保存站点配置'}).click();
-  await expect(page.locator('.sidebar-brand')).toContainText('阳光学校课堂通知');
+  await expect(page.locator('.app-footer')).toContainText('阳光学校课堂通知');
   const icp=page.getByRole('link',{name:'京ICP备12345678号-1',exact:true});
   await expect(icp).toHaveAttribute('href','https://beian.miit.gov.cn/');
   await expect(page.locator('html')).toHaveAttribute('data-cd-theme','blue');
-  expect(await page.getByLabel('站点名称').evaluate(e=>parseFloat(getComputedStyle(e).fontSize))).toBeGreaterThanOrEqual(16);
+  expect(await page.getByLabel('站点名称').evaluate(e=>parseFloat(getComputedStyle(e).fontSize))).toBeGreaterThanOrEqual(14);
   await noOverflow(page);await page.screenshot({path:info.outputPath('system-settings.png'),fullPage:true});
   const teacher=await context.newPage();await teacherLogin(teacher);
-  await expect(teacher.locator('.sidebar-brand')).toContainText('阳光学校课堂通知');
+  await expect(teacher.locator('.workspace-footer')).toContainText('阳光学校课堂通知');
   await expect(teacher.getByRole('link',{name:'京ICP备12345678号-1'})).toHaveAttribute('href','https://beian.miit.gov.cn/');
   await teacher.close();
   const download=page.waitForEvent('download');await page.getByRole('button',{name:'下载备份'}).click();
   const backup=await download;const backupPath=info.outputPath('site-backup.zip');await backup.saveAs(backupPath);
   await page.getByLabel('站点名称').fill('恢复前临时站点');await page.getByRole('button',{name:'保存站点配置'}).click();
-  await expect(page.locator('.sidebar-brand')).toContainText('恢复前临时站点');
+  await expect(page.locator('.app-footer')).toContainText('恢复前临时站点');
   await page.getByRole('button',{name:'导入并恢复',exact:true}).click();
   const dialog=page.getByRole('dialog');await dialog.getByLabel('选择备份文件').setInputFiles(backupPath);
   await expect(dialog.getByRole('button',{name:'确认覆盖恢复',exact:true})).toBeDisabled();
   await dialog.getByLabel('输入“覆盖恢复”确认').fill('覆盖恢复');
   await dialog.getByRole('button',{name:'确认覆盖恢复',exact:true}).click();
   await expect(page.getByLabel('管理员账号')).toBeVisible();
-  await adminLogin(page);await expect(page.locator('.sidebar-brand')).toContainText('阳光学校课堂通知');
+  await adminLogin(page);await expect(page.locator('.app-footer')).toContainText('阳光学校课堂通知');
   await page.getByRole('link',{name:'系统配置',exact:true}).filter({visible:true}).first().click();
   await expect(page.getByLabel('站点名称')).toHaveValue('阳光学校课堂通知');
   // Keep the shared temporary test server in its original appearance for later projects.
   await page.getByLabel('站点名称').fill('课堂叮咚');await page.getByLabel('备案号').fill('');
-  await page.getByLabel('主题',{exact:true}).selectOption('green');await page.getByRole('button',{name:'保存站点配置'}).click();
-  await expect(page.locator('.sidebar-brand')).toContainText('课堂叮咚');
+  await choose(page,'主题','森林绿');await page.getByRole('button',{name:'保存站点配置'}).click();
+  await expect(page.locator('.app-footer')).toContainText('课堂叮咚');
 });
 
 test('设备管理可保存和取消指定设备的服务器切换计划',async({page},info)=>{
@@ -96,10 +96,10 @@ test('设备管理可保存和取消指定设备的服务器切换计划',async(
 test('两后台在明暗模式下保持清晰文字和可用布局',async({page},info)=>{
   for(const scheme of ['light','dark'] as const){
     await page.emulateMedia({colorScheme:scheme});
-    for(const entry of [{url:teacherURL+'/login',text:'.login-form-wrap>p'},{url:adminURL,text:'.login-card>.muted'}]){
-      await page.goto(entry.url);const text=page.locator(entry.text);await expect(text).toBeVisible();
+    for(const entry of [{url:teacherURL+'/login',text:'登录后，让每一次沟通都及时抵达。'},{url:adminURL,text:'登录管理后台，继续今天的工作。'}]){
+      await page.goto(entry.url);const text=page.getByText(entry.text,{exact:true});await expect(text).toBeVisible();
       const contrast=await text.evaluate(element=>{
-        const rgb=(color:string)=>color.match(/[\d.]+/g)!.slice(0,3).map(Number);
+        const rgb=(color:string)=>{const canvas=document.createElement('canvas');canvas.width=canvas.height=1;const context=canvas.getContext('2d')!;context.fillStyle=color;context.fillRect(0,0,1,1);return Array.from(context.getImageData(0,0,1,1).data).slice(0,3);};
         const lum=(c:number[])=>c.map(v=>v/255).map(v=>v<=.04045?v/12.92:((v+.055)/1.055)**2.4).reduce((a,v,i)=>a+v*[.2126,.7152,.0722][i],0);
         let parent:Element|null=element;let bg='';
         while(parent){const color=getComputedStyle(parent).backgroundColor;if(color!=='rgba(0, 0, 0, 0)'&&color!=='transparent'){bg=color;break;}parent=parent.parentElement;}

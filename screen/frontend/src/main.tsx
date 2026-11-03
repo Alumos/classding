@@ -88,7 +88,7 @@ function App() {
   if (!state.ready) return <div className="screen-loading"><Brand/><span>正在准备大屏…</span></div>;
   return <>
     <main className="shell">
-      <header className="topbar"><Brand/><div className="topbar-right"><span className="desktop-label"><Monitor size={15}/> 大屏客户端</span><span className="version">V 0.1.4</span></div></header>
+      <header className="topbar"><Brand/><div className="topbar-right"><span className="desktop-label"><Monitor size={15}/> 大屏客户端</span><span className="version">V 0.2.0</span></div></header>
       {!state.bound ? <div className="bind-layout">
         <section className="bind-intro"><div className="eyebrow"><span className="eyebrow-dot"/> 让每一句话，都被听见</div><h1>连接班级，<br/><em>让课堂有回应。</em></h1><p>老师发来消息时，课堂叮咚会在大屏上展示并为同学们朗读。</p><div className="intro-steps"><div><span>01</span>老师在手机端生成绑定码</div><div><span>02</span>在此输入 6 位数字完成连接</div><div><span>03</span>保持运行，随时接收班级消息</div></div><div className="intro-decoration"><BellRing size={150} strokeWidth={.7}/></div></section>
         <section className="bind-side"><Card className="binding-card"><div className="card-icon"><Link2 size={25}/></div><div className="card-heading"><span className="overline">READY TO CONNECT</span><h2>绑定到班级</h2><p>打开教师端「班级」，获取 6 位绑定码</p></div>

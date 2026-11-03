@@ -1,13 +1,12 @@
-import {SiteSettingsProvider} from '@classding/ui';
-import {setAuthScope} from '@classding/api';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { Toaster } from 'sonner';
-import '@classding/ui/styles.css';
-import './styles.css';
+import { setAuthScope } from '@classding/api';
+import { SiteSettingsProvider } from '@classding/ui/components/classding';
+import { Toaster } from '@classding/ui/components/ui/sonner';
+import { TooltipProvider } from '@classding/ui/components/ui/tooltip';
+import '@classding/ui/globals.css';
 import App from './App';
-
 
 setAuthScope('admin');
 const queryClient = new QueryClient({
@@ -15,10 +14,14 @@ const queryClient = new QueryClient({
 });
 
 createRoot(document.getElementById('root')!).render(
-  <SiteSettingsProvider><QueryClientProvider client={queryClient}>
-      <BrowserRouter basename="/admin">
-        <App />
-        <Toaster position="top-right" richColors />
-      </BrowserRouter>
-  </QueryClientProvider></SiteSettingsProvider>,
+  <SiteSettingsProvider>
+    <QueryClientProvider client={queryClient}>
+      <TooltipProvider>
+        <BrowserRouter basename="/admin">
+          <App />
+          <Toaster position="top-right" richColors />
+        </BrowserRouter>
+      </TooltipProvider>
+    </QueryClientProvider>
+  </SiteSettingsProvider>,
 );

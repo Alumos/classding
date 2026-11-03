@@ -368,7 +368,7 @@ func (a *App) routes() {
 		})
 	})
 	r.Get("/healthz", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, 200, map[string]string{"status": "ok", "version": "0.1.4"})
+		writeJSON(w, 200, map[string]string{"status": "ok", "version": "0.2.0"})
 	})
 	r.Get("/metrics", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/plain; version=0.0.4")
@@ -377,7 +377,7 @@ func (a *App) routes() {
 	r.Route("/api/v1", func(r chi.Router) {
 		h := a.handle
 		r.Get("/config", h(false, false, func(w http.ResponseWriter, r *http.Request, u *User) (any, error) {
-			return map[string]any{"speech_enabled": false, "registration_enabled": true, "version": "0.1.4", "site_name": a.state.Settings["site_name"], "icp_number": a.state.Settings["icp_number"], "theme": a.state.Settings["theme"]}, nil
+			return map[string]any{"speech_enabled": false, "registration_enabled": true, "version": "0.2.0", "site_name": a.state.Settings["site_name"], "icp_number": a.state.Settings["icp_number"], "theme": a.state.Settings["theme"]}, nil
 		}))
 		r.Post("/auth/register", h(false, true, a.register))
 		r.Post("/auth/login", h(false, true, a.login))
@@ -423,7 +423,7 @@ func (a *App) routes() {
 			r.Post("/classes/{id}/tools/"+tool, h(true, true, a.tool))
 		}
 		r.Get("/client/latest", h(false, false, func(w http.ResponseWriter, r *http.Request, u *User) (any, error) {
-			return map[string]string{"version": "0.1.4", "url": "https://github.com/Alumos/classding/releases/download/v0.1.4/ClassDingScreen-amd64-installer.exe", "sha256": "", "notes": "支持通知时长、已读关闭与设备迁移，SHA-256 校验文件见对应 GitHub Release。", "min_supported": "0.1.0"}, nil
+			return map[string]string{"version": "0.2.0", "url": "https://github.com/Alumos/classding/releases/download/v0.2.0/ClassDingScreen-amd64-installer.exe", "sha256": "", "notes": "新版作业悬浮窗与设备迁移，SHA-256 校验文件见对应 GitHub Release。", "min_supported": "0.1.0"}, nil
 		}))
 		r.Get("/admin/overview", h(true, false, a.overview))
 		r.Get("/admin/activation-codes", h(true, false, a.listCodes))

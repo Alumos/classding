@@ -1,5 +1,21 @@
-import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis } from 'recharts';
+import { Area, AreaChart, CartesianGrid, XAxis } from 'recharts';
+import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from '@classding/ui/components/ui/chart';
+
+const config = { count: { label: '发送数量', color: 'var(--chart-1)' } } satisfies ChartConfig;
 
 export default function ActivityChart({ activity }: { activity: { date: string; count: number }[] }) {
-  return <div className="chart-wrap"><ResponsiveContainer width="100%" height="100%"><AreaChart data={activity} margin={{ top: 20, right: 12, left: 0, bottom: 0 }}><defs><linearGradient id="activityFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#79a988" stopOpacity={0.28}/><stop offset="100%" stopColor="#79a988" stopOpacity={0.01}/></linearGradient></defs><CartesianGrid vertical={false} stroke="#edf0e9" strokeDasharray="3 4"/><XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fill: '#939b91', fontSize: 11 }} tickFormatter={(value: string) => value.slice(5)}/><Tooltip contentStyle={{ borderRadius: 12, border: '1px solid #e7ece3', fontSize: 12 }} formatter={(value) => [value, '发送数量']}/><Area type="monotone" dataKey="count" stroke="#4e8c67" strokeWidth={2.5} fill="url(#activityFill)"/></AreaChart></ResponsiveContainer></div>;
+  return <ChartContainer config={config} className="aspect-auto h-60 w-full">
+    <AreaChart data={activity} margin={{ top: 12, left: 12, right: 12 }}>
+      <defs>
+        <linearGradient id="activityFill" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="5%" stopColor="var(--color-count)" stopOpacity={0.3} />
+          <stop offset="95%" stopColor="var(--color-count)" stopOpacity={0.02} />
+        </linearGradient>
+      </defs>
+      <CartesianGrid vertical={false} />
+      <XAxis dataKey="date" tickLine={false} axisLine={false} tickMargin={8} minTickGap={24} tickFormatter={(value: string) => value.slice(5)} />
+      <ChartTooltip cursor={false} content={<ChartTooltipContent indicator="dot" />} />
+      <Area dataKey="count" type="monotone" fill="url(#activityFill)" stroke="var(--color-count)" strokeWidth={2} />
+    </AreaChart>
+  </ChartContainer>;
 }

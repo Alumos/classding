@@ -30,6 +30,14 @@ export function SiteSettingsProvider({children}: {children:React.ReactNode}) {
     return ()=>{active=false;controller?.abort();window.removeEventListener('classding:site-settings',reload);window.removeEventListener('focus',reload);};
   },[]);
   React.useEffect(()=>{
+    // shadcn components read dark tokens from a class on <html>; follow the system setting.
+    const media=window.matchMedia('(prefers-color-scheme: dark)');
+    const apply=()=>document.documentElement.classList.toggle('dark',media.matches);
+    apply();
+    media.addEventListener('change',apply);
+    return ()=>media.removeEventListener('change',apply);
+  },[]);
+  React.useEffect(()=>{
     document.title=settings.site_name;
     document.documentElement.dataset.cdTheme=settings.theme;
   },[settings]);

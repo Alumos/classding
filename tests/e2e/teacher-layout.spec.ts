@@ -18,18 +18,17 @@ test('教师登录后桌面切换页面时侧栏固定于视口，内容宽度�
     layouts.push(await page.evaluate(() => {
       const sidebar = document.querySelector('.sidebar')!.getBoundingClientRect();
       const profile = document.querySelector('.side-profile')!.getBoundingClientRect();
-      const heading = document.querySelector('.page-heading')!.getBoundingClientRect();
-      const footer = document.querySelector('.workspace-footer .cd-site-copyright')!.getBoundingClientRect();
       const main = document.querySelector('.main-content')!.getBoundingClientRect();
-      return {sidebarTop:sidebar.top,sidebarHeight:sidebar.height,profileBottom:profile.bottom,headingLeft:heading.left,headingWidth:heading.width,footerCenter:(footer.left+footer.right)/2,mainCenter:(main.left+main.right)/2,viewportHeight:innerHeight};
+      const footer = document.querySelector('.workspace-footer a, .workspace-footer span')!.getBoundingClientRect();
+      return {sidebarTop:sidebar.top,sidebarHeight:sidebar.height,profileBottom:profile.bottom,mainLeft:main.left,mainWidth:main.width,footerCenter:(footer.left+footer.right)/2,mainCenter:(main.left+main.right)/2,viewportHeight:innerHeight};
     }));
   }
   for (const layout of layouts) {
     expect(Math.abs(layout.sidebarTop)).toBeLessThanOrEqual(1);
     expect(Math.abs(layout.sidebarHeight-layout.viewportHeight)).toBeLessThanOrEqual(1);
     expect(layout.profileBottom).toBeLessThanOrEqual(layout.viewportHeight);
-    expect(Math.abs(layout.headingLeft-layouts[0].headingLeft)).toBeLessThanOrEqual(1);
-    expect(Math.abs(layout.headingWidth-layouts[0].headingWidth)).toBeLessThanOrEqual(1);
+    expect(Math.abs(layout.mainLeft-layouts[0].mainLeft)).toBeLessThanOrEqual(1);
+    expect(Math.abs(layout.mainWidth-layouts[0].mainWidth)).toBeLessThanOrEqual(1);
     expect(Math.abs(layout.footerCenter-layout.mainCenter)).toBeLessThanOrEqual(1);
   }
   await expect(page.locator('.sidebar').getByRole('button',{name:'退出登录'})).toBeInViewport();

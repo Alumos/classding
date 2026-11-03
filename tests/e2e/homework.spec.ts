@@ -80,7 +80,7 @@ test('教师发布、修改、切换显示设置并删除作业，布局适应�
   }
   card=page.locator('.homework-card').filter({has:page.getByRole('heading',{name:subject,exact:true})});
   await card.getByRole('button',{name:'删除'}).click();
-  await page.getByRole('dialog',{name:'删除这条作业？'}).getByRole('button',{name:'确认删除'}).click();
+  await page.getByRole('alertdialog',{name:'删除这条作业？'}).getByRole('button',{name:'确认删除'}).click();
   await expect(card).toHaveCount(0);
   // Reload verifies the deletion using the authenticated application session.
   await page.reload();

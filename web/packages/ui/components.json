@@ -1,0 +1,20 @@
+{
+  "$schema": "https://ui.shadcn.com/schema.json",
+  "style": "base-nova",
+  "rsc": false,
+  "tsx": true,
+  "tailwind": {
+    "config": "",
+    "css": "src/styles/globals.css",
+    "baseColor": "neutral",
+    "cssVariables": true
+  },
+  "iconLibrary": "lucide",
+  "aliases": {
+    "components": "@classding/ui/components",
+    "utils": "@classding/ui/lib/utils",
+    "hooks": "@classding/ui/hooks",
+    "lib": "@classding/ui/lib",
+    "ui": "@classding/ui/components/ui"
+  }
+}
