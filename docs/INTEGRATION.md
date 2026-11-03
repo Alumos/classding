@@ -13,7 +13,7 @@
 - AuthResponse: {access_token,user}；refresh token 放 HttpOnly Cookie。
 
 ## REST
-GET config => {speech_enabled:false,registration_enabled:true,version:'0.1.2'}
+GET config => {speech_enabled:false,registration_enabled:true,version:'0.1.3'}
 POST auth/register {username,password,display_name} => AuthResponse
 POST auth/login {username,password} => AuthResponse
 POST auth/refresh => AuthResponse；POST auth/logout => {ok:true}
@@ -70,3 +70,11 @@ welcome d:{class:{id,name},volume,server_time,recalled_ids?}; notify d:{message_
 浏览器请求携带 `X-ClassDing-Auth-Scope: admin|teacher`，对应独立的刷新 Cookie。`refreshSession()` 合并同一页面并发刷新；服务端提供 30 秒旋转宽限。管理员仅使用账号密码登录，动态验证码已移除。
 
 POST admin/users/:id/unlock-login => {ok:true}，解除教师密码错误造成的短时限制；仅管理员有权操作同作用域教师，写入审计日志。User 可带 login_locked_until。
+
+## v0.1.3 增量接口
+
+- `/config` 返回 `site_name, icp_number, theme`；`GET/PUT /admin/settings` 仅运营管理员可用。
+- `GET /admin/backup` 下载 ZIP；`POST /admin/restore` 上传 `application/zip`，需 `X-ClassDing-Restore: replace`，恢复后所有用户重新登录。
+- `POST /admin/devices/{id}/config` 接收 `{server_url}`，空字符串取消迁移；配置保存在 `device.remote_config`，通过 welcome/config 帧传递。
+- `GET /device/me` 与设备 welcome 返回 `sequence`。`POST /device/migration-check` 用设备令牌接收 `{min_sequence,pending_ids}`；成功返回 `{device,class,volume,sequence,notifications,recalled_ids}`，通知使用目标站重新签名的录音 URL；数据不全返回 409。
+- 通知时长 15–600 秒；普通/表扬通知强制关闭提示音，紧急通知可主动开启。

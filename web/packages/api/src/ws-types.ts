@@ -40,7 +40,17 @@ export interface components {
                     id: string;
                     name: string;
                 };
+                device?: {
+                    id: string;
+                    class_id: string;
+                    name: string;
+                };
                 volume?: number;
+                sequence?: number;
+                remote_config?: {
+                    server_url: string;
+                    revision: string;
+                } | null;
                 server_time: number;
                 recalled_ids?: string[];
             };
@@ -94,7 +104,11 @@ export interface components {
             seq?: number;
             ts?: number;
             d: {
-                volume: number;
+                volume?: number;
+                remote_config?: {
+                    server_url: string;
+                    revision: string;
+                } | null;
             };
         } | {
             /** @constant */

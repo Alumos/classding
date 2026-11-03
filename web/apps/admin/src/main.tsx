@@ -1,3 +1,4 @@
+import {SiteSettingsProvider} from '@classding/ui';
 import {setAuthScope} from '@classding/api';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router';
@@ -14,10 +15,10 @@ const queryClient = new QueryClient({
 });
 
 createRoot(document.getElementById('root')!).render(
-  <QueryClientProvider client={queryClient}>
+  <SiteSettingsProvider><QueryClientProvider client={queryClient}>
       <BrowserRouter basename="/admin">
         <App />
         <Toaster position="top-right" richColors />
       </BrowserRouter>
-  </QueryClientProvider>,
+  </QueryClientProvider></SiteSettingsProvider>,
 );

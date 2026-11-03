@@ -129,8 +129,52 @@
                 "name"
               ]
             },
+            "device": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "class_id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "class_id",
+                "name"
+              ]
+            },
             "volume": {
               "type": "integer"
+            },
+            "sequence": {
+              "type": "integer"
+            },
+            "remote_config": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "server_url": {
+                      "type": "string"
+                    },
+                    "revision": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "server_url",
+                    "revision"
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ]
             },
             "server_time": {
               "type": "integer"
@@ -327,11 +371,31 @@
           "properties": {
             "volume": {
               "type": "integer"
+            },
+            "remote_config": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "server_url": {
+                      "type": "string"
+                    },
+                    "revision": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "server_url",
+                    "revision"
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ]
             }
           },
-          "required": [
-            "volume"
-          ]
+          "required": []
         }
       },
       "required": [

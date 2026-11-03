@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"net/http"
@@ -250,6 +251,76 @@ func atomicWrite(path string, data []byte) error {
 	}
 	return os.Rename(name, path)
 }
+func parseServer(server string) (*url.URL, error) {
+	if strings.ContainsAny(server, "?#\\") {
+		return nil, errors.New("服务器地址无效")
+	}
+	parsed, err := url.Parse(server)
+	if err != nil || parsed.Host == "" || parsed.Hostname() == "" || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.User != nil || parsed.Opaque != "" || parsed.RawPath != "" || (parsed.Path != "" && parsed.Path != "/") || parsed.RawQuery != "" || parsed.Fragment != "" {
+		return nil, errors.New("服务器地址无效")
+	}
+	return parsed, nil
+}
+
+// ProbeServer authenticates against a candidate without changing the active proxy.
+// A redirect is never followed, so the device token cannot be forwarded elsewhere.
+func (a *App) ProbeServer(server, token string, minSequence int64, pendingIDs []string) (ProbeResult, error) {
+	var result ProbeResult
+	target, err := parseServer(server)
+	if err != nil {
+		return result, err
+	}
+	if token == "" {
+		return result, errors.New("设备令牌为空")
+	}
+	if minSequence < 0 || len(pendingIDs) > 4096 {
+		return result, errors.New("迁移检查参数无效")
+	}
+	target.Path = "/api/v1/device/migration-check"
+	payload, err := json.Marshal(map[string]any{"min_sequence": minSequence, "pending_ids": pendingIDs})
+	if err != nil {
+		return result, err
+	}
+	request, err := http.NewRequest(http.MethodPost, target.String(), strings.NewReader(string(payload)))
+	if err != nil {
+		return result, err
+	}
+	request.Header.Set("Authorization", "Bearer "+token)
+	request.Header.Set("Content-Type", "application/json")
+	client := &http.Client{
+		Timeout: 5 * time.Second,
+		CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+	response, err := client.Do(request)
+	if err != nil {
+		return result, err
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		return result, fmt.Errorf("新服务器身份验证失败（%d）", response.StatusCode)
+	}
+	if err := json.NewDecoder(io.LimitReader(response.Body, 16<<20)).Decode(&result); err != nil {
+		return result, errors.New("新服务器返回的设备信息无效")
+	}
+	if result.Device.ID == "" || result.Device.ClassID == "" {
+		return result, errors.New("新服务器返回的设备身份不完整")
+	}
+	return result, nil
+}
+
+type ProbeResult struct {
+	Sequence      int64             `json:"sequence"`
+	Notifications []json.RawMessage `json:"notifications"`
+	RecalledIDs   []string          `json:"recalled_ids"`
+	Device        struct {
+		ID      string `json:"id"`
+		ClassID string `json:"class_id"`
+		Name    string `json:"name"`
+	} `json:"device"`
+}
+
 func (a *App) ConfigureServer(server string) (string, error) {
 	<-a.initDone
 	if a.initErr != nil {
@@ -257,9 +328,9 @@ func (a *App) ConfigureServer(server string) (string, error) {
 	}
 	var target *url.URL
 	if server != "" {
-		parsed, err := url.Parse(server)
-		if err != nil || parsed.Host == "" || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.User != nil || (parsed.Path != "" && parsed.Path != "/") || parsed.RawQuery != "" || parsed.Fragment != "" {
-			return "", errors.New("服务器地址无效")
+		parsed, err := parseServer(server)
+		if err != nil {
+			return "", err
 		}
 		target = parsed
 	}

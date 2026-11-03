@@ -38,15 +38,20 @@ type Member struct {
 	JoinedAt    string `json:"joined_at"`
 }
 type Device struct {
-	ID            string `json:"id"`
-	ClassID       string `json:"class_id"`
-	Name          string `json:"name"`
-	OS            string `json:"os"`
-	ClientVersion string `json:"client_version"`
-	Online        bool   `json:"online"`
-	LastSeenAt    string `json:"last_seen_at"`
-	TokenHash     string `json:"token_hash,omitempty"`
-	Sequence      int64  `json:"sequence,omitempty"`
+	ID            string        `json:"id"`
+	ClassID       string        `json:"class_id"`
+	Name          string        `json:"name"`
+	OS            string        `json:"os"`
+	ClientVersion string        `json:"client_version"`
+	Online        bool          `json:"online"`
+	LastSeenAt    string        `json:"last_seen_at"`
+	TokenHash     string        `json:"token_hash,omitempty"`
+	Sequence      int64         `json:"sequence,omitempty"`
+	RemoteConfig  *RemoteConfig `json:"remote_config,omitempty"`
+}
+type RemoteConfig struct {
+	ServerURL string `json:"server_url"`
+	Revision  string `json:"revision"`
 }
 type Target struct {
 	ClassID     string  `json:"class_id"`
@@ -135,10 +140,16 @@ type State struct {
 	Phrases  map[string]Phrase  `json:"phrases"`
 	Audio    map[string]Audio   `json:"audio"`
 	Audit    map[string]Audit   `json:"audit_logs"`
+	Settings map[string]string  `json:"settings"`
 }
 
 func newState() State {
-	return State{map[string]User{}, map[string]Class{}, map[string]Member{}, map[string]Device{}, map[string]Message{}, map[string]Code{}, map[string]Invite{}, map[string]Session{}, map[string]Phrase{}, map[string]Audio{}, map[string]Audit{}}
+	return State{
+		Users: map[string]User{}, Classes: map[string]Class{}, Members: map[string]Member{},
+		Devices: map[string]Device{}, Messages: map[string]Message{}, Codes: map[string]Code{},
+		Invites: map[string]Invite{}, Sessions: map[string]Session{}, Phrases: map[string]Phrase{},
+		Audio: map[string]Audio{}, Audit: map[string]Audit{}, Settings: map[string]string{},
+	}
 }
 func now() string { return time.Now().UTC().Format(time.RFC3339Nano) }
 func after(duration time.Duration) string {

@@ -315,8 +315,8 @@ func (a *App) bindDevice(w http.ResponseWriter, r *http.Request, _ *User) (any, 
 	if utf8.RuneCountInString(in.Name) > 60 || len(in.OS) > 80 || len(in.ClientVersion) > 30 {
 		return nil, bad("设备信息过长。")
 	}
-	if strings.TrimSpace(in.Name) == "" {
-		in.Name = "教室大屏"
+	if strings.TrimSpace(in.Name) == "" || strings.TrimSpace(in.Name) == "教室大屏" {
+		in.Name = c.Name + "智慧黑板"
 	}
 	token := random(32)
 	d := Device{ID: id("d"), ClassID: c.ID, Name: in.Name, OS: in.OS, ClientVersion: in.ClientVersion, LastSeenAt: now(), TokenHash: hash(token)}
@@ -347,7 +347,7 @@ func (a *App) deviceMe(w http.ResponseWriter, r *http.Request, _ *User) (any, er
 	if !exists {
 		return nil, fail(401, "DEVICE_REVOKED", "班级已被删除。")
 	}
-	return map[string]any{"device": publicDevice(d), "class": map[string]string{"id": c.ID, "name": c.Name}, "volume": c.Volume}, nil
+	return map[string]any{"device": publicDevice(d), "class": map[string]string{"id": c.ID, "name": c.Name}, "volume": c.Volume, "sequence": d.Sequence}, nil
 }
 func (a *App) renameDevice(w http.ResponseWriter, r *http.Request, u *User) (any, error) {
 	d, exists := a.state.Devices[chi.URLParam(r, "id")]

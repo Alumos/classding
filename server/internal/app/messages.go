@@ -50,8 +50,11 @@ func (a *App) createMessage(u *User, in messageInput) (Message, error) {
 	if in.Style != "notice" && in.Style != "praise" && in.Style != "urgent" {
 		return zero, bad("通知样式不正确。")
 	}
-	if in.DisplaySec < 15 || in.DisplaySec > 180 || in.Repeat < 1 || in.Repeat > 3 {
-		return zero, bad("显示时长需为 15–180 秒，朗读次数为 1–3 遍。")
+	if in.DisplaySec < 15 || in.DisplaySec > 600 || in.Repeat < 1 || in.Repeat > 3 {
+		return zero, bad("显示时长需为 15–600 秒，朗读次数为 1–3 遍。")
+	}
+	if in.Style != "urgent" {
+		in.Chime = false
 	}
 	in.Text = strings.TrimSpace(in.Text)
 	if utf8.RuneCountInString(in.Text) > 200 || utf8.RuneCountInString(in.StudentName) > 24 || utf8.RuneCountInString(in.Signature) > 24 {

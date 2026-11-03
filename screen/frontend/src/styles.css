@@ -8,3 +8,10 @@
 .presentation[data-style="urgent"] .presentation-controls{background:#fff1ed}
 .presentation-controls span{white-space:nowrap}
 @media(max-width:550px){.presentation-controls{gap:5px;min-height:42px;padding-bottom:8px}.presentation-controls span{padding:6px 9px}}
+.presentation{cursor:default}
+.presentation .cd-notice-body{overflow-y:auto;justify-content:safe center;overscroll-behavior:contain}
+.presentation-controls{gap:16px;min-height:80px;padding:10px 5vw max(14px,env(safe-area-inset-bottom));font-size:clamp(13px,1.5vh,20px)}
+.dismiss-notice{display:inline-flex;align-items:center;justify-content:center;gap:10px;min-height:58px;min-width:240px;padding:12px 24px;border:2px solid #276c4b;border-radius:12px;background:#276c4b;color:#fff;font-size:clamp(16px,2vh,24px);font-weight:700;cursor:pointer;box-shadow:0 4px 12px #173e2b30}
+.dismiss-notice:hover{background:#1d583c}
+.dismiss-notice:focus-visible{outline:3px solid #276c4b;outline-offset:3px}
+@media(max-width:550px){.presentation-controls{min-height:72px;gap:8px;padding:8px 16px 12px}.dismiss-notice{min-width:0;min-height:52px;padding:10px 15px;font-size:16px}}

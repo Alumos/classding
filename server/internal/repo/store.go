@@ -11,7 +11,7 @@ import (
 	"path/filepath"
 )
 
-var tables = []string{"users", "classes", "class_members", "devices", "messages", "activation_codes", "collab_invites", "sessions", "phrases", "audio", "audit_logs"}
+var tables = []string{"users", "classes", "class_members", "devices", "messages", "activation_codes", "collab_invites", "sessions", "phrases", "audio", "audit_logs", "settings"}
 
 type Store struct {
 	db    *sql.DB
@@ -82,6 +82,16 @@ func (s *Store) Load(ctx context.Context, dst any) error {
 	return json.Unmarshal(data, dst)
 }
 func (s *Store) Save(ctx context.Context, src any) error {
+	return s.save(ctx, src, false)
+}
+
+// Replace atomically replaces every table, including rows whose unique keys
+// belong to different IDs in the previous state.
+func (s *Store) Replace(ctx context.Context, src any) error {
+	return s.save(ctx, src, true)
+}
+
+func (s *Store) save(ctx context.Context, src any, replace bool) error {
 	data, err := json.Marshal(src)
 	if err != nil {
 		return err
@@ -95,18 +105,28 @@ func (s *Store) Save(ctx context.Context, src any) error {
 		return err
 	}
 	defer tx.Rollback()
+	if replace {
+		for _, table := range tables {
+			if _, err = tx.ExecContext(ctx, "DELETE FROM "+table); err != nil {
+				return err
+			}
+		}
+	}
 	next := map[string]map[string]string{}
 	for _, table := range tables {
 		next[table] = map[string]string{}
 		for id, body := range state[table] {
 			value := string(body)
 			next[table][id] = value
-			if s.saved[table][id] == value {
+			if !replace && s.saved[table][id] == value {
 				continue
 			}
 			if _, err = tx.ExecContext(ctx, "INSERT INTO "+table+" (id,body) VALUES (?,?) ON CONFLICT(id) DO UPDATE SET body=excluded.body,updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now')", id, value); err != nil {
 				return err
 			}
+		}
+		if replace {
+			continue
 		}
 		for id := range s.saved[table] {
 			if _, exists := next[table][id]; !exists {

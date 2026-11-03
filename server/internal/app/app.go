@@ -80,6 +80,7 @@ func New(c Config) (*App, error) {
 		store.Close()
 		return nil, err
 	}
+	initializeSettings(&a.state)
 	for key, d := range a.state.Devices {
 		d.Online = false
 		a.state.Devices[key] = d
@@ -127,17 +128,9 @@ type endpoint func(http.ResponseWriter, *http.Request, *User) (any, error)
 
 func (a *App) handle(auth, write bool, fn endpoint) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "GET" && r.Method != "HEAD" {
-			if origin := r.Header.Get("Origin"); origin != "" {
-				scheme := "http"
-				if r.TLS != nil {
-					scheme = "https"
-				}
-				if origin != scheme+"://"+r.Host && origin != "https://"+r.Host {
-					writeError(w, forbidden())
-					return
-				}
-			}
+		if r.Method != "GET" && r.Method != "HEAD" && !validOrigin(r) {
+			writeError(w, forbidden())
+			return
 		}
 
 		if r.Body != nil && r.Body != http.NoBody {
@@ -234,6 +227,17 @@ func (a *App) handle(auth, write bool, fn endpoint) http.HandlerFunc {
 		}
 		writeJSON(w, 200, result)
 	}
+}
+func validOrigin(r *http.Request) bool {
+	origin := r.Header.Get("Origin")
+	if origin == "" {
+		return true
+	}
+	scheme := "http"
+	if r.TLS != nil {
+		scheme = "https"
+	}
+	return origin == scheme+"://"+r.Host || origin == "https://"+r.Host
 }
 func writeJSON(w http.ResponseWriter, status int, value any) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
@@ -363,7 +367,7 @@ func (a *App) routes() {
 		})
 	})
 	r.Get("/healthz", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, 200, map[string]string{"status": "ok", "version": "0.1.2"})
+		writeJSON(w, 200, map[string]string{"status": "ok", "version": "0.1.3"})
 	})
 	r.Get("/metrics", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/plain; version=0.0.4")
@@ -372,7 +376,7 @@ func (a *App) routes() {
 	r.Route("/api/v1", func(r chi.Router) {
 		h := a.handle
 		r.Get("/config", h(false, false, func(w http.ResponseWriter, r *http.Request, u *User) (any, error) {
-			return map[string]any{"speech_enabled": false, "registration_enabled": true, "version": "0.1.2"}, nil
+			return map[string]any{"speech_enabled": false, "registration_enabled": true, "version": "0.1.3", "site_name": a.state.Settings["site_name"], "icp_number": a.state.Settings["icp_number"], "theme": a.state.Settings["theme"]}, nil
 		}))
 		r.Post("/auth/register", h(false, true, a.register))
 		r.Post("/auth/login", h(false, true, a.login))
@@ -395,6 +399,7 @@ func (a *App) routes() {
 		r.Post("/classes/{id}/bind-code", h(true, false, a.bindCode))
 		r.Post("/device/bind", h(false, true, a.bindDevice))
 		r.Get("/device/me", h(false, false, a.deviceMe))
+		r.Post("/device/migration-check", h(false, false, a.deviceMigrationCheck))
 		r.Patch("/devices/{id}", h(true, true, a.renameDevice))
 		r.Delete("/devices/{id}", h(true, true, a.removeDevice))
 		r.Get("/messages", h(true, false, a.listMessages))
@@ -412,7 +417,7 @@ func (a *App) routes() {
 			r.Post("/classes/{id}/tools/"+tool, h(true, true, a.tool))
 		}
 		r.Get("/client/latest", h(false, false, func(w http.ResponseWriter, r *http.Request, u *User) (any, error) {
-			return map[string]string{"version": "0.1.2", "url": "", "sha256": "", "notes": "尚未发布签名安装包", "min_supported": "0.1.0"}, nil
+			return map[string]string{"version": "0.1.3", "url": "https://github.com/Alumos/classding/releases/download/v0.1.3/ClassDingScreen-amd64-installer.exe", "sha256": "", "notes": "支持通知时长、已读关闭与设备迁移，SHA-256 校验文件见对应 GitHub Release。", "min_supported": "0.1.0"}, nil
 		}))
 		r.Get("/admin/overview", h(true, false, a.overview))
 		r.Get("/admin/activation-codes", h(true, false, a.listCodes))
@@ -428,6 +433,11 @@ func (a *App) routes() {
 		r.Patch("/admin/classes/{id}", h(true, true, a.adminUpdateClass))
 		r.Delete("/admin/classes/{id}", h(true, true, a.adminDeleteClass))
 		r.Get("/admin/devices", h(true, false, a.adminDevices))
+		r.Post("/admin/devices/{id}/config", h(true, true, a.configureDevice))
+		r.Get("/admin/settings", h(true, false, a.getSettings))
+		r.Put("/admin/settings", h(true, true, a.updateSettings))
+		r.Get("/admin/backup", a.backup)
+		r.Post("/admin/restore", a.restore)
 		r.Get("/admin/messages", h(true, true, a.adminMessages))
 		r.Get("/admin/audit-logs", h(true, false, a.auditLogs))
 	})

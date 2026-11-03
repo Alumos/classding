@@ -136,10 +136,13 @@ func TestRealtimeTwoClassDeliveryAndReplay(t *testing.T) {
 	c2.CloseNow()
 	var queued Message
 	rtRequest(t, s.URL, "POST", "/messages", token, rtInput(classes[1].ID), 200, &queued)
-	reconnected, _ := rtConnect(t, s.URL, d2, nil)
+	reconnected, reconnectedWelcome := rtConnect(t, s.URL, d2, nil)
 	replay := rtRead(t, reconnected, "notify")
 	if replay.ID != queued.ID || replay.Seq <= f2.Seq {
 		t.Fatal("offline replay failed")
+	}
+	if reconnectedWelcome["sequence"] != float64(replay.Seq) {
+		t.Fatalf("welcome checkpoint does not match latest device sequence: %+v", reconnectedWelcome)
 	}
 	reconnected.CloseNow()
 	rtRequest(t, s.URL, "POST", "/messages/"+queued.ID+"/recall", token, nil, 200, nil)
@@ -172,5 +175,53 @@ func TestCollaborationPermissionAndFilteredReceipts(t *testing.T) {
 	rtRequest(t, s.URL, "GET", "/messages/"+m.ID, token, nil, 200, &view)
 	if len(view.Targets) != 1 || view.Targets[0].ClassID != classes[0].ID {
 		t.Fatal("cross-class receipt leak")
+	}
+}
+
+func TestDeviceRemoteConfigRealtimeAndOfflineReconnect(t *testing.T) {
+	_, s, teacher := rtSetup(t)
+	var classes []Class
+	rtRequest(t, s.URL, "GET", "/classes", teacher, nil, 200, &classes)
+	deviceToken := rtBind(t, s.URL, teacher, classes[0].ID)
+	var me struct {
+		Device Device `json:"device"`
+	}
+	rtRequest(t, s.URL, "GET", "/device/me", deviceToken, nil, 200, &me)
+	var auth struct {
+		Token string `json:"access_token"`
+	}
+	rtRequest(t, s.URL, "POST", "/auth/login", "", map[string]string{"username": "admin", "password": "AdminDing2026!"}, 200, &auth)
+	conn, welcome := rtConnect(t, s.URL, deviceToken, nil)
+	identity, ok := welcome["device"].(map[string]any)
+	if !ok || identity["id"] != me.Device.ID || identity["name"] != me.Device.Name || identity["class_id"] != classes[0].ID {
+		t.Fatalf("welcome omitted identity: %+v", welcome)
+	}
+	if _, exists := welcome["remote_config"]; exists {
+		t.Fatalf("unplanned device has config: %+v", welcome)
+	}
+	endpoint := "/admin/devices/" + me.Device.ID + "/config"
+	var device Device
+	rtRequest(t, s.URL, "POST", endpoint, auth.Token, map[string]string{"server_url": "https://new.example"}, 200, &device)
+	frame := rtRead(t, conn, "config")
+	config, ok := frame.D.(map[string]any)["remote_config"].(map[string]any)
+	if !ok || config["revision"] != device.RemoteConfig.Revision || config["server_url"] != "https://new.example" {
+		t.Fatalf("invalid live config: %+v", frame)
+	}
+	conn.CloseNow()
+	conn, welcome = rtConnect(t, s.URL, deviceToken, nil)
+	config, ok = welcome["remote_config"].(map[string]any)
+	if !ok || config["revision"] != device.RemoteConfig.Revision {
+		t.Fatalf("offline config missing on reconnect: %+v", welcome)
+	}
+	rtRequest(t, s.URL, "POST", endpoint, auth.Token, map[string]string{"server_url": ""}, 200, nil)
+	frame = rtRead(t, conn, "config")
+	value, exists := frame.D.(map[string]any)["remote_config"]
+	if !exists || value != nil {
+		t.Fatalf("cancellation not sent: %+v", frame)
+	}
+	conn.CloseNow()
+	_, welcome = rtConnect(t, s.URL, deviceToken, nil)
+	if _, exists := welcome["remote_config"]; exists {
+		t.Fatalf("cancelled plan returned on reconnect: %+v", welcome)
 	}
 }

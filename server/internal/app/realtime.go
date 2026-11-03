@@ -146,6 +146,33 @@ func (a *App) notify(m Message, t Target) Frame {
 	}
 	return Frame{T: "notify", ID: m.ID, Seq: t.Seq, TS: time.Now().Unix(), D: map[string]any{"message_id": m.ID, "style": m.Style, "text": m.Text, "student_name": m.StudentName, "signature": m.Signature, "class_name": t.ClassName, "audio_url": audio, "chime": m.Chime, "repeat": m.Repeat, "display_sec": m.DisplaySec, "volume": volume, "sent_at": m.CreatedAt, "expires_at": m.ExpiresAt}}
 }
+
+type pendingStatus int
+
+const (
+	pendingMissing pendingStatus = iota
+	pendingRecalled
+	pendingAvailable
+)
+
+// The normal reconnect treats missing messages as recalled; migration probes
+// instead reject them because their absence may mean the backup is stale.
+func (a *App) pendingForDevice(d Device, c Class, messageID string) (Message, Target, pendingStatus) {
+	m, exists := a.state.Messages[messageID]
+	if !exists {
+		return Message{}, Target{}, pendingMissing
+	}
+	for _, target := range m.Targets {
+		if target.DeviceID != d.ID || target.ClassID != d.ClassID {
+			continue
+		}
+		if m.RecalledAt != nil || elapsed(m.ExpiresAt) || !a.licensed(c) {
+			return m, target, pendingRecalled
+		}
+		return m, target, pendingAvailable
+	}
+	return Message{}, Target{}, pendingMissing
+}
 func (a *App) teacherRecipients(classID string) []string {
 	c, exists := a.state.Classes[classID]
 	if !exists {
@@ -238,18 +265,16 @@ func (a *App) deviceWS(w http.ResponseWriter, r *http.Request) {
 	}
 	recalled := []string{}
 	for _, key := range in.PendingIDs {
-		m, ok := a.state.Messages[key]
-		allowed := false
-		for _, target := range m.Targets {
-			if target.DeviceID == d.ID {
-				allowed = true
-			}
-		}
-		if !ok || !allowed || m.RecalledAt != nil || elapsed(m.ExpiresAt) || !a.licensed(c) {
+		_, _, status := a.pendingForDevice(d, c, key)
+		if status != pendingAvailable {
 			recalled = append(recalled, key)
 		}
 	}
-	p.send(Frame{T: "welcome", D: map[string]any{"class": map[string]string{"id": c.ID, "name": c.Name}, "volume": c.Volume, "server_time": time.Now().Unix(), "recalled_ids": recalled}})
+	welcome := map[string]any{"class": map[string]string{"id": c.ID, "name": c.Name}, "device": map[string]string{"id": d.ID, "name": d.Name, "class_id": d.ClassID}, "volume": c.Volume, "sequence": d.Sequence, "server_time": time.Now().Unix(), "recalled_ids": recalled}
+	if d.RemoteConfig != nil {
+		welcome["remote_config"] = d.RemoteConfig
+	}
+	p.send(Frame{T: "welcome", D: welcome})
 	pending := []Frame{}
 	if a.licensed(c) {
 		for _, m := range a.state.Messages {
@@ -339,7 +364,7 @@ func (a *App) ack(d Device, raw json.RawMessage) {
 	before.Targets = append([]Target(nil), m.Targets...)
 	changed := -1
 	for i, t := range m.Targets {
-		if t.DeviceID != d.ID || rank[t.Status] >= next {
+		if t.DeviceID != d.ID || rank[t.Status] >= next && !(t.Status == "played" && in.Status == "dismissed") {
 			continue
 		}
 		stamp := now()

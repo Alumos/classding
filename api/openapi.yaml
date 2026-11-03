@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "课堂叮咚 API",
-    "version": "0.1.2"
+    "version": "0.1.3"
   },
   "servers": [
     {
@@ -39,9 +39,293 @@
         }
       }
     },
+    "/admin/settings": {
+      "get": {
+        "operationId": "get__admin_settings_1",
+        "summary": "GET /admin/settings",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SiteSettings"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "业务错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "operationId": "put__admin_settings_2",
+        "summary": "PUT /admin/settings",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SiteSettings"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SiteSettings"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "业务错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/devices/{id}/config": {
+      "post": {
+        "operationId": "post__admin_devices__id__config_3",
+        "summary": "POST /admin/devices/{id}/config",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "server_url": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "server_url"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Device"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "业务错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/device/migration-check": {
+      "post": {
+        "operationId": "post__device_migration_check_4",
+        "summary": "POST /device/migration-check",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "min_sequence": {
+                    "type": "integer"
+                  },
+                  "pending_ids": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": [
+                  "min_sequence",
+                  "pending_ids"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MigrationCheck"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "业务错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/backup": {
+      "get": {
+        "operationId": "get__admin_backup_5",
+        "summary": "GET /admin/backup",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/zip": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "业务错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/restore": {
+      "post": {
+        "operationId": "post__admin_restore_6",
+        "summary": "POST /admin/restore",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OK"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "业务错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "X-ClassDing-Restore",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "replace"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/zip": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            }
+          }
+        }
+      }
+    },
     "/auth/register": {
       "post": {
-        "operationId": "post__auth_register_1",
+        "operationId": "post__auth_register_7",
         "summary": "POST /auth/register",
         "security": [],
         "requestBody": {
@@ -96,7 +380,7 @@
     },
     "/auth/login": {
       "post": {
-        "operationId": "post__auth_login_2",
+        "operationId": "post__auth_login_8",
         "summary": "POST /auth/login",
         "security": [],
         "requestBody": {
@@ -147,7 +431,7 @@
     },
     "/auth/refresh": {
       "post": {
-        "operationId": "post__auth_refresh_3",
+        "operationId": "post__auth_refresh_9",
         "summary": "POST /auth/refresh",
         "security": [],
         "responses": {
@@ -176,7 +460,7 @@
     },
     "/auth/logout": {
       "post": {
-        "operationId": "post__auth_logout_4",
+        "operationId": "post__auth_logout_10",
         "summary": "POST /auth/logout",
         "security": [],
         "responses": {
@@ -205,7 +489,7 @@
     },
     "/me": {
       "get": {
-        "operationId": "get__me_5",
+        "operationId": "get__me_11",
         "summary": "GET /me",
         "security": [
           {
@@ -236,7 +520,7 @@
         }
       },
       "patch": {
-        "operationId": "patch__me_6",
+        "operationId": "patch__me_12",
         "summary": "PATCH /me",
         "security": [
           {
@@ -287,7 +571,7 @@
     },
     "/me/password": {
       "put": {
-        "operationId": "put__me_password_7",
+        "operationId": "put__me_password_13",
         "summary": "PUT /me/password",
         "security": [
           {
@@ -342,7 +626,7 @@
     },
     "/classes": {
       "get": {
-        "operationId": "get__classes_8",
+        "operationId": "get__classes_14",
         "summary": "GET /classes",
         "security": [
           {
@@ -376,7 +660,7 @@
         }
       },
       "post": {
-        "operationId": "post__classes_9",
+        "operationId": "post__classes_15",
         "summary": "POST /classes",
         "security": [
           {
@@ -434,7 +718,7 @@
     },
     "/classes/join": {
       "post": {
-        "operationId": "post__classes_join_10",
+        "operationId": "post__classes_join_16",
         "summary": "POST /classes/join",
         "security": [
           {
@@ -485,7 +769,7 @@
     },
     "/classes/{id}": {
       "patch": {
-        "operationId": "patch__classes__id__11",
+        "operationId": "patch__classes__id__17",
         "summary": "PATCH /classes/{id}",
         "security": [
           {
@@ -545,7 +829,7 @@
         }
       },
       "delete": {
-        "operationId": "delete__classes__id__12",
+        "operationId": "delete__classes__id__18",
         "summary": "DELETE /classes/{id}",
         "security": [
           {
@@ -588,7 +872,7 @@
     },
     "/classes/{id}/members": {
       "get": {
-        "operationId": "get__classes__id__members_13",
+        "operationId": "get__classes__id__members_19",
         "summary": "GET /classes/{id}/members",
         "security": [
           {
@@ -634,7 +918,7 @@
     },
     "/classes/{id}/members/{uid}": {
       "delete": {
-        "operationId": "delete__classes__id__members__uid__14",
+        "operationId": "delete__classes__id__members__uid__20",
         "summary": "DELETE /classes/{id}/members/{uid}",
         "security": [
           {
@@ -685,7 +969,7 @@
     },
     "/classes/{id}/invites": {
       "post": {
-        "operationId": "post__classes__id__invites_15",
+        "operationId": "post__classes__id__invites_21",
         "summary": "POST /classes/{id}/invites",
         "security": [
           {
@@ -728,7 +1012,7 @@
     },
     "/classes/{id}/bind-code": {
       "post": {
-        "operationId": "post__classes__id__bind_code_16",
+        "operationId": "post__classes__id__bind_code_22",
         "summary": "POST /classes/{id}/bind-code",
         "security": [
           {
@@ -771,7 +1055,7 @@
     },
     "/classes/{id}/devices": {
       "get": {
-        "operationId": "get__classes__id__devices_17",
+        "operationId": "get__classes__id__devices_23",
         "summary": "GET /classes/{id}/devices",
         "security": [
           {
@@ -817,7 +1101,7 @@
     },
     "/classes/{id}/transfer": {
       "post": {
-        "operationId": "post__classes__id__transfer_18",
+        "operationId": "post__classes__id__transfer_24",
         "summary": "POST /classes/{id}/transfer",
         "security": [
           {
@@ -878,7 +1162,7 @@
     },
     "/classes/{id}/leave": {
       "post": {
-        "operationId": "post__classes__id__leave_19",
+        "operationId": "post__classes__id__leave_25",
         "summary": "POST /classes/{id}/leave",
         "security": [
           {
@@ -921,7 +1205,7 @@
     },
     "/devices/{id}": {
       "patch": {
-        "operationId": "patch__devices__id__20",
+        "operationId": "patch__devices__id__26",
         "summary": "PATCH /devices/{id}",
         "security": [
           {
@@ -980,7 +1264,7 @@
         }
       },
       "delete": {
-        "operationId": "delete__devices__id__21",
+        "operationId": "delete__devices__id__27",
         "summary": "DELETE /devices/{id}",
         "security": [
           {
@@ -1023,7 +1307,7 @@
     },
     "/device/bind": {
       "post": {
-        "operationId": "post__device_bind_22",
+        "operationId": "post__device_bind_28",
         "summary": "POST /device/bind",
         "security": [],
         "requestBody": {
@@ -1082,7 +1366,7 @@
     },
     "/device/me": {
       "get": {
-        "operationId": "get__device_me_23",
+        "operationId": "get__device_me_29",
         "summary": "GET /device/me",
         "security": [
           {
@@ -1115,7 +1399,7 @@
     },
     "/client/latest": {
       "get": {
-        "operationId": "get__client_latest_24",
+        "operationId": "get__client_latest_30",
         "summary": "GET /client/latest",
         "security": [],
         "responses": {
@@ -1144,7 +1428,7 @@
     },
     "/messages": {
       "get": {
-        "operationId": "get__messages_25",
+        "operationId": "get__messages_31",
         "summary": "GET /messages",
         "security": [
           {
@@ -1209,7 +1493,7 @@
         }
       },
       "post": {
-        "operationId": "post__messages_26",
+        "operationId": "post__messages_32",
         "summary": "POST /messages",
         "security": [
           {
@@ -1252,7 +1536,7 @@
     },
     "/messages/{id}": {
       "get": {
-        "operationId": "get__messages__id__27",
+        "operationId": "get__messages__id__33",
         "summary": "GET /messages/{id}",
         "security": [
           {
@@ -1295,7 +1579,7 @@
     },
     "/messages/{id}/recall": {
       "post": {
-        "operationId": "post__messages__id__recall_28",
+        "operationId": "post__messages__id__recall_34",
         "summary": "POST /messages/{id}/recall",
         "security": [
           {
@@ -1338,7 +1622,7 @@
     },
     "/messages/{id}/resend": {
       "post": {
-        "operationId": "post__messages__id__resend_29",
+        "operationId": "post__messages__id__resend_35",
         "summary": "POST /messages/{id}/resend",
         "security": [
           {
@@ -1381,7 +1665,7 @@
     },
     "/phrases": {
       "get": {
-        "operationId": "get__phrases_30",
+        "operationId": "get__phrases_36",
         "summary": "GET /phrases",
         "security": [
           {
@@ -1415,7 +1699,7 @@
         }
       },
       "post": {
-        "operationId": "post__phrases_31",
+        "operationId": "post__phrases_37",
         "summary": "POST /phrases",
         "security": [
           {
@@ -1466,7 +1750,7 @@
     },
     "/phrases/{id}": {
       "patch": {
-        "operationId": "patch__phrases__id__32",
+        "operationId": "patch__phrases__id__38",
         "summary": "PATCH /phrases/{id}",
         "security": [
           {
@@ -1525,7 +1809,7 @@
         }
       },
       "delete": {
-        "operationId": "delete__phrases__id__33",
+        "operationId": "delete__phrases__id__39",
         "summary": "DELETE /phrases/{id}",
         "security": [
           {
@@ -1568,7 +1852,7 @@
     },
     "/classes/{id}/tools/countdown": {
       "post": {
-        "operationId": "post__classes__id__tools_countdown_34",
+        "operationId": "post__classes__id__tools_countdown_40",
         "summary": "POST /classes/{id}/tools/countdown",
         "security": [
           {
@@ -1629,7 +1913,7 @@
     },
     "/classes/{id}/tools/rollcall": {
       "post": {
-        "operationId": "post__classes__id__tools_rollcall_35",
+        "operationId": "post__classes__id__tools_rollcall_41",
         "summary": "POST /classes/{id}/tools/rollcall",
         "security": [
           {
@@ -1693,7 +1977,7 @@
     },
     "/classes/{id}/tools/stop": {
       "post": {
-        "operationId": "post__classes__id__tools_stop_36",
+        "operationId": "post__classes__id__tools_stop_42",
         "summary": "POST /classes/{id}/tools/stop",
         "security": [
           {
@@ -1736,7 +2020,7 @@
     },
     "/audio": {
       "post": {
-        "operationId": "post__audio_37",
+        "operationId": "post__audio_43",
         "summary": "POST /audio",
         "security": [
           {
@@ -1788,7 +2072,7 @@
     },
     "/admin/overview": {
       "get": {
-        "operationId": "get__admin_overview_38",
+        "operationId": "get__admin_overview_44",
         "summary": "GET /admin/overview",
         "security": [
           {
@@ -1821,7 +2105,7 @@
     },
     "/admin/activation-codes": {
       "get": {
-        "operationId": "get__admin_activation_codes_39",
+        "operationId": "get__admin_activation_codes_45",
         "summary": "GET /admin/activation-codes",
         "security": [
           {
@@ -1889,7 +2173,7 @@
         }
       },
       "post": {
-        "operationId": "post__admin_activation_codes_40",
+        "operationId": "post__admin_activation_codes_46",
         "summary": "POST /admin/activation-codes",
         "security": [
           {
@@ -1963,7 +2247,7 @@
     },
     "/admin/activation-codes/{code}": {
       "patch": {
-        "operationId": "patch__admin_activation_codes__code__41",
+        "operationId": "patch__admin_activation_codes__code__47",
         "summary": "PATCH /admin/activation-codes/{code}",
         "security": [
           {
@@ -2034,7 +2318,7 @@
     },
     "/admin/users": {
       "get": {
-        "operationId": "get__admin_users_42",
+        "operationId": "get__admin_users_48",
         "summary": "GET /admin/users",
         "security": [
           {
@@ -2068,7 +2352,7 @@
         }
       },
       "post": {
-        "operationId": "post__admin_users_43",
+        "operationId": "post__admin_users_49",
         "summary": "POST /admin/users",
         "security": [
           {
@@ -2130,7 +2414,7 @@
     },
     "/admin/users/{id}": {
       "patch": {
-        "operationId": "patch__admin_users__id__44",
+        "operationId": "patch__admin_users__id__50",
         "summary": "PATCH /admin/users/{id}",
         "security": [
           {
@@ -2196,7 +2480,7 @@
         }
       },
       "delete": {
-        "operationId": "delete__admin_users__id__45",
+        "operationId": "delete__admin_users__id__51",
         "summary": "DELETE /admin/users/{id}",
         "security": [
           {
@@ -2239,7 +2523,7 @@
     },
     "/admin/users/{id}/unlock-login": {
       "post": {
-        "operationId": "post__admin_users__id__unlock_login_46",
+        "operationId": "post__admin_users__id__unlock_login_52",
         "summary": "POST /admin/users/{id}/unlock-login",
         "security": [
           {
@@ -2282,7 +2566,7 @@
     },
     "/admin/classes": {
       "get": {
-        "operationId": "get__admin_classes_47",
+        "operationId": "get__admin_classes_53",
         "summary": "GET /admin/classes",
         "security": [
           {
@@ -2316,7 +2600,7 @@
         }
       },
       "post": {
-        "operationId": "post__admin_classes_48",
+        "operationId": "post__admin_classes_54",
         "summary": "POST /admin/classes",
         "security": [
           {
@@ -2382,7 +2666,7 @@
     },
     "/admin/classes/{id}": {
       "patch": {
-        "operationId": "patch__admin_classes__id__49",
+        "operationId": "patch__admin_classes__id__55",
         "summary": "PATCH /admin/classes/{id}",
         "security": [
           {
@@ -2451,7 +2735,7 @@
         }
       },
       "delete": {
-        "operationId": "delete__admin_classes__id__50",
+        "operationId": "delete__admin_classes__id__56",
         "summary": "DELETE /admin/classes/{id}",
         "security": [
           {
@@ -2494,7 +2778,7 @@
     },
     "/admin/devices": {
       "get": {
-        "operationId": "get__admin_devices_51",
+        "operationId": "get__admin_devices_57",
         "summary": "GET /admin/devices",
         "security": [
           {
@@ -2530,7 +2814,7 @@
     },
     "/admin/messages": {
       "get": {
-        "operationId": "get__admin_messages_52",
+        "operationId": "get__admin_messages_58",
         "summary": "GET /admin/messages",
         "security": [
           {
@@ -2597,7 +2881,7 @@
     },
     "/admin/audit-logs": {
       "get": {
-        "operationId": "get__admin_audit_logs_53",
+        "operationId": "get__admin_audit_logs_59",
         "summary": "GET /admin/audit-logs",
         "security": [
           {
@@ -2774,6 +3058,45 @@
           "created_at"
         ]
       },
+      "RemoteConfig": {
+        "type": "object",
+        "properties": {
+          "server_url": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "server_url",
+          "revision"
+        ]
+      },
+      "SiteSettings": {
+        "type": "object",
+        "properties": {
+          "site_name": {
+            "type": "string"
+          },
+          "icp_number": {
+            "type": "string"
+          },
+          "theme": {
+            "type": "string",
+            "enum": [
+              "green",
+              "blue",
+              "slate"
+            ]
+          }
+        },
+        "required": [
+          "site_name",
+          "icp_number",
+          "theme"
+        ]
+      },
       "Device": {
         "type": "object",
         "properties": {
@@ -2799,6 +3122,16 @@
             "type": [
               "string",
               "null"
+            ]
+          },
+          "remote_config": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/RemoteConfig"
+              },
+              {
+                "type": "null"
+              }
             ]
           }
         },
@@ -3158,12 +3491,29 @@
           },
           "version": {
             "type": "string"
+          },
+          "site_name": {
+            "type": "string"
+          },
+          "icp_number": {
+            "type": "string"
+          },
+          "theme": {
+            "type": "string",
+            "enum": [
+              "green",
+              "blue",
+              "slate"
+            ]
           }
         },
         "required": [
           "speech_enabled",
           "registration_enabled",
-          "version"
+          "version",
+          "site_name",
+          "icp_number",
+          "theme"
         ]
       },
       "AuditLog": {
@@ -3331,12 +3681,150 @@
           },
           "volume": {
             "type": "integer"
+          },
+          "sequence": {
+            "type": "integer"
           }
         },
         "required": [
           "device",
           "class",
-          "volume"
+          "volume",
+          "sequence"
+        ]
+      },
+      "MigrationCheck": {
+        "type": "object",
+        "properties": {
+          "device": {
+            "$ref": "#/components/schemas/Device"
+          },
+          "class": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name"
+            ]
+          },
+          "volume": {
+            "type": "integer"
+          },
+          "sequence": {
+            "type": "integer"
+          },
+          "notifications": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "t": {
+                  "type": "string",
+                  "enum": [
+                    "notify"
+                  ]
+                },
+                "id": {
+                  "type": "string"
+                },
+                "seq": {
+                  "type": "integer"
+                },
+                "ts": {
+                  "type": "integer"
+                },
+                "d": {
+                  "type": "object",
+                  "properties": {
+                    "message_id": {
+                      "type": "string"
+                    },
+                    "style": {
+                      "type": "string"
+                    },
+                    "text": {
+                      "type": "string"
+                    },
+                    "student_name": {
+                      "type": "string"
+                    },
+                    "signature": {
+                      "type": "string"
+                    },
+                    "class_name": {
+                      "type": "string"
+                    },
+                    "audio_url": {
+                      "type": "string"
+                    },
+                    "chime": {
+                      "type": "boolean"
+                    },
+                    "repeat": {
+                      "type": "integer"
+                    },
+                    "display_sec": {
+                      "type": "integer"
+                    },
+                    "volume": {
+                      "type": "integer"
+                    },
+                    "sent_at": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "expires_at": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "message_id",
+                    "style",
+                    "text",
+                    "student_name",
+                    "signature",
+                    "class_name",
+                    "audio_url",
+                    "chime",
+                    "repeat",
+                    "display_sec",
+                    "volume",
+                    "sent_at",
+                    "expires_at"
+                  ]
+                }
+              },
+              "required": [
+                "t",
+                "id",
+                "seq",
+                "ts",
+                "d"
+              ]
+            }
+          },
+          "recalled_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "device",
+          "class",
+          "volume",
+          "sequence",
+          "notifications",
+          "recalled_ids"
         ]
       },
       "MessageInput": {
@@ -3376,7 +3864,7 @@
           "display_sec": {
             "type": "integer",
             "minimum": 15,
-            "maximum": 180
+            "maximum": 600
           },
           "repeat": {
             "type": "integer",

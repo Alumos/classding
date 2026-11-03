@@ -43,6 +43,10 @@ jobs:
           pnpm --filter @classding/screen typecheck
           pnpm exec vitest run screen/frontend/tests/service.test.ts
 
+      - name: Verify native network migration
+        working-directory: screen
+        run: go test ./...
+
       - name: Install Wails and NSIS
         shell: pwsh
         run: |

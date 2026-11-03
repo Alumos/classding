@@ -47,6 +47,16 @@ test('管理员登录、生成激活码、搜索与查看真实数据',async({pa
 test('教师登录、切换页面并保持移动端布局',async({page},testInfo)=>{
   await teacherLogin(page);
   await noOverflow(page);
+  const fields=page.locator('.student-signature-fields');
+  const alignment=await fields.evaluate(element=>{
+    const labels=Array.from(element.querySelectorAll('label'));
+    const positions=labels.map(label=>({input:label.querySelector('input')!.getBoundingClientRect(),hint:label.querySelector('p')!.getBoundingClientRect()}));
+    return {inputOffset:Math.abs(positions[0].input.top-positions[1].input.top),heightOffset:Math.abs(positions[0].input.height-positions[1].input.height),hintOffset:Math.abs(positions[0].hint.top-positions[1].hint.top)};
+  });
+  expect(alignment.inputOffset).toBeLessThanOrEqual(1);
+  expect(alignment.heightOffset).toBeLessThanOrEqual(1);
+  expect(alignment.hintOffset).toBeLessThanOrEqual(1);
+  await fields.screenshot({path:testInfo.outputPath('aligned-name-fields.png')});
   await page.screenshot({path:testInfo.outputPath('teacher-send.png'),fullPage:true});
   await navigate(page,'/classes','我的班级');
   await expect(page.getByRole('heading',{name:'三年级（1）班',exact:true})).toBeVisible();
@@ -88,7 +98,7 @@ test('真实绑定大屏、发送200字通知并更新送达回执',async({page,
   const entry=page.locator('.history-row').filter({hasText:message});
   await expect(entry).toBeVisible();
   await expect(entry.getByText(/已送达|正在播放|已播放|投递失败/).filter({visible:true}).first()).toBeVisible();
-  await screen.getByRole('button',{name:'关闭通知'}).click();
+  await screen.getByRole('button',{name:'已读通知，关闭消息'}).click();
   await screen.close();
 });
 test('教师在开发模式下录制合成音源并上传原声',async({page})=>{

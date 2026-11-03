@@ -78,11 +78,12 @@ type claims struct {
 	Subject string `json:"sub"`
 	Expires int64  `json:"exp"`
 	Version int    `json:"ver"`
+	Epoch   string `json:"epoch,omitempty"`
 }
 
 func (a *App) access(u User) string {
 	header := base64.RawURLEncoding.EncodeToString([]byte(`{"alg":"HS256","typ":"JWT"}`))
-	body, _ := json.Marshal(claims{u.ID, time.Now().Add(15 * time.Minute).Unix(), u.TokenVersion})
+	body, _ := json.Marshal(claims{Subject: u.ID, Expires: time.Now().Add(15 * time.Minute).Unix(), Version: u.TokenVersion, Epoch: a.state.Settings["_auth_epoch"]})
 	payload := header + "." + base64.RawURLEncoding.EncodeToString(body)
 	mac := hmac.New(sha256.New, []byte(a.config.JWTSecret))
 	mac.Write([]byte(payload))
@@ -107,7 +108,7 @@ func (a *App) verify(token string) (claims, error) {
 	if err != nil {
 		return c, err
 	}
-	if err = json.Unmarshal(body, &c); err != nil || c.Expires <= time.Now().Unix() {
+	if err = json.Unmarshal(body, &c); err != nil || c.Expires <= time.Now().Unix() || c.Epoch != a.state.Settings["_auth_epoch"] {
 		return c, errors.New("expired token")
 	}
 	return c, nil

@@ -1,7 +1,7 @@
 {
   "name": "classding",
   "private": true,
-  "version": "0.1.2",
+  "version": "0.1.3",
   "type": "module",
   "packageManager": "pnpm@11.25.0",
   "engines": {
@@ -15,7 +15,7 @@
     "build": "pnpm -r --if-present build",
     "typecheck": "pnpm -r --if-present typecheck",
     "check:toolchain": "node scripts/check-toolchain.mjs",
-    "test": "vitest run screen/frontend/tests",
+    "test": "vitest run screen/frontend/tests web/apps/admin/src/*.test.ts",
     "test:e2e": "playwright test",
     "api:generate": "node scripts/generate-contract.mjs && pnpm --filter @classding/api-generator generate",
     "prepare:static": "node scripts/prepare-static.mjs"

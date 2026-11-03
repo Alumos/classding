@@ -2,19 +2,21 @@ import { createContext, lazy, Suspense, useContext, useEffect, useState, type Fo
 import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router';
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError, onSessionExpired, refreshSession, setAccessToken, type components } from '@classding/api';
-import { Badge, Brand, Button, Card, CopyButton, Dialog, Input } from '@classding/ui';
+import { SiteFooter, Badge, Brand, Button, Card, CopyButton, Dialog, Input } from '@classding/ui';
 import { toast } from 'sonner';
 import {
   Activity, ArrowDownToLine, ArrowRight, BellRing, BookOpen, Check, ChevronDown,
   ClipboardList, Copy, KeyRound, LayoutDashboard, LoaderCircle, LogOut, Monitor, RefreshCw,
-  Search, ShieldCheck, Users, XCircle, type LucideIcon,
+  Search, Settings, ShieldCheck, Upload, Users, XCircle, type LucideIcon,
 } from 'lucide-react';
+import { binaryRequest } from './binaryRequest';
+import { saveDeviceConfigurations } from './deviceConfig';
 
 const ActivityChart = lazy(() => import('./ActivityChart'));
 
 type User = components['schemas']['User'] & { status?: string };
 type Classroom = components['schemas']['Class'];
-type Device = components['schemas']['Device'] & { last_ip?: string };
+type Device = components['schemas']['Device'] & { last_ip?: string; remote_config?: { server_url: string; revision: string | number } | null };
 type Message = components['schemas']['Message'];
 type ActivationCode = components['schemas']['ActivationCode'];
 type AuthResponse = { access_token: string; user: User };
@@ -25,6 +27,7 @@ type Overview = {
 };
 type AuditLog = { id: string; actor: string; action: string; target: string; at: string };
 type MessagePage = { items: Message[]; next_cursor: string | null };
+type SiteSettings = { site_name: string; icp_number: string; theme: 'green' | 'blue' | 'slate' };
 
 const json = (method: string, body?: unknown): RequestInit => ({
   method,
@@ -113,7 +116,7 @@ function Login({ onLogin, initialError }: { onLogin: (user: User) => void; initi
         <div className="login-card">
           <div className="eyebrow"><span/> WELCOME BACK</div>
           <h2>欢迎回来</h2>
-          <p className="muted">登录课堂叮咚管理后台，继续今天的工作。</p>
+          <p className="muted">登录管理后台，继续今天的工作。</p>
           <form onSubmit={submit} className="form-stack">
             <label>管理员账号<Input autoFocus autoComplete="username" placeholder="请输入账号" value={username} onChange={e => setUsername(e.target.value)} /></label>
             <label>密码<Input type="password" autoComplete="current-password" placeholder="请输入密码" value={password} onChange={e => setPassword(e.target.value)} /></label>
@@ -124,7 +127,7 @@ function Login({ onLogin, initialError }: { onLogin: (user: User) => void; initi
         </div>
       </section>
     </div>
-    <div className="login-copyright">© ClassDing 课堂叮咚 <span>·</span> 把声音带到教室的每个角落</div>
+    <SiteFooter className="login-copyright"/>
   </div>;
 }
 
@@ -136,6 +139,7 @@ const navItems: { to: string; label: string; icon: LucideIcon; superOnly?: boole
   { to: '/devices', label: '设备管理', icon: Monitor },
   { to: '/messages', label: '消息审计', icon: BellRing },
   { to: '/audit-logs', label: '操作日志', icon: ClipboardList, superOnly: true },
+  { to: '/settings', label: '系统配置', icon: Settings, superOnly: true },
 ];
 function Shell() {
   const { user, logout } = useSession();
@@ -163,9 +167,10 @@ function Shell() {
         <Route path="/devices" element={<DevicesPage/>}/>
         <Route path="/messages" element={<MessagesPage/>}/>
         <Route path="/audit-logs" element={<SuperOnly><AuditPage/></SuperOnly>}/>
+        <Route path="/settings" element={<SuperOnly><SettingsPage/></SuperOnly>}/>
         <Route path="*" element={<Navigate to="/" replace/>}/>
       </Routes></main>
-      <footer className="app-footer"><span>© ClassDing 课堂叮咚</span><span>用心连接每一间教室 <span className="footer-star">✳</span></span></footer>
+      <SiteFooter className="app-footer"/>
     </div>
   </div>;
 }
@@ -201,7 +206,7 @@ function OverviewPage() {
   return <>
     <PageHead eyebrow="OVERVIEW" title="工作概览" description="从这里，了解每一间教室的连接状态。" />
     <section className="welcome-banner"><div className="welcome-copy"><div className="welcome-kicker"><span/> CLASSDING DASHBOARD</div><h2>你好，{user.display_name || user.username} <span>✳</span></h2><p>今天也一起，让沟通及时抵达。</p><div className="welcome-chip"><span/> {user.role === 'super_admin' ? '全局管理视图' : '学校管理视图'}</div></div><div className="welcome-decoration" aria-hidden="true"><div className="welcome-ring ring-one"/><div className="welcome-ring ring-two"/><span className="welcome-bell"><BellRing size={52} strokeWidth={1.2}/></span><span className="welcome-spark">✦</span></div></section>
-    <div className="section-line"><div><h2>数据概览</h2><p>实时掌握课堂叮咚的运行情况</p></div><span>当前统计 <i/></span></div>
+    <div className="section-line"><div><h2>数据概览</h2><p>实时掌握站点的运行情况</p></div><span>当前统计 <i/></span></div>
     {query.isError ? <Card className="panel"><ResultState loading={false} error={query.error} empty={false}>{null}</ResultState></Card> : <>
       <div className="stats-grid">
         <StatCard label="在线设备" value={data ? number(data.online_devices) : '—'} hint={data ? `共 ${number(data.total_devices)} 台设备` : '正在获取设备状态'} icon={Monitor} tone="green"/>
@@ -460,15 +465,62 @@ function ClassesPage() {
   </>;
 }
 function DevicesPage() {
+  const { user } = useSession();
+  const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('');
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [targets, setTargets] = useState<Device[]>([]);
+  const [serverUrl, setServerUrl] = useState('');
+  const [failures, setFailures] = useState<{ device: Device; message: string }[]>([]);
   const query = useQuery({ queryKey: ['admin', 'devices'], queryFn: () => api<Device[]>('/admin/devices') });
   const devices = (query.data ?? []).filter(item => `${item.name} ${item.class_id} ${item.os ?? ''} ${item.client_version ?? ''}`.toLowerCase().includes(search.trim().toLowerCase()) && (!status || (status === 'online' ? item.online : !item.online)));
+  const selectedDevices = (query.data ?? []).filter(item => selectedIds.has(item.id));
+  const allVisibleSelected = devices.length > 0 && devices.every(item => selectedIds.has(item.id));
+  const saveConfig = useMutation({
+    mutationFn: ({ items, url }: { items: Device[]; url: string }) => saveDeviceConfigurations(items, url),
+    onSuccess: ({ errors, saved, url }) => {
+      void queryClient.invalidateQueries({ queryKey: ['admin', 'devices'] });
+      setSelectedIds(new Set(errors.map(item => item.device.id)));
+      if (errors.length) {
+        setFailures(errors);
+        setTargets(errors.map(item => item.device));
+        toast.error(`${saved} 台已保存，${errors.length} 台失败，请检查后重试`);
+      } else {
+        setTargets([]); setFailures([]);
+        toast.success(url ? `${saved} 台设备配置已保存，等待设备接收或上线` : `${saved} 台设备的切换计划已取消`);
+      }
+    },
+  });
+  function openConfig(items: Device[]) {
+    setTargets(items);
+    setServerUrl(items.length === 1 ? items[0].remote_config?.server_url ?? '' : '');
+    setFailures([]);
+  }
+  function toggleVisible() {
+    setSelectedIds(previous => {
+      const next = new Set(previous);
+      for (const device of devices) allVisibleSelected ? next.delete(device.id) : next.add(device.id);
+      return next;
+    });
+  }
+  function submitConfig(event: FormEvent) {
+    event.preventDefault();
+    if (targets.length && !saveConfig.isPending) saveConfig.mutate({ items: targets, url: serverUrl.trim() });
+  }
   return <><PageHead eyebrow="DEVICES" title="设备管理" description="了解教室大屏的在线状态和客户端信息。"/>
     <Panel title="设备列表" sub="连接状态以服务端数据为准" action={<span className="panel-count">{query.data ? `${query.data.length} 台设备` : '设备列表'}</span>}>
-      <div className="filter-row"><SearchBox value={search} onChange={setSearch} placeholder="搜索设备、班级 ID 或版本"/><select aria-label="筛选设备状态" value={status} onChange={e => setStatus(e.target.value)}><option value="">全部状态</option><option value="online">在线</option><option value="offline">离线</option></select><span className="filter-count">{query.data ? `共 ${devices.length} 条` : ''}</span></div>
-      <ResultState loading={query.isLoading} error={query.error} empty={!devices.length} emptyText="没有找到设备"><div className="table-scroll"><table><thead><tr><th>设备名称</th><th>连接状态</th><th>班级 ID</th><th>系统 / 版本</th><th>最后心跳</th><th>IP 地址</th></tr></thead><tbody>{devices.map(item => <tr key={item.id}><td><div className="person-cell"><span className="device-avatar"><Monitor size={17}/></span><div><strong>{item.name}</strong><small>{item.id}</small></div></div></td><td><Badge variant={item.online ? 'success' : 'secondary'}><span className="badge-dot"/>{item.online ? '在线' : '离线'}</Badge></td><td>{item.class_id}</td><td>{item.os || '—'} <span className="subtle">/ {item.client_version || '—'}</span></td><td>{dateTime(item.last_seen_at)}</td><td>{item.last_ip || '—'}</td></tr>)}</tbody></table></div></ResultState>
-    </Panel></>;
+      <div className="filter-row"><SearchBox value={search} onChange={setSearch} placeholder="搜索设备、班级 ID 或版本"/><select aria-label="筛选设备状态" value={status} onChange={e => setStatus(e.target.value)}><option value="">全部状态</option><option value="online">在线</option><option value="offline">离线</option></select>{user.role === 'super_admin' && <Button variant="outline" size="sm" disabled={!selectedDevices.length} onClick={() => openConfig(selectedDevices)}>配置所选设备（{selectedDevices.length}）</Button>}<span className="filter-count">{query.data ? `共 ${devices.length} 条` : ''}</span></div>
+      <ResultState loading={query.isLoading} error={query.error} empty={!devices.length} emptyText="没有找到设备"><div className="table-scroll"><table><thead><tr>{user.role === 'super_admin' && <th><input type="checkbox" aria-label="选择全部筛选设备" checked={allVisibleSelected} onChange={toggleVisible}/></th>}<th>设备名称</th><th>连接状态</th><th>班级 ID</th><th>系统 / 版本</th><th>最后心跳</th><th>IP 地址</th>{user.role === 'super_admin' && <><th>服务器切换计划</th><th>操作</th></>}</tr></thead><tbody>{devices.map(item => <tr key={item.id}>{user.role === 'super_admin' && <td><input type="checkbox" aria-label={`选择设备 ${item.name} ${item.id}`} checked={selectedIds.has(item.id)} onChange={event => { const checked = event.target.checked; setSelectedIds(previous => { const next = new Set(previous); checked ? next.add(item.id) : next.delete(item.id); return next; }); }}/></td>}<td><div className="person-cell"><span className="device-avatar"><Monitor size={17}/></span><div><strong>{item.name}</strong><small>{item.id}</small></div></div></td><td><Badge variant={item.online ? 'success' : 'secondary'}><span className="badge-dot"/>{item.online ? '在线' : '离线'}</Badge></td><td>{item.class_id}</td><td>{item.os || '—'} <span className="subtle">/ {item.client_version || '—'}</span></td><td>{dateTime(item.last_seen_at)}</td><td>{item.last_ip || '—'}</td>{user.role === 'super_admin' && <><td>{item.remote_config?.server_url ? <><strong>{item.remote_config.server_url}</strong><small>配置已保存，{item.online ? '等待设备接收' : '等待设备上线'} · 版本 {item.remote_config.revision}</small></> : '未设置'}</td><td><div className="row-actions"><button onClick={() => openConfig([item])}>配置服务器</button></div></td></>}</tr>)}</tbody></table></div></ResultState>
+    </Panel>
+    <Dialog open={targets.length > 0} onClose={() => { if (!saveConfig.isPending) { setTargets([]); setFailures([]); } }} title="配置设备服务器" description={`将为 ${targets.length} 台设备保存服务器切换计划。`} footer={<><Button variant="outline" disabled={saveConfig.isPending} onClick={() => { setTargets([]); setFailures([]); }}>取消</Button><Button type="submit" form="device-config-form" disabled={saveConfig.isPending}>{saveConfig.isPending ? '正在保存…' : '保存配置'}</Button></>}>
+      <form id="device-config-form" className="dialog-form" onSubmit={submitConfig}>
+        <p className="guidance">请先为设备安装支持迁移的新版本客户端，并确保新站在恢复最终备份前无法使用原设备令牌通过验证。<br/><br/>1. 保存新服务器地址，下发切换计划。<br/>2. 暂停在旧站发送消息及其他会修改数据的操作。<br/>3. 从旧站导出最终备份并恢复到新站，确认新站域名和 HTTPS 配置正确。<br/>4. 客户端验证原设备令牌和数据后切换；离线设备会在上线后接收计划。<br/><br/>备份后请勿继续写入旧站，两站不会实时同步。配置已保存不代表设备已经接收或切换。</p>
+        <label>服务器地址<Input type="url" placeholder="例如：https://classding.example.com" value={serverUrl} onChange={event => setServerUrl(event.target.value)}/><small>请填写 HTTP 或 HTTPS 站点根地址；留空将取消这些设备的切换计划。</small></label>
+        {failures.length > 0 && <div className="form-error" role="alert"><strong>以下设备保存失败，可修改后重试：</strong><ul className="failure-list">{failures.map(({ device, message }) => <li key={device.id}>{device.name}（{device.id}）：{message}</li>)}</ul></div>}
+      </form>
+    </Dialog>
+  </>;
 }
 function MessageTable({ messages, compact = false, onSelect }: { messages: Message[]; compact?: boolean; onSelect?: (message: Message) => void }) {
   return <div className="table-scroll"><table><thead><tr><th>通知内容</th><th>发送人</th><th>目标班级</th><th>发送时间</th><th>回执状态</th>{onSelect && <th>操作</th>}</tr></thead><tbody>{messages.map(item => <tr key={item.id}><td><div className="message-content"><span className={`message-icon ${item.style === 'urgent' ? 'urgent' : item.style === 'praise' ? 'praise' : ''}`}><BellRing size={16}/></span><div><strong>{item.student_name ? `${item.student_name} · ` : ''}{item.text || (item.kind === 'voice' ? '语音通知' : '课堂通知')}</strong>{!compact && <small>{item.id}</small>}</div></div></td><td>{item.signature || item.sender_id || '—'}</td><td>{item.targets?.length ? [...new Set(item.targets.map(t => t.class_name || t.class_id))].join('、') : '—'}</td><td>{dateTime(item.created_at)}</td><td><span className={`receipt ${receiptTone(item.targets?.some(t => t.status === 'failed' || t.status === 'expired') ? 'failed' : item.targets?.length && item.targets.every(t => ['delivered', 'played', 'dismissed'].includes(t.status)) ? 'delivered' : undefined)}`}><i/>{messageSummary(item)}</span></td>{onSelect && <td><div className="row-actions"><button onClick={() => onSelect(item)}>查看回执</button></div></td>}</tr>)}</tbody></table></div>;
@@ -506,6 +558,112 @@ function AuditPage() {
       <div className="filter-row"><SearchBox value={search} onChange={setSearch} placeholder="搜索操作人、操作或对象"/><span className="filter-count">{query.data ? `共 ${logs.length} 条` : ''}</span></div>
       <ResultState loading={query.isLoading} error={query.error} empty={!logs.length} emptyText="没有找到操作记录"><div className="table-scroll"><table><thead><tr><th>操作时间</th><th>操作人</th><th>操作</th><th>操作对象</th><th>记录 ID</th></tr></thead><tbody>{logs.map(item => <tr key={item.id}><td>{dateTime(item.at)}</td><td><strong>{item.actor || '—'}</strong></td><td><Badge variant="secondary">{item.action}</Badge></td><td>{item.target || '—'}</td><td className="subtle">{item.id}</td></tr>)}</tbody></table></div></ResultState>
     </Panel></>;
+}
+
+function SettingsPage() {
+  const { logout } = useSession();
+  const queryClient = useQueryClient();
+  const query = useQuery({ queryKey: ['admin', 'settings'], queryFn: () => api<SiteSettings>('/admin/settings') });
+  const [restoreOpen, setRestoreOpen] = useState(false);
+  const [restoreFile, setRestoreFile] = useState<File | null>(null);
+  const [confirmation, setConfirmation] = useState('');
+  const [restoreError, setRestoreError] = useState('');
+  const backup = useMutation({
+    mutationFn: async () => {
+      const response = await binaryRequest('/admin/backup');
+      const blob = await response.blob();
+      const signature = new Uint8Array(await blob.slice(0, 4).arrayBuffer());
+      if (signature.length < 4 || signature[0] !== 0x50 || signature[1] !== 0x4b || !((signature[2] === 0x03 && signature[3] === 0x04) || (signature[2] === 0x05 && signature[3] === 0x06) || (signature[2] === 0x07 && signature[3] === 0x08))) {
+        throw new Error('服务端返回的备份文件不是 ZIP 文件。');
+      }
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = `classding-backup-${localDate(new Date().toISOString())}.zip`;
+      document.body.appendChild(anchor); anchor.click(); anchor.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    },
+    onSuccess: () => toast.success('备份文件已开始下载'),
+    onError: error => toast.error(`备份导出失败：${errorMessage(error)}`),
+  });
+  const restore = useMutation({
+    mutationFn: async (file: File) => {
+      const response = await binaryRequest('/admin/restore', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/zip', 'X-ClassDing-Restore': 'replace' },
+        body: file,
+      });
+      const result = await response.json().catch(() => null) as { ok?: boolean } | null;
+      if (!result?.ok) throw new Error('服务端未确认恢复成功，请检查数据状态后再操作。');
+    },
+    onSuccess: () => {
+      window.dispatchEvent(new Event('classding:site-settings'));
+      logout();
+      toast.success('全站数据已恢复，请重新登录');
+    },
+    onError: error => setRestoreError(errorMessage(error)),
+  });
+  function closeRestore() {
+    if (restore.isPending) return;
+    setRestoreOpen(false); setRestoreFile(null); setConfirmation(''); setRestoreError('');
+  }
+  function submitRestore(event: FormEvent) {
+    event.preventDefault(); setRestoreError('');
+    if (!restoreFile || !/\.zip$/i.test(restoreFile.name)) { setRestoreError('请选择 ZIP 格式的备份文件。'); return; }
+    if (restoreFile.size > 256 * 1024 * 1024) { setRestoreError('备份文件不能超过 256 MiB。'); return; }
+    if (confirmation !== '覆盖恢复') { setRestoreError('请输入“覆盖恢复”以确认操作。'); return; }
+    restore.mutate(restoreFile);
+  }
+  return <><PageHead eyebrow="SYSTEM SETTINGS" title="系统配置" description="管理站点展示、全站备份与数据恢复。"/>
+    <div className="settings-grid">
+      <Panel title="站点信息" sub="设置教师端与管理后台的站点名称、备案号和主题。">
+        <ResultState loading={query.isLoading} error={query.error} empty={!query.data}>
+          {query.data && <SettingsForm initial={query.data} onSaved={settings => {
+            queryClient.setQueryData(['admin', 'settings'], settings);
+            window.dispatchEvent(new Event('classding:site-settings'));
+          }}/>}
+        </ResultState>
+      </Panel>
+      <Panel title="全站备份与恢复" sub="备份包含全站数据和设备身份，请妥善保管文件。">
+        <div className="settings-content backup-content">
+          <div className="backup-action"><div><h3>导出全站备份</h3><p>下载 ZIP 文件，用于迁移或恢复此站点的数据。</p></div><Button variant="outline" disabled={backup.isPending || restore.isPending} onClick={() => backup.mutate()}><ArrowDownToLine size={17}/>{backup.isPending ? '正在导出…' : '下载备份'}</Button></div>
+          <div className="backup-action"><div><h3>导入备份并恢复</h3><p>恢复会覆盖当前全站数据，操作完成后需要重新登录。</p></div><Button variant="destructive" disabled={backup.isPending || restore.isPending} onClick={() => setRestoreOpen(true)}><Upload size={17}/>导入并恢复</Button></div>
+        </div>
+      </Panel>
+    </div>
+    <Dialog open={restoreOpen} onClose={closeRestore} title="确认覆盖恢复全站数据？" description="恢复将用备份覆盖当前全站数据，此操作无法撤销。请先下载当前站点备份。" footer={<><Button variant="outline" disabled={restore.isPending} onClick={closeRestore}>取消</Button><Button variant="destructive" type="submit" form="restore-form" disabled={restore.isPending || !restoreFile || confirmation !== '覆盖恢复'}>{restore.isPending ? '正在恢复，请勿关闭页面…' : '确认覆盖恢复'}</Button></>}>
+      <form id="restore-form" className="dialog-form" onSubmit={submitRestore}>
+        <p className="restore-warning">备份中的账号、消息及设备身份等数据将替换当前数据。恢复成功后，管理员需要重新登录。</p>
+        <label>选择备份文件<Input type="file" accept=".zip,application/zip" onChange={event => { setRestoreFile(event.target.files?.[0] ?? null); setRestoreError(''); }}/><small>ZIP 文件最大 256 MiB，解压后最大 512 MiB。</small></label>
+        <label>输入“覆盖恢复”确认<Input value={confirmation} onChange={event => setConfirmation(event.target.value)} autoComplete="off"/></label>
+        {restoreError && <p className="form-error" role="alert">{restoreError}</p>}
+      </form>
+    </Dialog>
+  </>;
+}
+
+function SettingsForm({ initial, onSaved }: { initial: SiteSettings; onSaved: (settings: SiteSettings) => void }) {
+  const [form, setForm] = useState(initial);
+  const [formError, setFormError] = useState('');
+  useEffect(() => setForm(initial), [initial]);
+  const save = useMutation({
+    mutationFn: (settings: SiteSettings) => api<SiteSettings>('/admin/settings', json('PUT', settings)),
+    onSuccess: settings => { setForm(settings); onSaved(settings); toast.success('站点配置已保存'); },
+    onError: error => setFormError(errorMessage(error)),
+  });
+  function submit(event: FormEvent) {
+    event.preventDefault(); setFormError('');
+    if (!form.site_name.trim()) { setFormError('请输入站点名称。'); return; }
+    if (Array.from(form.site_name.trim()).length > 60) { setFormError('站点名称不能超过 60 个字符。'); return; }
+    save.mutate({ ...form, site_name: form.site_name.trim(), icp_number: form.icp_number.trim() });
+  }
+  return <form className="dialog-form settings-content" onSubmit={submit}>
+    <label>站点名称<Input required value={form.site_name} onChange={event => setForm({ ...form, site_name: event.target.value })}/><small>最多 60 个字符。</small></label>
+    <label>备案号 <small>选填</small><Input value={form.icp_number} placeholder="例如：京ICP备12345678号" onChange={event => setForm({ ...form, icp_number: event.target.value })}/></label>
+    <label>主题<select aria-label="主题" className="dialog-select" value={form.theme} onChange={event => setForm({ ...form, theme: event.target.value as SiteSettings['theme'] })}><option value="green">森林绿</option><option value="blue">海洋蓝</option><option value="slate">石板灰</option></select></label>
+    {formError && <p className="form-error" role="alert">{formError}</p>}
+    <div><Button type="submit" disabled={save.isPending}>{save.isPending ? '正在保存…' : '保存站点配置'}</Button></div>
+  </form>;
 }
 
 export default function App() {
