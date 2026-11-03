@@ -109,14 +109,25 @@ td { border-color: var(--cd-border); }
 .table-scroll:focus-visible { outline: 3px solid var(--cd-primary); outline-offset: -3px; }
 .table-scroll::-webkit-scrollbar, .mobile-nav::-webkit-scrollbar { display: block; height: 6px; }
 .table-scroll::-webkit-scrollbar-thumb, .mobile-nav::-webkit-scrollbar-thumb { background: var(--cd-border); border-radius: 6px; }
+/* App shell: the sidebar stays viewport-tall while only the main column grows with page content,
+   and the scrollbar gutter is always reserved so every page keeps the same width. */
+html { scrollbar-gutter: stable; }
+.nav-link { position: relative; }
+.nav-link.active:before { left: 0; }
+.sidebar-note small { text-wrap: pretty; }
+.filter-row .search-box .cd-input, .filter-row select, .filter-row .cd-button, .date-filter input { height: 44px; min-height: 44px; }
+.filter-row .search-box .cd-input { padding-top: 0; padding-bottom: 0; }
 @media (min-width: 901px) {
-  .sidebar { position: relative; inset: auto; width: 238px; height: auto; min-height: 100dvh; flex: 0 0 238px; overflow: visible; }
-  .main-column { flex: 1; width: auto; margin-left: 0; }
-  .cd-site-footer.app-footer > .cd-site-copyright, .cd-site-footer.app-footer > .cd-site-icp { position: relative; left: -119px; align-self: center; width: calc(100% - 238px); }
+  .app-layout { align-items: flex-start; }
+  .sidebar { position: sticky; inset: auto; top: 0; width: 238px; height: 100dvh; flex: 0 0 238px; overflow-y: auto; overscroll-behavior: contain; }
+  .main-column { flex: 1; width: auto; min-height: 100dvh; margin-left: 0; }
 }
 @media (min-width: 901px) and (max-width: 1200px) {
   .sidebar { width: 210px; flex-basis: 210px; }
-  .cd-site-footer.app-footer > .cd-site-copyright, .cd-site-footer.app-footer > .cd-site-icp { left: -105px; width: calc(100% - 210px); }
+}
+@media (min-width: 901px) and (max-height: 860px) {
+  .sidebar-note { display: none; }
+  .sidebar-spacer { min-height: 16px; }
 }
 @media (prefers-color-scheme: dark) {
   :root {

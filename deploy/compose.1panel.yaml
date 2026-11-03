@@ -1,7 +1,7 @@
 # 粘贴到 1Panel 的编排编辑器。首次部署请填写两项密码；升级保留原值和原编排名称。
 services:
   classding:
-    image: ghcr.io/alumos/classding-server:0.1.3
+    image: ghcr.io/alumos/classding-server:0.1.4
     platform: linux/amd64
     restart: unless-stopped
     ports:

@@ -5,7 +5,7 @@ import { api, ApiError, onSessionExpired, refreshSession, setAccessToken, type c
 import { SiteFooter, Badge, Brand, Button, Card, CopyButton, Dialog, Input } from '@classding/ui';
 import { toast } from 'sonner';
 import {
-  Activity, ArrowDownToLine, ArrowRight, BellRing, BookOpen, Check, ChevronDown,
+  Activity, ArrowDownToLine, ArrowRight, BellRing, BookOpen, Check,
   ClipboardList, Copy, KeyRound, LayoutDashboard, LoaderCircle, LogOut, Monitor, RefreshCw,
   Search, Settings, ShieldCheck, Upload, Users, XCircle, type LucideIcon,
 } from 'lucide-react';
@@ -166,13 +166,13 @@ function Shell() {
     <aside className="sidebar">
       <div className="sidebar-brand"><Brand/><span>管理后台</span></div>
       <div className="sidebar-caption">WORKSPACE <span>工作空间</span></div>
-      <nav className="side-nav" aria-label="管理后台导航">{visible.map(item => <NavLink key={item.to} to={item.to} end={item.to === '/'} className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}><item.icon size={19} strokeWidth={1.8}/><span>{item.label}</span>{item.to === '/' && <span className="nav-arrow">↗</span>}</NavLink>)}</nav>
+      <nav className="side-nav" aria-label="管理后台导航">{visible.map(item => <NavLink key={item.to} to={item.to} end={item.to === '/'} className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}><item.icon size={19} strokeWidth={1.8}/><span>{item.label}</span></NavLink>)}</nav>
       <div className="sidebar-spacer"/>
       <div className="sidebar-note"><span className="note-icon"><ShieldCheck size={17}/></span><div><strong>安全管理空间</strong><small>每一次操作都有迹可循</small></div></div>
       <div className="sidebar-user"><span className="avatar">{(user.display_name || user.username || '管').slice(0, 1)}</span><div><strong>{user.display_name || user.username}</strong><small>{roleName[user.role] ?? user.role}</small></div><button onClick={logout} className="icon-button" title="退出登录" aria-label="退出登录"><LogOut size={17}/></button></div>
     </aside>
     <div className="main-column">
-      <header className="topbar"><div className="breadcrumbs"><span>管理后台</span><span>/</span><strong>{current}</strong></div><div className="top-actions"><span className="top-date">{new Date().toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' })}</span><button className="top-icon" aria-label="刷新数据" title="刷新数据" onClick={() => void queryClient.invalidateQueries()}><RefreshCw size={18}/></button><span className="top-separator"/><span className="avatar small">{(user.display_name || user.username || '管').slice(0, 1)}</span><span className="top-user">{user.display_name || user.username}<small>{roleName[user.role] ?? user.role}</small></span><ChevronDown size={15} className="top-chevron"/><button className="top-icon mobile-logout" onClick={logout} title="退出登录" aria-label="退出登录"><LogOut size={17}/></button></div></header>
+      <header className="topbar"><div className="breadcrumbs"><span>管理后台</span><span>/</span><strong>{current}</strong></div><div className="top-actions"><span className="top-date">{new Date().toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' })}</span><button className="top-icon" aria-label="刷新数据" title="刷新数据" onClick={() => void queryClient.invalidateQueries()}><RefreshCw size={18}/></button><span className="top-separator"/><span className="avatar small">{(user.display_name || user.username || '管').slice(0, 1)}</span><span className="top-user">{user.display_name || user.username}<small>{roleName[user.role] ?? user.role}</small></span><button className="top-icon mobile-logout" onClick={logout} title="退出登录" aria-label="退出登录"><LogOut size={17}/></button></div></header>
       <nav ref={mobileNav} className="mobile-nav" aria-label="管理后台导航">{visible.map(item => <NavLink key={item.to} to={item.to} end={item.to === '/'} className={({ isActive }) => isActive ? 'active' : ''}><item.icon size={16}/>{item.label}</NavLink>)}</nav>
       <main className="main-content"><Routes>
         <Route path="/" element={<OverviewPage/>}/>

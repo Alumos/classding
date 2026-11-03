@@ -368,7 +368,7 @@ func (a *App) routes() {
 		})
 	})
 	r.Get("/healthz", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, 200, map[string]string{"status": "ok", "version": "0.1.3"})
+		writeJSON(w, 200, map[string]string{"status": "ok", "version": "0.1.4"})
 	})
 	r.Get("/metrics", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/plain; version=0.0.4")
@@ -377,7 +377,7 @@ func (a *App) routes() {
 	r.Route("/api/v1", func(r chi.Router) {
 		h := a.handle
 		r.Get("/config", h(false, false, func(w http.ResponseWriter, r *http.Request, u *User) (any, error) {
-			return map[string]any{"speech_enabled": false, "registration_enabled": true, "version": "0.1.3", "site_name": a.state.Settings["site_name"], "icp_number": a.state.Settings["icp_number"], "theme": a.state.Settings["theme"]}, nil
+			return map[string]any{"speech_enabled": false, "registration_enabled": true, "version": "0.1.4", "site_name": a.state.Settings["site_name"], "icp_number": a.state.Settings["icp_number"], "theme": a.state.Settings["theme"]}, nil
 		}))
 		r.Post("/auth/register", h(false, true, a.register))
 		r.Post("/auth/login", h(false, true, a.login))
@@ -423,7 +423,7 @@ func (a *App) routes() {
 			r.Post("/classes/{id}/tools/"+tool, h(true, true, a.tool))
 		}
 		r.Get("/client/latest", h(false, false, func(w http.ResponseWriter, r *http.Request, u *User) (any, error) {
-			return map[string]string{"version": "0.1.3", "url": "https://github.com/Alumos/classding/releases/download/v0.1.3/ClassDingScreen-amd64-installer.exe", "sha256": "", "notes": "支持通知时长、已读关闭与设备迁移，SHA-256 校验文件见对应 GitHub Release。", "min_supported": "0.1.0"}, nil
+			return map[string]string{"version": "0.1.4", "url": "https://github.com/Alumos/classding/releases/download/v0.1.4/ClassDingScreen-amd64-installer.exe", "sha256": "", "notes": "支持通知时长、已读关闭与设备迁移，SHA-256 校验文件见对应 GitHub Release。", "min_supported": "0.1.0"}, nil
 		}))
 		r.Get("/admin/overview", h(true, false, a.overview))
 		r.Get("/admin/activation-codes", h(true, false, a.listCodes))
@@ -485,6 +485,10 @@ func (a *App) maintenanceSweep(at time.Time) error {
 			delete(a.limits, key)
 		}
 	}
+	if !a.hasDurableExpirations(at, expired) {
+		// Skip the full snapshot and rewrite while holding a.mu when nothing durable has expired.
+		return nil
+	}
 	backup, err := json.Marshal(a.state)
 	if err != nil {
 		return fmt.Errorf("snapshot state: %w", err)
@@ -542,6 +546,36 @@ func (a *App) maintenanceSweep(at time.Time) error {
 		a.receipt(receipt.message, receipt.target)
 	}
 	return nil
+}
+
+// hasDurableExpirations mirrors the persisted cleanup rules of maintenanceSweep.
+func (a *App) hasDurableExpirations(at time.Time, expired func(string) bool) bool {
+	for _, session := range a.state.Sessions {
+		if expired(session.ExpiresAt) || session.RotationUntil != "" && expired(session.RotationUntil) {
+			return true
+		}
+	}
+	for _, message := range a.state.Messages {
+		created, _ := time.Parse(time.RFC3339Nano, message.CreatedAt)
+		if at.Sub(created) > 90*24*time.Hour {
+			return true
+		}
+		if expired(message.ExpiresAt) {
+			for _, target := range message.Targets {
+				switch target.Status {
+				case "queued", "delivered", "playing":
+					return true
+				}
+			}
+		}
+	}
+	for _, audio := range a.state.Audio {
+		created, _ := time.Parse(time.RFC3339Nano, audio.CreatedAt)
+		if at.Sub(created) > 7*24*time.Hour {
+			return true
+		}
+	}
+	return false
 }
 
 func (a *App) deferJob(fn func())      { a.jobs = append(a.jobs, fn) }

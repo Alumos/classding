@@ -109,7 +109,7 @@ test('管理员登录后长站点名称不会挤占导航，页脚保留完整�
   }
 });
 
-test('管理员登录后桌面长页面的侧栏贯穿全页，账号贴近页面底部', async ({page},testInfo) => {
+test('管理员登录后桌面切换页面时侧栏固定于视口，内容宽度保持一致', async ({page}) => {
   await mockAdmin(page);
   for (const width of [1000,1440]) {
     await page.setViewportSize({width,height:720});
@@ -127,29 +127,24 @@ test('管理员登录后桌面长页面的侧栏贯穿全页，账号贴近页�
       });
       expect(Math.abs(caption.firstTop - caption.secondTop)).toBeLessThan(2);
       expect(caption.secondRight).toBeLessThanOrEqual(caption.containerRight);
-      const screenshot = await page.screenshot({path:testInfo.outputPath(`sidebar-${width}-${colorScheme}.png`),fullPage:true,animations:'disabled'});
-      const pixels = await page.evaluate(async data => {
-        const image = new Image();
-        image.src = `data:image/png;base64,${data}`;
-        await image.decode();
-        const canvas = document.createElement('canvas');
-        canvas.width = image.width; canvas.height = image.height;
-        const context = canvas.getContext('2d')!;
-        context.drawImage(image,0,0);
-        return [Array.from(context.getImageData(5,5,1,1).data),Array.from(context.getImageData(5,image.height - 5,1,1).data)];
-      },screenshot.toString('base64'));
-      expect(pixels[1]).toEqual(pixels[0]);
-      const sidebar = page.locator('.sidebar');
-      const alignment = await sidebar.evaluate(element => {
-        const sidebar = element.getBoundingClientRect();
-        const account = element.querySelector('.sidebar-user')!.getBoundingClientRect();
-        const padding = parseFloat(getComputedStyle(element).paddingBottom);
-        return {height:sidebar.height,pageHeight:document.documentElement.scrollHeight,accountBottom:sidebar.bottom-account.bottom,padding};
+      const measure = () => page.evaluate(() => {
+        const sidebar = document.querySelector('.sidebar')!.getBoundingClientRect();
+        const account = document.querySelector('.sidebar-user')!.getBoundingClientRect();
+        const main = document.querySelector('.main-content')!.getBoundingClientRect();
+        return {sidebarTop:sidebar.top,sidebarHeight:sidebar.height,viewportHeight:innerHeight,accountGap:sidebar.bottom-account.bottom,padding:parseFloat(getComputedStyle(document.querySelector('.sidebar')!).paddingBottom),mainLeft:main.left,mainWidth:main.width};
       });
-      expect(Math.abs(alignment.height-alignment.pageHeight)).toBeLessThanOrEqual(1);
-      expect(alignment.accountBottom).toBeLessThanOrEqual(alignment.padding+1);
-      await sidebar.getByRole('button',{name:'退出登录'}).scrollIntoViewIfNeeded();
-      await expect(sidebar.getByRole('button',{name:'退出登录'})).toBeInViewport();
+      await page.evaluate(() => window.scrollTo(0,document.documentElement.scrollHeight));
+      const longPage = await measure();
+      expect(Math.abs(longPage.sidebarTop)).toBeLessThanOrEqual(1);
+      expect(Math.abs(longPage.sidebarHeight-longPage.viewportHeight)).toBeLessThanOrEqual(1);
+      expect(longPage.accountGap).toBeLessThanOrEqual(longPage.padding+1);
+      await expect(page.locator('.sidebar').getByRole('button',{name:'退出登录'})).toBeInViewport();
+      await page.locator('.side-nav').getByRole('link',{name:'教师管理'}).click();
+      await expect(page.getByRole('heading',{name:'教师管理',exact:true})).toBeVisible();
+      const shortPage = await measure();
+      expect(shortPage.sidebarHeight).toBeCloseTo(longPage.sidebarHeight,0);
+      expect(shortPage.mainLeft).toBeCloseTo(longPage.mainLeft,0);
+      expect(shortPage.mainWidth).toBeCloseTo(longPage.mainWidth,0);
     }
   }
 });
@@ -166,7 +161,7 @@ test('桌面短屏和长站名下可滚动访问侧栏导航与退出按钮', as
       await expect(page.getByRole('heading',{name:'系统配置',exact:true})).toBeVisible();
       const sidebar = page.locator('.sidebar');
       const dimensions = await sidebar.evaluate(element => {
-        const parts = ['.sidebar-brand','.sidebar-caption','.side-nav','.sidebar-note','.sidebar-user'].map(selector => element.querySelector(selector)!.getBoundingClientRect());
+        const parts = ['.sidebar-brand','.sidebar-caption','.side-nav','.sidebar-note','.sidebar-user'].map(selector => element.querySelector(selector)!.getBoundingClientRect()).filter(rect => rect.height > 0);
         const links = [...element.querySelectorAll('.side-nav a')].map(link => link.getBoundingClientRect().height);
         return {pageHeight:document.documentElement.scrollHeight,viewportHeight:innerHeight,parts:parts.map(rect => ({top:rect.top,bottom:rect.bottom})),links};
       });
@@ -185,7 +180,7 @@ test('桌面短屏和长站名下可滚动访问侧栏导航与退出按钮', as
 });
 
 
-test('登录页与管理页的备案号位于页脚底部中央，长编号可换行', async ({page}) => {
+test('登录页与管理页的备案号位于页脚底部内容区中央，长编号可换行', async ({page}) => {
   const icpNumber = `京ICP备${'1234567890'.repeat(12)}号`;
   const longName = '校园课堂通知管理服务平台'.repeat(6).slice(0,60);
   await mockAdmin(page,longName,icpNumber);
@@ -205,10 +200,11 @@ test('登录页与管理页的备案号位于页脚底部中央，长编号可�
         const anchor = element.querySelector('a')!;
         const link = anchor.getBoundingClientRect();
         const style = getComputedStyle(anchor);
-        return {viewportCenter:innerWidth/2,linkCenter:(link.left+link.right)/2,copyrightCenter:(copyright.left+copyright.right)/2,copyrightLeft:copyright.left,linkLeft:link.left,sidebarRight:document.querySelector('.sidebar')?.getBoundingClientRect().right??0,copyrightBottom:copyright.bottom,linkTop:link.top,linkHeight:link.height,lineHeight:parseFloat(style.lineHeight),textAlign:style.textAlign};
+        const column = document.querySelector('.main-column') ?? document.documentElement;
+        return {contentCenter:column.getBoundingClientRect().left+column.clientWidth/2,linkCenter:(link.left+link.right)/2,copyrightCenter:(copyright.left+copyright.right)/2,copyrightLeft:copyright.left,linkLeft:link.left,sidebarRight:document.querySelector('.sidebar')?.getBoundingClientRect().right??0,copyrightBottom:copyright.bottom,linkTop:link.top,linkHeight:link.height,lineHeight:parseFloat(style.lineHeight),textAlign:style.textAlign};
       });
-      expect(Math.abs(geometry.linkCenter-geometry.viewportCenter)).toBeLessThanOrEqual(1);
-      expect(Math.abs(geometry.copyrightCenter-geometry.viewportCenter)).toBeLessThanOrEqual(1);
+      expect(Math.abs(geometry.linkCenter-geometry.contentCenter)).toBeLessThanOrEqual(1);
+      expect(Math.abs(geometry.copyrightCenter-geometry.contentCenter)).toBeLessThanOrEqual(1);
       expect(geometry.textAlign).toBe('center');
       if (loggedIn && width>900) {
         expect(geometry.copyrightLeft).toBeGreaterThanOrEqual(geometry.sidebarRight);

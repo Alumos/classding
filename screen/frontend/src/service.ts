@@ -122,7 +122,7 @@ export class ScreenService {
     try {
       server = normalizeServer(server, true);
       await this.setBase(server);
-      const payload: paths['/device/bind']['post']['requestBody']['content']['application/json'] = {code,name:deviceName.trim(),os:navigator.userAgent.includes('Windows') ? 'windows' : 'browser',client_version:'0.1.3'};
+      const payload: paths['/device/bind']['post']['requestBody']['content']['application/json'] = {code,name:deviceName.trim(),os:navigator.userAgent.includes('Windows') ? 'windows' : 'browser',client_version:'0.1.4'};
       const response = await this.request('/api/v1/device/bind', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
       const data = await response.json().catch(() => ({})) as Partial<components['schemas']['DeviceBinding'] & components['schemas']['Error']>;
       if (!response.ok) throw new Error(data.message || `绑定失败（${response.status}）`);
@@ -171,7 +171,7 @@ export class ScreenService {
     });
     if (generation !== this.generation || ws.readyState !== WebSocket.OPEN) return;
     const pendingIDs = this.state.queue.slice(0,4096).map(item => item.message_id);
-    ws.send(JSON.stringify({t:'hello',d:{token:this.state.token,last_seq:this.state.lastSeq,client_version:'0.1.3',os:navigator.userAgent.includes('Windows') ? 'windows' : 'browser',pending_ids:pendingIDs}}));
+    ws.send(JSON.stringify({t:'hello',d:{token:this.state.token,last_seq:this.state.lastSeq,client_version:'0.1.4',os:navigator.userAgent.includes('Windows') ? 'windows' : 'browser',pending_ids:pendingIDs}}));
     this.helloPending = pendingIDs;
     this.heartbeat = setInterval(() => {
       if (Date.now() - this.lastFrame > 60000) { ws.close(); return; }

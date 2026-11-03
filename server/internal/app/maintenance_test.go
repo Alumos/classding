@@ -119,3 +119,23 @@ func TestMaintenanceRollbackAndRecovery(t *testing.T) {
 		}
 	}
 }
+
+func TestMaintenanceSkipsSaveWhenNothingExpired(t *testing.T) {
+	f := newSecurityFixture(t)
+	when := time.Now().UTC()
+	format := func(t time.Time) string { return t.Format(time.RFC3339Nano) }
+	f.app.state.Messages["fresh"] = Message{ID: "fresh", CreatedAt: format(when), ExpiresAt: format(when.Add(time.Hour)), Targets: []Target{{ClassID: "class_a", Status: "queued"}}}
+	f.app.state.Messages["settled"] = Message{ID: "settled", CreatedAt: format(when.Add(-time.Hour)), ExpiresAt: format(when.Add(-time.Minute)), Targets: []Target{{ClassID: "class_a", Status: "played"}}}
+	f.app.bindings["expired"] = binding{Expires: format(when.Add(-time.Minute))}
+	restore := closeStoreForRollback(t, f.app)
+	defer restore()
+	f.app.mu.Lock()
+	err := f.app.maintenanceSweep(when)
+	f.app.mu.Unlock()
+	if err != nil {
+		t.Fatalf("maintenance without durable expirations should not write state: %v", err)
+	}
+	if _, exists := f.app.bindings["expired"]; exists {
+		t.Fatal("expired in-memory binding was not cleaned")
+	}
+}
