@@ -46,7 +46,7 @@ jobs:
 
       - name: Verify native desktop windows and server migration
         working-directory: screen
-        run: go test ./...
+        run: go test -v ./...
 
       - name: Install Wails and NSIS
         shell: pwsh
