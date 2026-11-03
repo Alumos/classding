@@ -14,7 +14,7 @@
 - AuthResponse: {access_token,user}；refresh token 放 HttpOnly Cookie。
 
 ## REST
-GET config => {speech_enabled:false,registration_enabled:true,version:'0.3.0'}
+GET config => {speech_enabled:false,registration_enabled:true,version:'0.3.1'}
 POST auth/register {username,password,display_name} => AuthResponse
 POST auth/login {username,password} => AuthResponse
 POST auth/refresh => AuthResponse；POST auth/logout => {ok:true}

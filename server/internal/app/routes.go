@@ -129,7 +129,7 @@ func clientRelease(_ http.ResponseWriter, _ *http.Request, _ *User) (any, error)
 		"version":       Version,
 		"url":           releaseBase + "/ClassDingScreen-amd64-installer.exe",
 		"sha256":        "",
-		"notes":         "上报内网地址，收到新服务器地址后直接切换，SHA-256 校验文件见对应 GitHub Release。",
+		"notes":         "内部代码整理，功能与 0.3.0 相同；SHA-256 校验文件见对应 GitHub Release。",
 		"min_supported": "0.1.0",
 	}, nil
 }
