@@ -41,9 +41,10 @@ jobs:
         run: |
           pnpm check:toolchain
           pnpm --filter @classding/screen typecheck
-          pnpm exec vitest run screen/frontend/tests/service.test.ts
+          pnpm exec vitest run screen/frontend/tests
+          pnpm --filter @classding/screen build
 
-      - name: Verify native network migration
+      - name: Verify native desktop windows and server migration
         working-directory: screen
         run: go test ./...
 

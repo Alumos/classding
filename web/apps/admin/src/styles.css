@@ -25,10 +25,16 @@ body { min-width: 0; background: var(--cd-bg); color: var(--cd-text); font-size:
   background: var(--cd-panel); color: var(--cd-text); border-color: var(--cd-border);
 }
 .login-page { background: var(--cd-bg); }
+.cd-site-footer.app-footer, .cd-site-footer.login-copyright { width: 100%; min-width: 0; flex-direction: column; align-items: stretch; justify-content: center; gap: 6px; text-align: center; }
+.cd-site-footer.login-copyright > span { margin: 0; }
+.cd-site-footer.app-footer > a, .cd-site-footer.login-copyright > a { width: 100%; overflow-wrap: anywhere; }
 .sidebar { overflow-y: auto; }
+.sidebar-brand, .sidebar-caption, .side-nav, .sidebar-note, .sidebar-user { flex-shrink: 0; }
+.sidebar-caption { padding-left: 8px; padding-right: 0; letter-spacing: .5px; white-space: nowrap; }
 .sidebar-brand .cd-brand, .login-brand .cd-brand { white-space: normal; min-width: 0; }
 .sidebar-brand .cd-brand > span:last-child, .login-brand .cd-brand > span:last-child { min-width: 0; }
-.sidebar-brand .cd-brand strong, .login-brand .cd-brand strong { overflow-wrap: anywhere; }
+.sidebar-brand .cd-brand strong, .login-brand .cd-brand strong { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+.sidebar-brand .cd-brand-mark, .login-brand .cd-brand-mark { flex: none; }
 .cd-brand small { font-size: 14px; letter-spacing: 1px; color: var(--admin-muted); }
 .main-content, .panel, .settings-grid, .search-box, .backup-action > div { min-width: 0; }
 .filter-row { flex-wrap: wrap; }
@@ -98,6 +104,20 @@ td { border-color: var(--cd-border); }
 .restore-warning { border: 1px solid; }
 .failure-list { margin: 8px 0 0; padding-left: 20px; overflow-wrap: anywhere; }
 .failure-list li + li { margin-top: 4px; }
+.table-scroll-hint { display: flex; align-items: center; justify-content: flex-end; gap: 5px; padding: 8px 20px; border-top: 1px solid var(--cd-border); color: var(--admin-muted); font-size: 14px; }
+.table-scroll, .mobile-nav { scrollbar-width: thin; scrollbar-color: var(--cd-border) transparent; }
+.table-scroll:focus-visible { outline: 3px solid var(--cd-primary); outline-offset: -3px; }
+.table-scroll::-webkit-scrollbar, .mobile-nav::-webkit-scrollbar { display: block; height: 6px; }
+.table-scroll::-webkit-scrollbar-thumb, .mobile-nav::-webkit-scrollbar-thumb { background: var(--cd-border); border-radius: 6px; }
+@media (min-width: 901px) {
+  .sidebar { position: relative; inset: auto; width: 238px; height: auto; min-height: 100dvh; flex: 0 0 238px; overflow: visible; }
+  .main-column { flex: 1; width: auto; margin-left: 0; }
+  .cd-site-footer.app-footer > .cd-site-copyright, .cd-site-footer.app-footer > .cd-site-icp { position: relative; left: -119px; align-self: center; width: calc(100% - 238px); }
+}
+@media (min-width: 901px) and (max-width: 1200px) {
+  .sidebar { width: 210px; flex-basis: 210px; }
+  .cd-site-footer.app-footer > .cd-site-copyright, .cd-site-footer.app-footer > .cd-site-icp { left: -105px; width: calc(100% - 210px); }
+}
 @media (prefers-color-scheme: dark) {
   :root {
     --admin-muted: #b8c8ba;
@@ -109,9 +129,16 @@ td { border-color: var(--cd-border); }
     --admin-warning-ink: #ffe09a;
     --admin-warning-bg: #55451f;
   }
+  .cd-button-primary { color: #11261d; }
+  .welcome-banner, .login-intro { background: color-mix(in srgb, var(--cd-primary) 25%, #12251c); }
 }
 @media (max-width: 1200px) { .settings-grid { grid-template-columns: 1fr; } }
-@media (max-width: 900px) { .sidebar { overflow: visible; } }
+@media (max-width: 900px) {
+  .sidebar { overflow: visible; }
+  .sidebar-brand { display: flex; align-items: center; gap: 12px; }
+  .sidebar-brand .cd-brand { flex: 0 1 auto; }
+  .sidebar-brand > span { flex: none; margin: 0; }
+}
 @media (max-width: 650px) {
   .page-head, .panel-head, .backup-action { flex-wrap: wrap; }
   .page-head .cd-button { font-size: 14px; }
@@ -119,4 +146,10 @@ td { border-color: var(--cd-border); }
   .cd-dialog-footer { flex-wrap: wrap; }
   .cd-dialog-footer .cd-button { white-space: normal; }
   .login-intro p, .login-copyright, .sidebar-brand > span, .breadcrumbs { font-size: 14px; }
+}
+@media (max-width: 380px) {
+  .breadcrumbs { min-width: 0; }
+  .breadcrumbs span { display: none; }
+  .breadcrumbs strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .top-actions { flex: none; }
 }

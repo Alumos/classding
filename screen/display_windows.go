@@ -31,7 +31,7 @@ var (
 		info := monitorInfo{size: uint32(unsafe.Sizeof(monitorInfo{}))}
 		if ok, _, _ := getMonitorInfo.Call(monitor, uintptr(unsafe.Pointer(&info))); ok != 0 {
 			id := syscall.UTF16ToString(info.device[:])
-			displayResults = append(displayResults, ScreenDisplay{ID: id, Primary: info.flags&1 != 0, Width: int(info.monitor.right - info.monitor.left), Height: int(info.monitor.bottom - info.monitor.top), rect: info.monitor})
+			displayResults = append(displayResults, ScreenDisplay{ID: id, Primary: info.flags&1 != 0, Width: int(info.monitor.right - info.monitor.left), Height: int(info.monitor.bottom - info.monitor.top), rect: info.monitor, work: info.work})
 		}
 		return 1
 	})

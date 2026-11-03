@@ -186,7 +186,7 @@ func (a *App) backup(w http.ResponseWriter, r *http.Request) {
 // Validate every relationship that is required for live entities. Historical
 // messages and audio can legitimately refer to since-deleted users/classes/devices.
 func validateBackupState(s State) error {
-	if s.Users == nil || s.Classes == nil || s.Members == nil || s.Devices == nil || s.Messages == nil || s.Codes == nil || s.Invites == nil || s.Sessions == nil || s.Phrases == nil || s.Audio == nil || s.Audit == nil || s.Settings == nil {
+	if s.Users == nil || s.Classes == nil || s.Members == nil || s.Devices == nil || s.Messages == nil || s.Homeworks == nil || s.Codes == nil || s.Invites == nil || s.Sessions == nil || s.Phrases == nil || s.Audio == nil || s.Audit == nil || s.Settings == nil {
 		return errors.New("missing state collection")
 	}
 	if _, ok := s.Settings["site_name"]; !ok {
@@ -214,7 +214,7 @@ func validateBackupState(s State) error {
 		return errors.New("no active administrator")
 	}
 	for key, c := range s.Classes {
-		if key == "" || c.ID != key || c.Name == "" {
+		if key == "" || c.ID != key || c.Name == "" || c.HomeworkRevision < 0 || c.HomeworkRevision > maxHomeworkRevision {
 			return errors.New("invalid class")
 		}
 		if _, exists := s.Users[c.OwnerID]; !exists {
@@ -235,6 +235,20 @@ func validateBackupState(s State) error {
 		_, userExists := s.Users[m.UserID]
 		if !classExists || !userExists || (m.Role != "owner" && m.Role != "collaborator") || (m.Role == "owner" && c.OwnerID != m.UserID) {
 			return errors.New("invalid membership relationship")
+		}
+	}
+	classHomeworkCounts := map[string]int{}
+	for key, item := range s.Homeworks {
+		c, classExists := s.Classes[item.ClassID]
+		_, teacherExists := s.Users[item.TeacherID]
+		created, createdErr := time.Parse(time.RFC3339Nano, item.CreatedAt)
+		updated, updatedErr := time.Parse(time.RFC3339Nano, item.UpdatedAt)
+		if key == "" || item.ID != key || !classExists || !teacherExists || c.HomeworkRevision < 1 || strings.TrimSpace(item.TeacherName) == "" || !validHomeworkText(item.Subject, item.Text) || createdErr != nil || updatedErr != nil || updated.Before(created) {
+			return errors.New("invalid homework")
+		}
+		classHomeworkCounts[item.ClassID]++
+		if classHomeworkCounts[item.ClassID] > maxClassHomeworks {
+			return errors.New("too many homeworks")
 		}
 	}
 	tokens := map[string]bool{}
@@ -363,6 +377,40 @@ func prepareRestore(zipPath, stage string) (State, error) {
 	}
 	if _, err := time.Parse(time.RFC3339Nano, manifest.CreatedAt); err != nil {
 		return empty, errors.New("invalid backup time")
+	}
+	var envelope struct {
+		State map[string]json.RawMessage `json:"state"`
+	}
+	if json.Unmarshal(data, &envelope) != nil {
+		return empty, errors.New("invalid state")
+	}
+	// Version 1 archives created before homework support do not have this
+	// collection. A null collection or a revision without a collection cannot
+	// be an old archive and must not silently discard homework.
+	if manifest.State.Homeworks == nil {
+		if _, exists := envelope.State["homeworks"]; exists {
+			return empty, errors.New("invalid homework collection")
+		}
+		for _, c := range manifest.State.Classes {
+			if c.HomeworkRevision != 0 {
+				return empty, errors.New("homework collection missing for revision")
+			}
+		}
+		manifest.State.Homeworks = map[string]Homework{}
+	} else {
+		// Boolean zero values alone cannot distinguish false from missing/null.
+		var rawItems map[string]map[string]json.RawMessage
+		if json.Unmarshal(envelope.State["homeworks"], &rawItems) != nil {
+			return empty, errors.New("invalid homework collection")
+		}
+		for _, fields := range rawItems {
+			for _, key := range []string{"visible", "always_on_top"} {
+				value, exists := fields[key]
+				if !exists || string(value) == "null" {
+					return empty, errors.New("missing homework display option")
+				}
+			}
+		}
 	}
 	if err := validateBackupState(manifest.State); err != nil {
 		return empty, err

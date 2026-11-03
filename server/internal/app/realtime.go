@@ -270,7 +270,7 @@ func (a *App) deviceWS(w http.ResponseWriter, r *http.Request) {
 			recalled = append(recalled, key)
 		}
 	}
-	welcome := map[string]any{"class": map[string]string{"id": c.ID, "name": c.Name}, "device": map[string]string{"id": d.ID, "name": d.Name, "class_id": d.ClassID}, "volume": c.Volume, "sequence": d.Sequence, "server_time": time.Now().Unix(), "recalled_ids": recalled}
+	welcome := map[string]any{"class": map[string]string{"id": c.ID, "name": c.Name}, "device": map[string]string{"id": d.ID, "name": d.Name, "class_id": d.ClassID}, "volume": c.Volume, "sequence": d.Sequence, "server_time": time.Now().Unix(), "recalled_ids": recalled, "homeworks": a.homeworkItems(c.ID), "homework_revision": c.HomeworkRevision}
 	if d.RemoteConfig != nil {
 		welcome["remote_config"] = d.RemoteConfig
 	}

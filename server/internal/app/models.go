@@ -14,20 +14,33 @@ type User struct {
 	LoginLockedUntil string `json:"login_locked_until,omitempty"`
 }
 type Class struct {
-	ID             string `json:"id"`
-	Name           string `json:"name"`
-	Grade          string `json:"grade"`
-	OwnerID        string `json:"owner_id"`
-	OrgID          string `json:"org_id"`
-	Volume         int    `json:"volume"`
-	Role           string `json:"role"`
-	MaxTeachers    int    `json:"max_teachers"`
-	MaxDevices     int    `json:"max_devices"`
-	TeachersCount  int    `json:"teachers_count"`
-	DevicesCount   int    `json:"devices_count"`
-	OnlineDevices  int    `json:"online_devices"`
-	CreatedAt      string `json:"created_at"`
-	ActivationCode string `json:"activation_code,omitempty"`
+	ID               string `json:"id"`
+	Name             string `json:"name"`
+	Grade            string `json:"grade"`
+	OwnerID          string `json:"owner_id"`
+	OrgID            string `json:"org_id"`
+	Volume           int    `json:"volume"`
+	Role             string `json:"role"`
+	MaxTeachers      int    `json:"max_teachers"`
+	MaxDevices       int    `json:"max_devices"`
+	TeachersCount    int    `json:"teachers_count"`
+	DevicesCount     int    `json:"devices_count"`
+	OnlineDevices    int    `json:"online_devices"`
+	CreatedAt        string `json:"created_at"`
+	ActivationCode   string `json:"activation_code,omitempty"`
+	HomeworkRevision int64  `json:"homework_revision,omitempty"`
+}
+type Homework struct {
+	ID          string `json:"id"`
+	ClassID     string `json:"class_id"`
+	Subject     string `json:"subject"`
+	Text        string `json:"text"`
+	TeacherID   string `json:"teacher_id"`
+	TeacherName string `json:"teacher_name"`
+	Visible     bool   `json:"visible"`
+	AlwaysOnTop bool   `json:"always_on_top"`
+	CreatedAt   string `json:"created_at"`
+	UpdatedAt   string `json:"updated_at"`
 }
 type Member struct {
 	UserID      string `json:"user_id"`
@@ -129,24 +142,25 @@ type Audit struct {
 	At     string `json:"at"`
 }
 type State struct {
-	Users    map[string]User    `json:"users"`
-	Classes  map[string]Class   `json:"classes"`
-	Members  map[string]Member  `json:"class_members"`
-	Devices  map[string]Device  `json:"devices"`
-	Messages map[string]Message `json:"messages"`
-	Codes    map[string]Code    `json:"activation_codes"`
-	Invites  map[string]Invite  `json:"collab_invites"`
-	Sessions map[string]Session `json:"sessions"`
-	Phrases  map[string]Phrase  `json:"phrases"`
-	Audio    map[string]Audio   `json:"audio"`
-	Audit    map[string]Audit   `json:"audit_logs"`
-	Settings map[string]string  `json:"settings"`
+	Users     map[string]User     `json:"users"`
+	Classes   map[string]Class    `json:"classes"`
+	Members   map[string]Member   `json:"class_members"`
+	Devices   map[string]Device   `json:"devices"`
+	Messages  map[string]Message  `json:"messages"`
+	Homeworks map[string]Homework `json:"homeworks"`
+	Codes     map[string]Code     `json:"activation_codes"`
+	Invites   map[string]Invite   `json:"collab_invites"`
+	Sessions  map[string]Session  `json:"sessions"`
+	Phrases   map[string]Phrase   `json:"phrases"`
+	Audio     map[string]Audio    `json:"audio"`
+	Audit     map[string]Audit    `json:"audit_logs"`
+	Settings  map[string]string   `json:"settings"`
 }
 
 func newState() State {
 	return State{
 		Users: map[string]User{}, Classes: map[string]Class{}, Members: map[string]Member{},
-		Devices: map[string]Device{}, Messages: map[string]Message{}, Codes: map[string]Code{},
+		Devices: map[string]Device{}, Messages: map[string]Message{}, Homeworks: map[string]Homework{}, Codes: map[string]Code{},
 		Invites: map[string]Invite{}, Sessions: map[string]Session{}, Phrases: map[string]Phrase{},
 		Audio: map[string]Audio{}, Audit: map[string]Audit{}, Settings: map[string]string{},
 	}

@@ -194,6 +194,18 @@ func (a *App) adminDeleteUser(w http.ResponseWriter, r *http.Request, u *User) (
 			delete(a.state.Phrases, key)
 		}
 	}
+	changedClasses := map[string]bool{}
+	for key, item := range a.state.Homeworks {
+		if item.TeacherID == target.ID {
+			delete(a.state.Homeworks, key)
+			changedClasses[item.ClassID] = true
+		}
+	}
+	for classID := range changedClasses {
+		if err := a.homeworkChanged(classID); err != nil {
+			return nil, err
+		}
+	}
 	delete(a.state.Users, target.ID)
 	a.deferJob(func() { a.hub.RemoveTeacher(target.ID) })
 	a.audit(u, "admin.user.delete", target.ID)

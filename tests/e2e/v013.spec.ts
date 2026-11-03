@@ -13,17 +13,23 @@ async function teacherLogin(page:Page){
   await page.getByRole('button',{name:'进入工作台'}).click();
   await expect(page.getByRole('heading',{name:'选择接收班级'})).toBeVisible();
 }
+async function choose(page:Page,label:string,option:string){await page.getByRole('combobox',{name:label,exact:true}).click();await page.getByRole('option',{name:option,exact:true}).click();}
 async function noOverflow(page:Page){expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);}
 
 test('教师可直接选择时长，紧急提示音需手动打开且切换样式会复位',async({page},info)=>{
   await teacherLogin(page);
-  await page.getByLabel('通知显示时长').selectOption('600');
+  if(info.project.name==='mobile'){await page.locator('.class-option').nth(0).click();await page.locator('.class-option').nth(1).click();}
+  await choose(page,'通知显示时长','10 分钟');
+  await expect(page.getByText('快捷短语',{exact:true})).toHaveCount(0);
+  await expect(page.getByLabel('老师落款',{exact:true})).toHaveValue('林老师');
+  await expect(page.getByLabel('老师落款',{exact:true})).toHaveAttribute('readonly','');
+  await expect(page.getByRole('option')).toHaveCount(0);
   await expect(page.getByRole('switch',{name:'紧急事项提示音'})).toHaveCount(0);
-  await page.getByRole('button',{name:'紧急提醒',exact:true}).click();
+  await choose(page,'通知样式','紧急提醒');
   const chime=page.getByRole('switch',{name:'紧急事项提示音'});
   await expect(chime).not.toBeChecked();await chime.click();await expect(chime).toBeChecked();
-  await page.getByRole('button',{name:'日常通知',exact:true}).click();
-  await page.getByRole('button',{name:'紧急提醒',exact:true}).click();await expect(chime).not.toBeChecked();
+  await choose(page,'通知样式','日常通知');
+  await choose(page,'通知样式','紧急提醒');await expect(chime).not.toBeChecked();
   await chime.click();
   await page.getByLabel('通知内容').fill(`时长与提示音验收 ${info.project.name}`);
   const sent=page.waitForResponse(r=>r.url().endsWith('/api/v1/messages')&&r.request().method()==='POST');

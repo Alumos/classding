@@ -1,6 +1,7 @@
 import * as React from 'react';
 import {useSiteSettings} from './site';
 export {SiteSettingsProvider,SiteFooter,useSiteSettings,type SiteSettings} from './site';
+export {Select,type SelectOption} from './select';
 import { Dialog as DialogPrimitive } from '@base-ui/react/dialog';
 import { Switch as SwitchPrimitive } from '@base-ui/react/switch';
 import { cva, type VariantProps } from 'class-variance-authority';
@@ -60,7 +61,7 @@ export function CopyButton({text,onCopied,dialogTitle='手动复制',children,..
   async function copy(){if(await copyText(text))onCopied?.();else setManual(true);}
   return <><Button {...buttonProps} onClick={()=>void copy()}>{children??'复制'}</Button><Dialog open={manual} onClose={()=>setManual(false)} title={dialogTitle} description="无法自动复制，请选中以下内容后手动复制。" footer={<Button onClick={()=>setManual(false)}>完成</Button>}><Textarea aria-label="待复制内容" className="cd-copy-text" value={text} readOnly onFocus={event=>event.currentTarget.select()} onClick={event=>event.currentTarget.select()}/></Dialog></>;
 }
-export function Switch({checked,onCheckedChange,className,...props}:{checked:boolean;onCheckedChange:(checked:boolean)=>void;className?:string;'aria-label'?:string;disabled?:boolean}){return <SwitchPrimitive.Root checked={checked} onCheckedChange={onCheckedChange} className={cn('cd-switch',className)} {...props}><SwitchPrimitive.Thumb className="cd-switch-thumb"/></SwitchPrimitive.Root>;}
+export function Switch({checked,onCheckedChange,className,...props}:{checked:boolean;onCheckedChange:(checked:boolean)=>void;className?:string;id?:string;'aria-label'?:string;disabled?:boolean}){return <SwitchPrimitive.Root checked={checked} onCheckedChange={onCheckedChange} className={cn('cd-switch',className)} {...props}><SwitchPrimitive.Thumb className="cd-switch-thumb"/></SwitchPrimitive.Root>;}
 export function Brand({compact=false,className}:{compact?:boolean;className?:string}){const {site_name}=useSiteSettings();return <div className={cn('cd-brand',className)}><span className="cd-brand-mark"><BellRing size={23} strokeWidth={2.1}/><i/></span>{!compact&&<span><strong>{site_name}<span className="cd-brand-dot">.</span></strong><small>CLASSDING</small></span>}</div>;}
 export interface NoticeScreenProps {text:string;studentName?:string;signature?:string;className?:string;style?:string;progress?:number;compact?:boolean;sentAt?:string;}
 export function NoticeScreen({text,studentName,signature='老师',className='教室大屏',style='notice',progress=68,compact=false,sentAt}:NoticeScreenProps){

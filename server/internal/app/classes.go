@@ -93,6 +93,11 @@ func (a *App) deleteClass(w http.ResponseWriter, r *http.Request, u *User) (any,
 }
 
 func (a *App) removeClass(c Class, u *User) {
+	for key, item := range a.state.Homeworks {
+		if item.ClassID == c.ID {
+			delete(a.state.Homeworks, key)
+		}
+	}
 	for key, m := range a.state.Members {
 		if m.ClassID == c.ID {
 			delete(a.state.Members, key)
@@ -324,7 +329,7 @@ func (a *App) bindDevice(w http.ResponseWriter, r *http.Request, _ *User) (any, 
 	delete(a.bindings, in.Code)
 	a.bindPending(d)
 	a.audit(nil, "device.bind", d.ID)
-	return map[string]any{"device_token": token, "device": publicDevice(d), "class": map[string]string{"id": c.ID, "name": c.Name}, "volume": c.Volume}, nil
+	return map[string]any{"device_token": token, "device": publicDevice(d), "class": map[string]string{"id": c.ID, "name": c.Name}, "volume": c.Volume, "homeworks": a.homeworkItems(c.ID), "homework_revision": c.HomeworkRevision}, nil
 }
 func (a *App) deviceFromToken(token string) (Device, error) {
 	if token == "" {
@@ -347,7 +352,7 @@ func (a *App) deviceMe(w http.ResponseWriter, r *http.Request, _ *User) (any, er
 	if !exists {
 		return nil, fail(401, "DEVICE_REVOKED", "班级已被删除。")
 	}
-	return map[string]any{"device": publicDevice(d), "class": map[string]string{"id": c.ID, "name": c.Name}, "volume": c.Volume, "sequence": d.Sequence}, nil
+	return map[string]any{"device": publicDevice(d), "class": map[string]string{"id": c.ID, "name": c.Name}, "volume": c.Volume, "sequence": d.Sequence, "homeworks": a.homeworkItems(c.ID), "homework_revision": c.HomeworkRevision}, nil
 }
 func (a *App) renameDevice(w http.ResponseWriter, r *http.Request, u *User) (any, error) {
 	d, exists := a.state.Devices[chi.URLParam(r, "id")]

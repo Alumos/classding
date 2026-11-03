@@ -332,6 +332,7 @@ func (a *App) licensed(c Class) bool {
 	return exists && code.ClassID != nil && *code.ClassID == c.ID && code.Status == "active" && (code.ExpiresAt == nil || !elapsed(*code.ExpiresAt))
 }
 func (a *App) classView(c Class, u *User) Class {
+	c.HomeworkRevision = 0
 	c.Role = "collaborator"
 	if a.owns(u, c) {
 		c.Role = "owner"
@@ -399,9 +400,14 @@ func (a *App) routes() {
 		r.Post("/classes/{id}/bind-code", h(true, false, a.bindCode))
 		r.Post("/device/bind", h(false, true, a.bindDevice))
 		r.Get("/device/me", h(false, false, a.deviceMe))
+		r.Get("/device/homeworks", h(false, false, a.deviceHomeworks))
 		r.Post("/device/migration-check", h(false, false, a.deviceMigrationCheck))
 		r.Patch("/devices/{id}", h(true, true, a.renameDevice))
 		r.Delete("/devices/{id}", h(true, true, a.removeDevice))
+		r.Get("/homeworks", h(true, false, a.listHomeworks))
+		r.Post("/homeworks", h(true, true, a.createHomework))
+		r.Patch("/homeworks/{id}", h(true, true, a.updateHomework))
+		r.Delete("/homeworks/{id}", h(true, true, a.deleteHomework))
 		r.Get("/messages", h(true, false, a.listMessages))
 		r.Post("/messages", h(true, true, a.sendMessage))
 		r.Get("/messages/{id}", h(true, false, a.getMessage))

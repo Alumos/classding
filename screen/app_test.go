@@ -27,10 +27,11 @@ func TestProbeServerKeepsActiveTargetAndRejectsRedirect(t *testing.T) {
 			t.Fatalf("unexpected probe: %s %s, authorization %q, content type %q", r.Method, r.URL, r.Header.Get("Authorization"), r.Header.Get("Content-Type"))
 		}
 		var body struct {
-			MinSequence int64    `json:"min_sequence"`
-			PendingIDs  []string `json:"pending_ids"`
+			MinSequence         int64    `json:"min_sequence"`
+			PendingIDs          []string `json:"pending_ids"`
+			MinHomeworkRevision int64    `json:"min_homework_revision"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.MinSequence != 42 || !reflect.DeepEqual(body.PendingIDs, []string{"m1", "m2"}) {
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.MinSequence != 42 || body.MinHomeworkRevision != 7 || !reflect.DeepEqual(body.PendingIDs, []string{"m1", "m2"}) {
 			t.Fatalf("unexpected probe body: %+v, %v", body, err)
 		}
 		deadline, ok := r.Context().Deadline()
@@ -42,7 +43,7 @@ func TestProbeServerKeepsActiveTargetAndRejectsRedirect(t *testing.T) {
 		verifyRequest(r)
 		return &http.Response{StatusCode: http.StatusFound, Header: http.Header{"Location": []string{"https://other.example/steal"}}, Body: io.NopCloser(strings.NewReader("")), Request: r}, nil
 	})
-	if _, err := app.ProbeServer("https://new.example", "secret", 42, []string{"m1", "m2"}); err == nil {
+	if _, err := app.ProbeServer("https://new.example", "secret", 42, []string{"m1", "m2"}, 7); err == nil {
 		t.Fatal("redirect must fail")
 	}
 	if calls != 1 {
@@ -56,7 +57,7 @@ func TestProbeServerKeepsActiveTargetAndRejectsRedirect(t *testing.T) {
 		verifyRequest(r)
 		return &http.Response{StatusCode: http.StatusOK, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(`{"device":{"id":"d1","class_id":"c1","name":"黑板"},"sequence":42,"notifications":[{"t":"notify","seq":42,"d":{"message_id":"m1","audio_url":"/audio?s=1"}}],"recalled_ids":["m2"]}`)), Request: r}, nil
 	})
-	got, err := app.ProbeServer("https://new.example/", "secret", 42, []string{"m1", "m2"})
+	got, err := app.ProbeServer("https://new.example/", "secret", 42, []string{"m1", "m2"}, 7)
 	if err != nil || got.Device.ID != "d1" || got.Device.ClassID != "c1" || got.Sequence != 42 || !reflect.DeepEqual(got.RecalledIDs, []string{"m2"}) || len(got.Notifications) != 1 {
 		t.Fatalf("valid migration result: %+v, %v", got, err)
 	}

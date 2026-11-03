@@ -1,6 +1,7 @@
 import type {components, paths} from '@classding/api/types';
 import type {AckStatus, Notice, WSFrame} from '@classding/api/ws';
 import { configureServer, loadState, normalizeServer, probeServer, saveState, type ProbeResult } from './native';
+import {readHomeworks,type Homework} from './homework';
 import { playChime, playNotice } from './audio';
 
 export type {AckStatus, Notice} from '@classding/api/ws';
@@ -8,17 +9,19 @@ export type Connection = 'connecting' | 'online' | 'offline';
 interface Ledger { status: AckStatus; at: number; err?: string; }
 interface RemoteConfig {server_url:string; revision:string;}
 interface StoredState {
+  homeworks:Homework[];homeworkRevision:number;
   version: 1; server: string; token: string; deviceName: string; className: string; volume: number; lastSeq: number;
   queue: Notice[]; ledger: Record<string, Ledger>;
   sourceSequence:number; deviceId: string; classId: string; remoteConfig?: RemoteConfig; appliedRevision: string;
 }
 export type Tool = { name: 'countdown'; end: number; seconds: number } | { name: 'rollcall'; names: string[]; selected: string; ends: number } | null;
 export interface Snapshot {
+  homeworks:Homework[];
   ready: boolean; busy: boolean; error: string; connection: Connection; bound: boolean; className: string; deviceName: string;
   server: string; volume: number; pending: number; current: Notice | null; startedAt: number; tool: Tool;
 }
 type Frame = Pick<WSFrame,'t'|'id'|'seq'> & {d?: Record<string, unknown>};
-const frameTypes = ['hello','ack','welcome','notify','recall','tool','config','unbind','ping','pong','receipt','presence'] as const satisfies readonly WSFrame['t'][];
+const frameTypes = ['hello','ack','welcome','notify','recall','tool','config','unbind','ping','pong','receipt','presence','homework'] as const satisfies readonly WSFrame['t'][];
 const parseFrame = (input: unknown): Frame | null => {
   if (typeof input !== 'object' || input === null || Array.isArray(input)) return null;
   const value = input as Record<string,unknown>;
@@ -27,7 +30,7 @@ const parseFrame = (input: unknown): Frame | null => {
   const d = typeof value.d === 'object' && value.d !== null && !Array.isArray(value.d) ? value.d as Record<string,unknown> : undefined;
   return {t,id:typeof value.id === 'string' ? value.id : undefined,seq:typeof value.seq === 'number' ? value.seq : undefined,d};
 };
-const fresh = (): StoredState => ({version: 1, server: '', token: '', deviceName: '', className: '', volume: 80, lastSeq: 0, queue: [], ledger: {}, sourceSequence:0, deviceId:'', classId:'', appliedRevision:''});
+const fresh = (): StoredState => ({homeworks:[],homeworkRevision:0,version: 1, server: '', token: '', deviceName: '', className: '', volume: 80, lastSeq: 0, queue: [], ledger: {}, sourceSequence:0, deviceId:'', classId:'', appliedRevision:''});
 const sleep = (ms: number, signal: AbortSignal) => new Promise<void>((resolve, reject) => {
   if (signal.aborted) { reject(new DOMException('已取消', 'AbortError')); return; }
   const cancel = () => { clearTimeout(timer); reject(new DOMException('已取消', 'AbortError')); };
@@ -47,16 +50,19 @@ const remoteConfig = (value:unknown): RemoteConfig | undefined => {
 
 export class ScreenService {
   private state = fresh();
-  private view: Snapshot = {ready:false,busy:false,error:'',connection:'offline',bound:false,className:'',deviceName:'',server:'',volume:80,pending:0,current:null,startedAt:0,tool:null};
+  private view: Snapshot = {homeworks:[],ready:false,busy:false,error:'',connection:'offline',bound:false,className:'',deviceName:'',server:'',volume:80,pending:0,current:null,startedAt:0,tool:null};
   private listeners = new Set<() => void>();
   private ops: Promise<void> = Promise.resolve();
   private socket?: WebSocket;
   private retry?: ReturnType<typeof setTimeout>;
+  private homeworkTimer?:ReturnType<typeof setInterval>;
+  private homeworkPolling=false;
   private heartbeat?: ReturnType<typeof setInterval>;
   private migrationTimer?: ReturnType<typeof setTimeout>;
   private migrationRunning = false;
   private migrationEpoch = 0;
   private sourceEpoch = 0;
+  private sourceHomeworkRevision=0;
   private attempts = 0;
   private lastFrame = 0;
   private serverOffset = 0;
@@ -73,7 +79,7 @@ export class ScreenService {
   private emit(patch: Partial<Snapshot> = {}) {
     const current = patch.current === undefined ? this.view.current : patch.current;
     this.view = {...this.view, ...patch, bound: !!this.state.token, className:this.state.className, deviceName:this.state.deviceName,
-      server:this.state.server, volume:this.state.volume, pending:Math.max(0, this.state.queue.length - (current ? 1 : 0))};
+      homeworks:this.state.homeworks,server:this.state.server, volume:this.state.volume, pending:Math.max(0, this.state.queue.length - (current ? 1 : 0))};
     this.listeners.forEach(fn => fn());
   }
   private mutate(change: () => void): Promise<void> {
@@ -98,12 +104,15 @@ export class ScreenService {
         this.state = {...fresh(), ...saved} as StoredState;
         // A completed message must never be spoken again after a restart.
         this.state.queue = this.state.queue.filter(item => !['played','dismissed','failed'].includes(this.state.ledger[item.message_id]?.status)).map(item => ({...item,display_sec:duration(item.display_sec)}));
+        this.state.homeworks=readHomeworks(this.state.homeworks,this.state.classId)??[];
+        this.state.homeworkRevision=Math.max(0,num(this.state.homeworkRevision,0));
+        this.sourceHomeworkRevision=this.state.homeworkRevision;
         this.state.remoteConfig = remoteConfig(this.state.remoteConfig);
         this.state.sourceSequence = Math.max(this.state.lastSeq,num(this.state.sourceSequence,0));
       }
       await this.setBase(this.state.server);
       this.emit({ready:true});
-      if (this.state.token) { this.connect(); this.scheduleMigration(); }
+      if (this.state.token) { this.startHomeworkPolling();this.connect(); this.scheduleMigration(); }
     } catch (error) { this.emit({ready:true,error:`初始化失败：${error instanceof Error ? error.message : String(error)}`}); }
   }
   async bind(code: string, deviceName: string, server: string) {
@@ -119,8 +128,8 @@ export class ScreenService {
       if (!response.ok) throw new Error(data.message || `绑定失败（${response.status}）`);
       if (!data.device_token || !data.class?.name || !data.class.id || !data.device?.id || data.device.class_id !== data.class.id) throw new Error('服务器返回的绑定信息不完整');
       serverAccepted = true;
-      await this.mutate(() => { this.state = {...fresh(),server,token:data.device_token!,deviceId:data.device!.id,classId:data.class!.id,deviceName:data.device!.name,className:data.class!.name,volume:num(data.volume,80)}; });
-      this.attempts = 0; this.connect();
+      await this.mutate(() => { this.sourceHomeworkRevision=0;this.state = {...fresh(),server,token:data.device_token!,deviceId:data.device!.id,classId:data.class!.id,deviceName:data.device!.name,className:data.class!.name,volume:num(data.volume,80)};this.applyHomeworkSnapshot(data.homeworks,data.homework_revision); });
+      this.startHomeworkPolling();this.attempts = 0; this.connect();
     } catch (error) { const reason = error instanceof TypeError ? '无法连接服务器，请检查地址和网络' : error instanceof Error ? error.message : String(error); const message = serverAccepted ? `服务器已绑定设备，但本机保存失败：${reason}。请在教师端解绑该设备后重新绑定。` : reason; this.emit({error:message}); throw error; }
     finally { this.emit({busy:false}); }
   }
@@ -181,7 +190,7 @@ export class ScreenService {
         const revoked=typeof response.json==='function' ? await response.json().catch(()=>({})) as {code?:string} : {};
         if (revoked.code==='DEVICE_REVOKED'||(!this.state.remoteConfig&&!this.migrationRunning)) { await this.unbind(); return; }
       } else if (response.ok && typeof response.json === 'function') {
-        const data = await response.json() as {device?:{id?:unknown;class_id?:unknown;name?:unknown;remote_config?:unknown};class?:{id?:unknown;name?:unknown};sequence?:unknown;remote_config?:unknown};
+        const data = await response.json() as {device?:{id?:unknown;class_id?:unknown;name?:unknown;remote_config?:unknown};class?:{id?:unknown;name?:unknown};sequence?:unknown;remote_config?:unknown;homeworks?:unknown;homework_revision?:unknown};
         if (generation !== this.generation) return;
         await this.mutate(() => {
           if (generation !== this.generation) return;
@@ -191,6 +200,7 @@ export class ScreenService {
             this.state.deviceName = str(data.device?.name,this.state.deviceName);
             this.state.className = str(data.class?.name,this.state.className);
             this.state.sourceSequence = Math.max(this.state.sourceSequence,num(data.sequence,0));
+            this.applyHomeworkSnapshot(data.homeworks,data.homework_revision);
             if(data.device&&Object.prototype.hasOwnProperty.call(data.device,'remote_config'))this.setRemoteConfig(data.device.remote_config);
             else if(Object.prototype.hasOwnProperty.call(data,'remote_config'))this.setRemoteConfig(data.remote_config);
           }
@@ -200,6 +210,33 @@ export class ScreenService {
     } catch { /* Network errors must not erase an otherwise valid binding. */ }
     finally { clearTimeout(timer); }
     if (generation === this.generation) this.scheduleRetry();
+  }
+  private observeHomework(items:unknown,revision:unknown) {
+    if(typeof revision==='number'&&Number.isSafeInteger(revision)&&revision>this.sourceHomeworkRevision&&readHomeworks(items,this.state.classId)!==null){this.sourceHomeworkRevision=revision;this.sourceEpoch++;}
+  }
+  private applyHomeworkSnapshot(items:unknown,revision:unknown,observeSource=true) {
+    if(typeof revision!=='number'||!Number.isSafeInteger(revision)||revision<0||revision<this.state.homeworkRevision)return;
+    const parsed=readHomeworks(items,this.state.classId);if(parsed===null)return;
+    if(observeSource)this.observeHomework(items,revision);
+    this.state.homeworks=parsed;this.state.homeworkRevision=revision;
+  }
+  private startHomeworkPolling() {
+    clearInterval(this.homeworkTimer);
+    this.homeworkTimer=setInterval(()=>{void this.refreshHomeworks();},30000);
+  }
+  private async refreshHomeworks(force=false) {
+    if(this.homeworkPolling||this.disposed||!this.state.token||(!force&&this.view.connection!=='online'))return;
+    this.homeworkPolling=true;const generation=this.generation;
+    const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),5000);
+    try {
+      const response=await this.request('/api/v1/device/homeworks',{headers:{Authorization:`Bearer ${this.state.token}`},signal:controller.signal});
+      if(!response.ok)return;
+      const data=await response.json() as {items?:unknown;homework_revision?:unknown};
+      if(generation!==this.generation||this.disposed)return;
+      this.observeHomework(data.items,data.homework_revision);
+      await this.mutate(()=>{if(generation===this.generation)this.applyHomeworkSnapshot(data.items,data.homework_revision);});
+    }catch{/* The live connection and cached assignments remain usable during network failures. */}
+    finally{clearTimeout(timer);this.homeworkPolling=false;}
   }
   private scheduleRetry() {
     if (!this.state.token || this.disposed) return;
@@ -226,17 +263,23 @@ export class ScreenService {
     // Let an active presentation finish; a migration never interrupts a student reading.
     // Large queues drain in validated batches before a single migration checkpoint.
     if(this.active || this.state.queue.length>4096){this.scheduleMigration(5000);return;}
+    await this.refreshHomeworks(true);
     await this.ops;
+    if(this.migrationRunning||this.disposed||this.active||this.state.remoteConfig!==plan)return;
     const minSequence=this.state.sourceSequence;
+    const minHomeworkRevision=Math.max(this.state.homeworkRevision,this.sourceHomeworkRevision);
     const migrationEpoch=this.migrationEpoch, sourceEpoch=this.sourceEpoch;
     const pendingIds=this.state.queue.map(item=>item.message_id);
     const token = this.state.token, deviceId = this.state.deviceId, classId = this.state.classId;
     this.migrationRunning = true; this.suppressStarts = true;
     try {
-      const result = await probeServer(plan.server_url, token,minSequence,pendingIds);
+      const result = await probeServer(plan.server_url, token,minSequence,pendingIds,minHomeworkRevision);
+      const targetRevision=result.homework_revision;
+      const legacyHomework=targetRevision===undefined&&minHomeworkRevision===0&&result.homeworks===undefined;
+      const validHomework=legacyHomework||(typeof targetRevision==='number'&&Number.isSafeInteger(targetRevision)&&targetRevision>=minHomeworkRevision&&readHomeworks(result.homeworks,classId)!==null);
       if (result.device.id !== deviceId || result.device.class_id !== classId) {
         this.emit({error:'新服务器的设备身份不匹配，继续使用原服务器'});
-      } else if(!Number.isSafeInteger(result.sequence)||result.sequence<minSequence||!Array.isArray(result.notifications)||!Array.isArray(result.recalled_ids)){
+      } else if(!Number.isSafeInteger(result.sequence)||result.sequence<minSequence||!Array.isArray(result.notifications)||!Array.isArray(result.recalled_ids)||!validHomework){
         this.emit({error:'新服务器尚未恢复完整数据，继续使用原服务器'});
       } else await this.commitMigration(plan, token, deviceId, classId,result,minSequence,pendingIds,migrationEpoch,sourceEpoch);
     } catch { /* The old connection remains active; retry after the new server comes online. */ }
@@ -258,6 +301,7 @@ export class ScreenService {
       clearTimeout(this.retry); clearInterval(this.heartbeat);
       this.state.queue=this.state.queue.filter(item=>!recalled.has(item.message_id)).map(item=>({...item,audio_url:refreshed.get(item.message_id)!.audio_url||undefined,expires_at:refreshed.get(item.message_id)!.expires_at}));
       recalled.forEach(id=>{this.state.ledger[id]={status:'dismissed',at:Date.now()};});
+      this.applyHomeworkSnapshot(result.homeworks,result.homework_revision,false);
       this.state.sourceSequence=Math.max(minSequence,result.sequence);
       this.state.server = plan.server_url; this.state.remoteConfig = undefined; this.state.appliedRevision = plan.revision;
       try {
@@ -274,6 +318,7 @@ export class ScreenService {
         this.emit({error:`保存服务器迁移失败：${error instanceof Error ? error.message : String(error)}`});
         return;
       }
+      this.sourceHomeworkRevision=this.state.homeworkRevision;
       this.generation++; previousSocket?.close(); this.attempts = 0; this.connect();
     });
     this.ops = operation.catch(() => {});
@@ -289,7 +334,8 @@ export class ScreenService {
     if(generation!==this.generation)return;
     const d = frame.d || {};
     if((frame.t==='config'||frame.t==='welcome')&&Object.prototype.hasOwnProperty.call(d,'remote_config'))this.migrationEpoch++;
-    if(frame.t==='notify'||frame.t==='recall'||frame.t==='unbind')this.sourceEpoch++;
+    if(frame.t==='welcome'||frame.t==='homework')this.observeHomework(frame.t==='welcome'?d.homeworks:d.items,d.homework_revision);
+    if(frame.t==='notify'||frame.t==='recall'||frame.t==='unbind'||frame.t==='homework')this.sourceEpoch++;
     switch (frame.t) {
       case 'welcome': {
         const cls = d.class as {id?:unknown;name?:unknown} | undefined;
@@ -304,6 +350,7 @@ export class ScreenService {
           await this.mutate(() => {
             if (generation !== this.generation) return;
             this.state.sourceSequence=Math.max(this.state.sourceSequence,num(d.sequence,0));
+            this.applyHomeworkSnapshot(d.homeworks,d.homework_revision);
             this.state.className = str(cls?.name, this.state.className); this.state.volume = num(d.volume,this.state.volume);
             const id = str(device?.id); const classId = str(device?.class_id, str(cls?.id));
             if ((!this.state.deviceId || this.state.deviceId === id) && (!this.state.classId || this.state.classId === classId)) {
@@ -353,6 +400,9 @@ export class ScreenService {
         if (this.view.current?.message_id === id) this.emit({current:null,startedAt:0});
         void this.startNext(); break;
       }
+      case 'homework':
+        await this.mutate(()=>{if(generation===this.generation)this.applyHomeworkSnapshot(d.items,d.homework_revision);});
+        break;
       case 'config':
         await this.mutate(() => {
           if (generation !== this.generation) return;
@@ -444,11 +494,11 @@ export class ScreenService {
   }
   async unbind() {
     this.suppressStarts = true;
-    this.generation++; this.active?.abort(); clearTimeout(this.retry); clearInterval(this.heartbeat); clearTimeout(this.migrationTimer); this.socket?.close();
-    try { await this.mutate(() => { const server = this.state.server; this.state = {...fresh(),server}; }); }
+    this.generation++; this.active?.abort(); clearTimeout(this.retry); clearInterval(this.heartbeat); clearInterval(this.homeworkTimer);clearTimeout(this.migrationTimer); this.socket?.close();
+    try { await this.mutate(() => { const server = this.state.server; this.sourceHomeworkRevision=0;this.state = {...fresh(),server}; }); }
     finally { this.suppressStarts = false; }
     this.emit({connection:'offline',current:null,startedAt:0,tool:null,error:'设备已解绑，请输入新的绑定码'});
   }
   closeTool() { this.emit({tool:null}); }
-  dispose() { this.disposed = true; this.generation++; this.active?.abort(); clearTimeout(this.retry); clearInterval(this.heartbeat); clearTimeout(this.migrationTimer); this.socket?.close(); }
+  dispose() { this.disposed = true; this.generation++; this.active?.abort(); clearTimeout(this.retry); clearInterval(this.heartbeat); clearInterval(this.homeworkTimer);clearTimeout(this.migrationTimer); this.socket?.close(); }
 }

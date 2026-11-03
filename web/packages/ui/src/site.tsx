@@ -40,5 +40,5 @@ export function useSiteSettings(){return React.useContext(SiteContext);}
 
 export function SiteFooter({className=''}:{className?:string}){
   const {site_name,icp_number}=useSiteSettings();
-  return <footer className={`cd-site-footer ${className}`}><span>© {site_name}</span>{icp_number&&<a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer">{icp_number}</a>}</footer>;
+  return <footer className={`cd-site-footer ${className}`}><span className="cd-site-copyright">© {site_name}</span>{icp_number&&<a className="cd-site-icp" href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer">{icp_number}</a>}</footer>;
 }

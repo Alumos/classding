@@ -198,6 +198,11 @@
                     "items": {
                       "type": "string"
                     }
+                  },
+                  "min_homework_revision": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
                   }
                 },
                 "required": [
@@ -1397,9 +1402,42 @@
         }
       }
     },
+    "/device/homeworks": {
+      "get": {
+        "operationId": "get__device_homeworks_30",
+        "summary": "GET /device/homeworks",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeviceHomeworkList"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "业务错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/client/latest": {
       "get": {
-        "operationId": "get__client_latest_30",
+        "operationId": "get__client_latest_31",
         "summary": "GET /client/latest",
         "security": [],
         "responses": {
@@ -1426,9 +1464,234 @@
         }
       }
     },
+    "/homeworks": {
+      "get": {
+        "operationId": "get__homeworks_32",
+        "summary": "GET /homeworks",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HomeworkList"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "业务错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "class_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      },
+      "post": {
+        "operationId": "post__homeworks_33",
+        "summary": "POST /homeworks",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "class_id": {
+                    "type": "string"
+                  },
+                  "subject": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 24
+                  },
+                  "text": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 300
+                  },
+                  "visible": {
+                    "type": "boolean"
+                  },
+                  "always_on_top": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "class_id",
+                  "subject",
+                  "text",
+                  "visible",
+                  "always_on_top"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Homework"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "业务错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/homeworks/{id}": {
+      "patch": {
+        "operationId": "patch__homeworks__id__34",
+        "summary": "PATCH /homeworks/{id}",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "subject": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 24
+                  },
+                  "text": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 300
+                  },
+                  "visible": {
+                    "type": "boolean"
+                  },
+                  "always_on_top": {
+                    "type": "boolean"
+                  }
+                },
+                "required": []
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Homework"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "业务错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "delete__homeworks__id__35",
+        "summary": "DELETE /homeworks/{id}",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OK"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "业务错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/messages": {
       "get": {
-        "operationId": "get__messages_31",
+        "operationId": "get__messages_36",
         "summary": "GET /messages",
         "security": [
           {
@@ -1493,7 +1756,7 @@
         }
       },
       "post": {
-        "operationId": "post__messages_32",
+        "operationId": "post__messages_37",
         "summary": "POST /messages",
         "security": [
           {
@@ -1536,7 +1799,7 @@
     },
     "/messages/{id}": {
       "get": {
-        "operationId": "get__messages__id__33",
+        "operationId": "get__messages__id__38",
         "summary": "GET /messages/{id}",
         "security": [
           {
@@ -1579,7 +1842,7 @@
     },
     "/messages/{id}/recall": {
       "post": {
-        "operationId": "post__messages__id__recall_34",
+        "operationId": "post__messages__id__recall_39",
         "summary": "POST /messages/{id}/recall",
         "security": [
           {
@@ -1622,7 +1885,7 @@
     },
     "/messages/{id}/resend": {
       "post": {
-        "operationId": "post__messages__id__resend_35",
+        "operationId": "post__messages__id__resend_40",
         "summary": "POST /messages/{id}/resend",
         "security": [
           {
@@ -1665,7 +1928,7 @@
     },
     "/phrases": {
       "get": {
-        "operationId": "get__phrases_36",
+        "operationId": "get__phrases_41",
         "summary": "GET /phrases",
         "security": [
           {
@@ -1699,7 +1962,7 @@
         }
       },
       "post": {
-        "operationId": "post__phrases_37",
+        "operationId": "post__phrases_42",
         "summary": "POST /phrases",
         "security": [
           {
@@ -1750,7 +2013,7 @@
     },
     "/phrases/{id}": {
       "patch": {
-        "operationId": "patch__phrases__id__38",
+        "operationId": "patch__phrases__id__43",
         "summary": "PATCH /phrases/{id}",
         "security": [
           {
@@ -1809,7 +2072,7 @@
         }
       },
       "delete": {
-        "operationId": "delete__phrases__id__39",
+        "operationId": "delete__phrases__id__44",
         "summary": "DELETE /phrases/{id}",
         "security": [
           {
@@ -1852,7 +2115,7 @@
     },
     "/classes/{id}/tools/countdown": {
       "post": {
-        "operationId": "post__classes__id__tools_countdown_40",
+        "operationId": "post__classes__id__tools_countdown_45",
         "summary": "POST /classes/{id}/tools/countdown",
         "security": [
           {
@@ -1913,7 +2176,7 @@
     },
     "/classes/{id}/tools/rollcall": {
       "post": {
-        "operationId": "post__classes__id__tools_rollcall_41",
+        "operationId": "post__classes__id__tools_rollcall_46",
         "summary": "POST /classes/{id}/tools/rollcall",
         "security": [
           {
@@ -1977,7 +2240,7 @@
     },
     "/classes/{id}/tools/stop": {
       "post": {
-        "operationId": "post__classes__id__tools_stop_42",
+        "operationId": "post__classes__id__tools_stop_47",
         "summary": "POST /classes/{id}/tools/stop",
         "security": [
           {
@@ -2020,7 +2283,7 @@
     },
     "/audio": {
       "post": {
-        "operationId": "post__audio_43",
+        "operationId": "post__audio_48",
         "summary": "POST /audio",
         "security": [
           {
@@ -2072,7 +2335,7 @@
     },
     "/admin/overview": {
       "get": {
-        "operationId": "get__admin_overview_44",
+        "operationId": "get__admin_overview_49",
         "summary": "GET /admin/overview",
         "security": [
           {
@@ -2105,7 +2368,7 @@
     },
     "/admin/activation-codes": {
       "get": {
-        "operationId": "get__admin_activation_codes_45",
+        "operationId": "get__admin_activation_codes_50",
         "summary": "GET /admin/activation-codes",
         "security": [
           {
@@ -2173,7 +2436,7 @@
         }
       },
       "post": {
-        "operationId": "post__admin_activation_codes_46",
+        "operationId": "post__admin_activation_codes_51",
         "summary": "POST /admin/activation-codes",
         "security": [
           {
@@ -2247,7 +2510,7 @@
     },
     "/admin/activation-codes/{code}": {
       "patch": {
-        "operationId": "patch__admin_activation_codes__code__47",
+        "operationId": "patch__admin_activation_codes__code__52",
         "summary": "PATCH /admin/activation-codes/{code}",
         "security": [
           {
@@ -2318,7 +2581,7 @@
     },
     "/admin/users": {
       "get": {
-        "operationId": "get__admin_users_48",
+        "operationId": "get__admin_users_53",
         "summary": "GET /admin/users",
         "security": [
           {
@@ -2352,7 +2615,7 @@
         }
       },
       "post": {
-        "operationId": "post__admin_users_49",
+        "operationId": "post__admin_users_54",
         "summary": "POST /admin/users",
         "security": [
           {
@@ -2414,7 +2677,7 @@
     },
     "/admin/users/{id}": {
       "patch": {
-        "operationId": "patch__admin_users__id__50",
+        "operationId": "patch__admin_users__id__55",
         "summary": "PATCH /admin/users/{id}",
         "security": [
           {
@@ -2480,7 +2743,7 @@
         }
       },
       "delete": {
-        "operationId": "delete__admin_users__id__51",
+        "operationId": "delete__admin_users__id__56",
         "summary": "DELETE /admin/users/{id}",
         "security": [
           {
@@ -2523,7 +2786,7 @@
     },
     "/admin/users/{id}/unlock-login": {
       "post": {
-        "operationId": "post__admin_users__id__unlock_login_52",
+        "operationId": "post__admin_users__id__unlock_login_57",
         "summary": "POST /admin/users/{id}/unlock-login",
         "security": [
           {
@@ -2566,7 +2829,7 @@
     },
     "/admin/classes": {
       "get": {
-        "operationId": "get__admin_classes_53",
+        "operationId": "get__admin_classes_58",
         "summary": "GET /admin/classes",
         "security": [
           {
@@ -2600,7 +2863,7 @@
         }
       },
       "post": {
-        "operationId": "post__admin_classes_54",
+        "operationId": "post__admin_classes_59",
         "summary": "POST /admin/classes",
         "security": [
           {
@@ -2666,7 +2929,7 @@
     },
     "/admin/classes/{id}": {
       "patch": {
-        "operationId": "patch__admin_classes__id__55",
+        "operationId": "patch__admin_classes__id__60",
         "summary": "PATCH /admin/classes/{id}",
         "security": [
           {
@@ -2735,7 +2998,7 @@
         }
       },
       "delete": {
-        "operationId": "delete__admin_classes__id__56",
+        "operationId": "delete__admin_classes__id__61",
         "summary": "DELETE /admin/classes/{id}",
         "security": [
           {
@@ -2778,7 +3041,7 @@
     },
     "/admin/devices": {
       "get": {
-        "operationId": "get__admin_devices_57",
+        "operationId": "get__admin_devices_62",
         "summary": "GET /admin/devices",
         "security": [
           {
@@ -2814,7 +3077,7 @@
     },
     "/admin/messages": {
       "get": {
-        "operationId": "get__admin_messages_58",
+        "operationId": "get__admin_messages_63",
         "summary": "GET /admin/messages",
         "security": [
           {
@@ -2881,7 +3144,7 @@
     },
     "/admin/audit-logs": {
       "get": {
-        "operationId": "get__admin_audit_logs_59",
+        "operationId": "get__admin_audit_logs_64",
         "summary": "GET /admin/audit-logs",
         "security": [
           {
@@ -3194,6 +3457,93 @@
           "id",
           "text",
           "sort"
+        ]
+      },
+      "Homework": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "class_id": {
+            "type": "string"
+          },
+          "subject": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 24
+          },
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 300
+          },
+          "teacher_id": {
+            "type": "string"
+          },
+          "teacher_name": {
+            "type": "string"
+          },
+          "visible": {
+            "type": "boolean"
+          },
+          "always_on_top": {
+            "type": "boolean"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "class_id",
+          "subject",
+          "text",
+          "teacher_id",
+          "teacher_name",
+          "visible",
+          "always_on_top",
+          "created_at",
+          "updated_at"
+        ]
+      },
+      "HomeworkList": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Homework"
+            }
+          }
+        },
+        "required": [
+          "items"
+        ]
+      },
+      "DeviceHomeworkList": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Homework"
+            }
+          },
+          "homework_revision": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "items",
+          "homework_revision"
         ]
       },
       "MessageTarget": {
@@ -3649,13 +3999,26 @@
           },
           "volume": {
             "type": "integer"
+          },
+          "homeworks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Homework"
+            }
+          },
+          "homework_revision": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
           }
         },
         "required": [
           "device_token",
           "device",
           "class",
-          "volume"
+          "volume",
+          "homeworks",
+          "homework_revision"
         ]
       },
       "DeviceMe": {
@@ -3684,13 +4047,26 @@
           },
           "sequence": {
             "type": "integer"
+          },
+          "homeworks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Homework"
+            }
+          },
+          "homework_revision": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
           }
         },
         "required": [
           "device",
           "class",
           "volume",
-          "sequence"
+          "sequence",
+          "homeworks",
+          "homework_revision"
         ]
       },
       "MigrationCheck": {
@@ -3816,6 +4192,17 @@
             "items": {
               "type": "string"
             }
+          },
+          "homeworks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Homework"
+            }
+          },
+          "homework_revision": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
           }
         },
         "required": [
@@ -3824,7 +4211,9 @@
           "volume",
           "sequence",
           "notifications",
-          "recalled_ids"
+          "recalled_ids",
+          "homeworks",
+          "homework_revision"
         ]
       },
       "MessageInput": {

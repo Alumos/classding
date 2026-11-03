@@ -22,16 +22,17 @@ func (a *App) deviceMigrationCheck(_ http.ResponseWriter, r *http.Request, _ *Us
 		return nil, fail(401, "DEVICE_REVOKED", "班级已被删除。")
 	}
 	var in struct {
-		MinSequence *int64    `json:"min_sequence"`
-		PendingIDs  *[]string `json:"pending_ids"`
+		MinSequence         *int64    `json:"min_sequence"`
+		MinHomeworkRevision *int64    `json:"min_homework_revision"`
+		PendingIDs          *[]string `json:"pending_ids"`
 	}
 	if err := decodeStrict(r, &in); err != nil {
 		return nil, err
 	}
-	if in.MinSequence == nil || *in.MinSequence < 0 || in.PendingIDs == nil || len(*in.PendingIDs) > 4096 {
+	if in.MinSequence == nil || *in.MinSequence < 0 || in.MinHomeworkRevision != nil && (*in.MinHomeworkRevision < 0 || *in.MinHomeworkRevision > maxHomeworkRevision) || in.PendingIDs == nil || len(*in.PendingIDs) > 4096 {
 		return nil, bad("迁移检查的序号或待播消息列表不正确。")
 	}
-	if d.Sequence < *in.MinSequence {
+	if d.Sequence < *in.MinSequence || in.MinHomeworkRevision != nil && c.HomeworkRevision < *in.MinHomeworkRevision {
 		return nil, migrationNotReady()
 	}
 	notifications := []Frame{}
@@ -75,5 +76,6 @@ func (a *App) deviceMigrationCheck(_ http.ResponseWriter, r *http.Request, _ *Us
 	return map[string]any{
 		"device": publicDevice(d), "class": map[string]string{"id": c.ID, "name": c.Name},
 		"volume": c.Volume, "sequence": d.Sequence, "notifications": notifications, "recalled_ids": recalled,
+		"homeworks": a.homeworkItems(c.ID), "homework_revision": c.HomeworkRevision,
 	}, nil
 }

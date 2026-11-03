@@ -53,6 +53,44 @@ export interface components {
                 } | null;
                 server_time: number;
                 recalled_ids?: string[];
+                homeworks?: {
+                    id: string;
+                    class_id: string;
+                    subject: string;
+                    text: string;
+                    teacher_id: string;
+                    teacher_name: string;
+                    visible: boolean;
+                    always_on_top: boolean;
+                    /** Format: date-time */
+                    created_at: string;
+                    /** Format: date-time */
+                    updated_at: string;
+                }[];
+                homework_revision?: number;
+            };
+        } | {
+            /** @constant */
+            t: "homework";
+            id?: string;
+            seq?: number;
+            ts?: number;
+            d: {
+                items: {
+                    id: string;
+                    class_id: string;
+                    subject: string;
+                    text: string;
+                    teacher_id: string;
+                    teacher_name: string;
+                    visible: boolean;
+                    always_on_top: boolean;
+                    /** Format: date-time */
+                    created_at: string;
+                    /** Format: date-time */
+                    updated_at: string;
+                }[];
+                homework_revision: number;
             };
         } | {
             /** @constant */

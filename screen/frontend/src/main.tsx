@@ -2,8 +2,9 @@ import React, {useEffect, useRef, useState, useSyncExternalStore} from 'react';
 import {createRoot} from 'react-dom/client';
 import {Badge, Brand, Button, Card, Input, NoticeScreen, Switch} from '@classding/ui';
 import {ArrowRight, AudioLines, BellRing, Check, ChevronDown, CircleHelp, Clock3, Link2, Monitor, Radio, Settings2, ShieldCheck, Volume2, Wifi, WifiOff, X} from 'lucide-react';
+import {HomeworkPanel} from './HomeworkPanel';
 import {ScreenService} from './service';
-import {native, type DisplaySettings} from './native';
+import {native,syncHomeworkWindows, type DisplaySettings} from './native';
 import {playNotice, unlockAudio} from './audio';
 import '@classding/ui/styles.css';
 import './styles.css';
@@ -28,6 +29,7 @@ function App() {
   const testController = useRef<AbortController | null>(null);
   const isNative = !!native();
   useEffect(() => { if (state.ready) { setServer(state.server); setDeviceName(state.deviceName); } },[state.ready]);
+  useEffect(()=>{if(state.ready&&native())void syncHomeworkWindows(state.bound?state.homeworks:[]).then(()=>window.dispatchEvent(new Event('classding:homework-applied'))).catch(error=>setLocalError(`桌面作业窗口更新失败：${String(error)}`));},[state.ready,state.bound,state.homeworks]);
   useEffect(() => { if (state.current) testController.current?.abort(); },[state.current]);
   useEffect(() => { if (isNative) void native()!.GetAutostart().then(setAutostart).catch(() => {}); },[isNative]);
   useEffect(() => {
@@ -103,7 +105,7 @@ function App() {
         <div className="dashboard-grid"><Card className="class-card"><div className="class-card-top"><span className="class-icon"><Monitor size={22}/></span><Badge variant="success"><span className="status-dot"/> 已绑定</Badge></div><span className="section-label">当前班级</span><h2>{state.className}</h2><p>{state.deviceName}</p><div className="class-divider"/><div className="class-summary"><div><Radio size={18}/><span>消息接收<strong>{state.connection === 'online' ? '在线待命' : '等待连接'}</strong></span></div><div><Volume2 size={18}/><span>班级音量<strong>{state.volume}%</strong></span></div></div></Card>
           <div className="dashboard-side"><Card className="ready-card"><div className="ready-visual"><span className="sound-orbit orbit-one"/><span className="sound-orbit orbit-two"/><span className="ready-bell"><BellRing size={37}/></span></div><div><h3>声音准备好了吗？</h3><p>可以播放一段提示音和语音，确认教室能够听清。</p><Button variant="secondary" onClick={()=>void testSound()} disabled={soundTesting}><AudioLines size={16}/>{soundTesting ? '正在测试…' : '测试播报'}</Button></div></Card>
             <Card className="settings-card"><div className="setting-row"><span className="setting-icon"><Clock3 size={18}/></span><div><strong>开机启动</strong><p>{isNative ? '电脑开机后在后台自动守候消息' : '仅 Windows 客户端支持'}</p></div><Switch checked={autostart} onCheckedChange={checked=>void toggleStart(checked)} disabled={!isNative} aria-label="开机启动"/></div>{displaySettings && displaySettings.displays.length > 0 && <div className="setting-row"><span className="setting-icon"><Monitor size={18}/></span><div><strong>通知显示器</strong><p>通知与课堂工具出现的位置</p></div><select className="display-select" aria-label="通知显示器" value={displaySettings.selected} onChange={event=>void selectDisplay(event.target.value)}><option value="">跟随当前窗口</option>{displaySettings.selected && !displaySettings.displays.some(display=>display.id===displaySettings.selected) && <option value={displaySettings.selected}>所选显示器已断开</option>}{displaySettings.displays.map(display=><option key={display.id} value={display.id}>{display.name}</option>)}</select></div>}<div className="setting-row"><span className="setting-icon"><ShieldCheck size={18}/></span><div><strong>设备管理</strong><p>如需解绑，请在教师端班级设置中操作</p></div><Check size={17} className="muted-check"/></div></Card></div></div>
-        {error && <div className="inline-error dashboard-error" role="alert">{error}</div>}<div className="dashboard-note"><span><span className="status-dot"/> {state.connection === 'online' ? '正在守候班级消息' : '正在尝试恢复连接'}</span><span>课堂叮咚 · 让沟通更简单</span></div></div>}
+        <HomeworkPanel items={state.homeworks}/>{error && <div className="inline-error dashboard-error" role="alert">{error}</div>}<div className="dashboard-note"><span><span className="status-dot"/> {state.connection === 'online' ? '正在守候班级消息' : '正在尝试恢复连接'}</span><span>课堂叮咚 · 让沟通更简单</span></div></div>}
       <footer className="page-footer"><span>© 课堂叮咚 ClassDing</span><span>为每一间教室而设计 <span className="footer-heart">✳</span></span></footer>
     </main>
     {current && <div className="presentation" data-style={current.style}><NoticeScreen text={current.text || '老师发来一条语音消息'} studentName={current.student_name} signature={current.signature || '老师'} className={current.class_name || state.className} style={current.style} progress={progress} sentAt={current.sent_at}/><div className="presentation-controls">{state.pending > 0 && <span>还有 {state.pending} 条</span>}<button type="button" className="dismiss-notice" onClick={()=>void service.dismiss()}><Check size={22}/>已读通知，关闭消息</button></div></div>}

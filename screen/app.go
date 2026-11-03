@@ -34,12 +34,14 @@ type ScreenDisplay struct {
 	Width   int    `json:"width"`
 	Height  int    `json:"height"`
 	rect    displayRect
+	work    displayRect
 }
 type DisplaySettings struct {
 	Selected string          `json:"selected"`
 	Displays []ScreenDisplay `json:"displays"`
 }
 type App struct {
+	homework  homeworkState
 	ctx       context.Context
 	dataDir   string
 	initErr   error
@@ -98,6 +100,7 @@ func (a *App) initialize() error {
 		listener.Close()
 		return err
 	}
+	a.loadHomeworkPreferences()
 	a.secret = hex.EncodeToString(secret)
 	a.proxyURL = "http://" + listener.Addr().String() + "/" + a.secret
 	a.proxy = &http.Server{Handler: http.HandlerFunc(a.proxyHandler), ReadHeaderTimeout: 10 * time.Second}
@@ -185,6 +188,7 @@ func (a *App) trayUnavailable() {
 	runtime.EventsEmit(a.ctx, "tray:unavailable")
 }
 func (a *App) shutdown(_ context.Context) {
+	a.closeHomework()
 	a.windowMu.Lock()
 	tray := a.tray
 	a.windowMu.Unlock()
@@ -264,7 +268,7 @@ func parseServer(server string) (*url.URL, error) {
 
 // ProbeServer authenticates against a candidate without changing the active proxy.
 // A redirect is never followed, so the device token cannot be forwarded elsewhere.
-func (a *App) ProbeServer(server, token string, minSequence int64, pendingIDs []string) (ProbeResult, error) {
+func (a *App) ProbeServer(server, token string, minSequence int64, pendingIDs []string, minHomeworkRevision int64) (ProbeResult, error) {
 	var result ProbeResult
 	target, err := parseServer(server)
 	if err != nil {
@@ -273,11 +277,11 @@ func (a *App) ProbeServer(server, token string, minSequence int64, pendingIDs []
 	if token == "" {
 		return result, errors.New("设备令牌为空")
 	}
-	if minSequence < 0 || len(pendingIDs) > 4096 {
+	if minSequence < 0 || minHomeworkRevision < 0 || len(pendingIDs) > 4096 {
 		return result, errors.New("迁移检查参数无效")
 	}
 	target.Path = "/api/v1/device/migration-check"
-	payload, err := json.Marshal(map[string]any{"min_sequence": minSequence, "pending_ids": pendingIDs})
+	payload, err := json.Marshal(map[string]any{"min_sequence": minSequence, "pending_ids": pendingIDs, "min_homework_revision": minHomeworkRevision})
 	if err != nil {
 		return result, err
 	}
@@ -311,10 +315,12 @@ func (a *App) ProbeServer(server, token string, minSequence int64, pendingIDs []
 }
 
 type ProbeResult struct {
-	Sequence      int64             `json:"sequence"`
-	Notifications []json.RawMessage `json:"notifications"`
-	RecalledIDs   []string          `json:"recalled_ids"`
-	Device        struct {
+	Homeworks        []HomeworkCard    `json:"homeworks"`
+	HomeworkRevision int64             `json:"homework_revision"`
+	Sequence         int64             `json:"sequence"`
+	Notifications    []json.RawMessage `json:"notifications"`
+	RecalledIDs      []string          `json:"recalled_ids"`
+	Device           struct {
 		ID      string `json:"id"`
 		ClassID string `json:"class_id"`
 		Name    string `json:"name"`
@@ -391,6 +397,7 @@ func (a *App) SetPresentationActive(active bool) error {
 		return nil
 	}
 	<-a.initDone
+	a.suspendHomework(active)
 	var displayErr error
 	if active {
 		runtime.WindowShow(a.ctx)
@@ -460,6 +467,13 @@ func (a *App) SetSelectedDisplay(id string) error {
 		return err
 	}
 	a.displayID = id
+	go func() {
+		a.homework.mu.Lock()
+		defer a.homework.mu.Unlock()
+		if a.homework.windows != nil {
+			_ = a.renderHomeworkLocked()
+		}
+	}()
 	return nil
 }
 func (a *App) GetTrayError() string {

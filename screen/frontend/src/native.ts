@@ -1,14 +1,20 @@
+import type {Homework} from './homework';
 import type {Notice} from '@classding/api/ws';
 export interface DisplaySettings {
   selected: string;
   displays: Array<{id:string;name:string;primary:boolean;width:number;height:number}>;
 }
-export interface ProbeResult {device:{id:string;class_id:string;name?:string};sequence:number;notifications:Array<{t:string;id?:string;seq?:number;d:Notice}>;recalled_ids:string[];}
+export interface HomeworkPreference {revision:string;visible?:boolean;always_on_top?:boolean}
+export interface HomeworkSettings {items:Homework[];preferences:Record<string,HomeworkPreference>}
+export interface ProbeResult {homeworks?:Homework[];homework_revision?:number;device:{id:string;class_id:string;name?:string};sequence:number;notifications:Array<{t:string;id?:string;seq?:number;d:Notice}>;recalled_ids:string[];}
 export interface NativeApp {
+  UpdateHomeworks(value:string):Promise<void>;
+  GetHomeworkSettings():Promise<HomeworkSettings>;
+  SetHomeworkPreference(id:string,action:string):Promise<void>;
   LoadState(): Promise<string>;
   SaveState(value: string): Promise<void>;
   ConfigureServer(server: string): Promise<string>;
-  ProbeServer(server: string, token: string, minSequence:number, pendingIds:string[]): Promise<ProbeResult>;
+  ProbeServer(server: string, token: string, minSequence:number, pendingIds:string[],minHomeworkRevision:number): Promise<ProbeResult>;
   SetPresentationActive(active: boolean): Promise<void>;
   PrepareAudio(volume: number): Promise<void>;
   RestoreAudio(): Promise<void>;
@@ -22,7 +28,7 @@ export interface NativeApp {
 declare global {
   interface Window {
     go?: { main?: { App?: NativeApp } };
-    runtime?: { EventsOnMultiple(name:string, callback:() => void, maxCallbacks:number): () => void };
+    runtime?: { EventsOnMultiple(name:string, callback:(...args:unknown[]) => void, maxCallbacks:number): () => void };
   }
 }
 export const native = (): NativeApp | undefined => window.go?.main?.App;
@@ -42,16 +48,25 @@ export async function configureServer(server: string): Promise<string> {
   if (native()) return native()!.ConfigureServer(normalized);
   return normalized;
 }
-export async function probeServer(server: string, token: string, minSequence:number, pendingIds:string[]): Promise<ProbeResult> {
+export async function probeServer(server: string, token: string, minSequence:number, pendingIds:string[],minHomeworkRevision=0): Promise<ProbeResult> {
   const normalized = normalizeServer(server);
-  if (native()) return native()!.ProbeServer(normalized, token, minSequence, pendingIds);
+  if (native()) return native()!.ProbeServer(normalized, token, minSequence, pendingIds,minHomeworkRevision);
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 5000);
   try {
-    const response = await fetch(`${normalized}/api/v1/device/migration-check`, {method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify({min_sequence:minSequence,pending_ids:pendingIds}),redirect:'error',signal:controller.signal});
+    const response = await fetch(`${normalized}/api/v1/device/migration-check`, {method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify({min_sequence:minSequence,pending_ids:pendingIds,min_homework_revision:minHomeworkRevision}),redirect:'error',signal:controller.signal});
     if (!response.ok) throw new Error(`新服务器身份验证失败（${response.status}）`);
     const result = await response.json() as ProbeResult;
     if (!result?.device?.id || !result.device.class_id) throw new Error('新服务器返回的设备身份不完整');
     return result;
   } finally { clearTimeout(timer); }
+}
+
+// All updates, including unbind cleanup, share one native call queue.
+let homeworkWindowUpdates:Promise<void>=Promise.resolve();
+export function syncHomeworkWindows(items:Homework[]):Promise<void>{
+  const value=JSON.stringify(items);
+  const operation=homeworkWindowUpdates.then(async()=>{if(native())await native()!.UpdateHomeworks(value);});
+  homeworkWindowUpdates=operation.catch(()=>{});
+  return operation;
 }

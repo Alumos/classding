@@ -203,7 +203,7 @@ describe('远程迁移', () => {
     mocks.disk = JSON.stringify(saved()); mocks.probe.mockRejectedValue(new Error('offline'));
     vi.stubGlobal('fetch',vi.fn(async () => ({status:401,ok:false})));
     const service = makeService(); await service.init(); socket().open(); sendPlan();
-    await vi.waitFor(() => expect(mocks.probe).toHaveBeenCalledWith(plan.server_url,'device-token',42,['m1']));
+    await vi.waitFor(() => expect(mocks.probe).toHaveBeenCalledWith(plan.server_url,'device-token',42,['m1'],0));
     expect(JSON.parse(mocks.disk).remoteConfig).toEqual(plan);
     expect(mocks.configure.mock.calls.map(call => call[0])).toEqual(['https://old.example']);
     socket().close();
@@ -268,7 +268,7 @@ describe('远程迁移', () => {
     mocks.probe.mockResolvedValue({...probeResult(),sequence:41});
     const service = makeService(); await service.init();
     await vi.waitFor(() => expect(service.getSnapshot().error).toContain('未恢复完整数据'));
-    expect(mocks.probe).toHaveBeenCalledWith(plan.server_url,'device-token',42,['m1']);
+    expect(mocks.probe).toHaveBeenCalledWith(plan.server_url,'device-token',42,['m1'],0);
     expect(JSON.parse(mocks.disk)).toMatchObject({server:'https://old.example',remoteConfig:plan});
     expect(mocks.configure.mock.calls.map(call=>call[0])).toEqual(['https://old.example']);
   });
@@ -280,7 +280,7 @@ describe('远程迁移', () => {
     socket().frame({t:'welcome',d:{...welcome.d,sequence:50}});
     await vi.waitFor(() => expect(JSON.parse(mocks.disk).sourceSequence).toBe(50));
     sendPlan();
-    await vi.waitFor(() => expect(mocks.probe).toHaveBeenCalledWith(plan.server_url,'device-token',50,[]));
+    await vi.waitFor(() => expect(mocks.probe).toHaveBeenCalledWith(plan.server_url,'device-token',50,[],0));
   });
 
   it('迁移检查期间收到新通知时不切换，检查期间也不开始播放', async () => {

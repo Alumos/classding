@@ -8,6 +8,7 @@
 - Device: id,class_id,name,os,client_version,online,last_seen_at
 - Member: user_id,display_name,username,role,joined_at
 - Phrase: id,text,sort
+- Homework: id,class_id,subject,text,teacher_id,teacher_name,visible,always_on_top,created_at,updated_at；两个显示字段为布尔值，其余字段为字符串。
 - Message: id,kind,text,student_name,signature,style(notice|praise|urgent),display_sec,repeat,chime,play_mode,sender_id,created_at,expires_at,recalled_at,targets: [{class_id,class_name,device_id,device_name,status,seq,delivered_at,played_at}]
 - ActivationCode: code,max_teachers,max_devices,expires_at,status(unused|active|revoked|released),class_id,org_id,batch_id,note,redeemed_at
 - AuthResponse: {access_token,user}；refresh token 放 HttpOnly Cookie。
@@ -27,8 +28,10 @@ DELETE classes/:id/members/:uid => {ok:true}
 POST classes/:id/transfer {user_id} => Class；POST classes/:id/leave => {ok:true}
 POST classes/:id/bind-code => {code,expires_at}
 GET classes/:id/devices => Device[]；PATCH devices/:id {name} => Device；DELETE devices/:id => {ok:true}
-POST device/bind {code,name,os,client_version} => {device_token,device,class:{id,name},volume}
-GET device/me => {device,class:{id,name},volume}
+POST device/bind {code,name,os,client_version} => {device_token,device,class:{id,name},volume,homeworks,homework_revision}
+GET device/me => {device,class:{id,name},volume,sequence,homeworks,homework_revision}
+GET device/homeworks => {items:Homework[],homework_revision}，设备 Bearer 令牌认证。
+GET homeworks?class_id= => {items:Homework[]}；POST homeworks {class_id,subject,text,visible,always_on_top} => Homework；PATCH homeworks/:id {subject?,text?,visible?,always_on_top?} => Homework；DELETE homeworks/:id => {ok:true}。
 POST messages {class_ids,kind,text,student_name,signature,style,display_sec,repeat,chime,play_mode,audio_id?} => Message
 GET messages?class_id=&cursor= => {items:Message[],next_cursor:string|null}
 GET messages/:id => Message；POST messages/:id/recall => Message；POST messages/:id/resend => Message
@@ -50,7 +53,9 @@ GET admin/devices => Device[]；GET admin/messages => {items:Message[],next_curs
 
 ## WebSocket
 帧 {t,id?,seq?,ts?,d:{...}}。连接5秒内 hello {d:{token,last_seq?,client_version?,os?,pending_ids?}}。
-welcome d:{class:{id,name},volume,server_time,recalled_ids?}; notify d:{message_id,style,text,student_name,signature,class_name,audio_url?,chime,repeat,display_sec,volume,sent_at,expires_at}; recall d:{message_id}; config d:{volume}; unbind d:{}；tool d:{name,params}; ping/pong；ack d:{message_id,status:delivered|playing|played|dismissed|failed}; receipt d:{message_id,class_id,device_id,status,at}; presence d:{class_id,device_id,online}。
+设备 welcome d:{class:{id,name},volume,server_time,recalled_ids?,homeworks,homework_revision}; homework d:{items:Homework[],homework_revision}; notify d:{message_id,style,text,student_name,signature,class_name,audio_url?,chime,repeat,display_sec,volume,sent_at,expires_at}; recall d:{message_id}; config d:{volume}; unbind d:{}；tool d:{name,params}; ping/pong；ack d:{message_id,status:delivered|playing|played|dismissed|failed}; receipt d:{message_id,class_id,device_id,status,at}; presence d:{class_id,device_id,online}。
+
+作业列表和快照均包含隐藏作业，设备只展示 `visible=true` 的项目。每班最多 12 条，科目 1–24 字、内容 1–300 字；作者、班主任和有该班管理权限的管理员可以修改或删除，其他协同教师仅可查看他人的作业。班级成员均可发布自己的作业。更改在持久化成功后推送给该班设备及教师，教师可据此刷新列表。设备断线后由 welcome 补全快照，并可定期调用 device/homeworks 兜底；客户端应忽略修订号低于已采用快照的响应。
 
 ## 前端共享包（主 Agent 提供）
 @ classding/ui (实际包名 @classding/ui): 导出 cn, Button(variant default|secondary|ghost|outline|destructive, size default|sm|icon), Input, Textarea, Card, Badge(variant default|secondary|outline|success|warning|destructive), Dialog({open,onClose,title,description?,children,footer?}), Switch({checked,onCheckedChange,aria-label?}), NoticeScreen({text,studentName?,signature?,className?,style?,progress?,compact?,sentAt?}), Brand({compact?})。
@@ -76,5 +81,5 @@ POST admin/users/:id/unlock-login => {ok:true}，解除教师密码错误造成�
 - `/config` 返回 `site_name, icp_number, theme`；`GET/PUT /admin/settings` 仅运营管理员可用。
 - `GET /admin/backup` 下载 ZIP；`POST /admin/restore` 上传 `application/zip`，需 `X-ClassDing-Restore: replace`，恢复后所有用户重新登录。
 - `POST /admin/devices/{id}/config` 接收 `{server_url}`，空字符串取消迁移；配置保存在 `device.remote_config`，通过 welcome/config 帧传递。
-- `GET /device/me` 与设备 welcome 返回 `sequence`。`POST /device/migration-check` 用设备令牌接收 `{min_sequence,pending_ids}`；成功返回 `{device,class,volume,sequence,notifications,recalled_ids}`，通知使用目标站重新签名的录音 URL；数据不全返回 409。
+- `GET /device/me` 与设备 welcome 返回 `sequence`。`POST /device/migration-check` 用设备令牌接收 `{min_sequence,pending_ids,min_homework_revision?}`；成功返回 `{device,class,volume,sequence,notifications,recalled_ids,homeworks,homework_revision}`，通知使用目标站重新签名的录音 URL；数据不全返回 409。迁移前设备应从源站取最新 `homework_revision` 并作为 `min_homework_revision` 提交，目标站修订号落后时拒绝迁移。该字段对旧设备可省略；省略时无法检测源站备份后的作业变动。迁移期间仍需停止源站写入，并在源站最后一次变更后重新备份和探测。
 - 通知时长 15–600 秒；普通/表扬通知强制关闭提示音，紧急通知可主动开启。

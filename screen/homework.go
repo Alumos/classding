@@ -1,0 +1,278 @@
+package main
+
+import (
+	"encoding/json"
+	"errors"
+	"os"
+	"path/filepath"
+	"sync"
+
+	"github.com/wailsapp/wails/v2/pkg/runtime"
+)
+
+type HomeworkCard struct {
+	ID          string `json:"id"`
+	ClassID     string `json:"class_id"`
+	Subject     string `json:"subject"`
+	Text        string `json:"text"`
+	TeacherName string `json:"teacher_name"`
+	Visible     bool   `json:"visible"`
+	AlwaysOnTop bool   `json:"always_on_top"`
+	UpdatedAt   string `json:"updated_at"`
+}
+type HomeworkPreference struct {
+	Revision    string `json:"revision"`
+	Visible     *bool  `json:"visible,omitempty"`
+	AlwaysOnTop *bool  `json:"always_on_top,omitempty"`
+}
+type HomeworkSettings struct {
+	Items       []HomeworkCard                `json:"items"`
+	Preferences map[string]HomeworkPreference `json:"preferences"`
+}
+type homeworkWindowManager interface {
+	update(string, []HomeworkCard, bool) error
+	close()
+}
+type homeworkState struct {
+	mu          sync.Mutex
+	items       []HomeworkCard
+	preferences map[string]HomeworkPreference
+	windows     homeworkWindowManager
+	suspended   bool
+}
+
+func (a *App) loadHomeworkPreferences() {
+	a.homework.preferences = map[string]HomeworkPreference{}
+	data, err := os.ReadFile(filepath.Join(a.dataDir, "homework-local.json"))
+	if err == nil {
+		_ = json.Unmarshal(data, &a.homework.preferences)
+	}
+	if a.homework.preferences == nil {
+		a.homework.preferences = map[string]HomeworkPreference{}
+	}
+}
+
+// UpdateHomeworks receives an authenticated server snapshot from the main WebView.
+func (a *App) UpdateHomeworks(value string) error {
+	<-a.initDone
+	if a.initErr != nil {
+		return a.initErr
+	}
+	var cards []HomeworkCard
+	if len(value) > 128*1024 {
+		return errors.New("作业数据过大")
+	}
+	if err := json.Unmarshal([]byte(value), &cards); err != nil {
+		return errors.New("作业数据无效")
+	}
+	if len(cards) > 12 {
+		return errors.New("作业数量超过上限")
+	}
+	a.homework.mu.Lock()
+	defer a.homework.mu.Unlock()
+	previousItems := a.homework.items
+	previousPreferences := map[string]HomeworkPreference{}
+	for id, pref := range a.homework.preferences {
+		previousPreferences[id] = pref
+	}
+	a.homework.items = cards
+	valid := map[string]bool{}
+	for _, card := range cards {
+		valid[card.ID] = true
+		if pref, ok := a.homework.preferences[card.ID]; ok && pref.Revision != card.UpdatedAt {
+			delete(a.homework.preferences, card.ID)
+		}
+	}
+	for id := range a.homework.preferences {
+		if !valid[id] {
+			delete(a.homework.preferences, id)
+		}
+	}
+	before, _ := json.Marshal(previousPreferences)
+	after, err := json.Marshal(a.homework.preferences)
+	if err == nil && string(before) != string(after) {
+		err = atomicWrite(filepath.Join(a.dataDir, "homework-local.json"), after)
+	}
+	if err != nil {
+		a.homework.items = previousItems
+		a.homework.preferences = previousPreferences
+		// Unbinding must still remove every desktop window if disk access fails.
+		if len(cards) == 0 {
+			a.homework.items = nil
+			_ = a.renderHomeworkLocked()
+		}
+		return err
+	}
+	return a.renderHomeworkLocked()
+}
+func (a *App) renderHomeworkLocked() error {
+	if a.homework.windows == nil {
+		manager, err := newHomeworkWindows(func(id, action string) {
+			if err := a.SetHomeworkPreference(id, action); err != nil && a.ctx != nil {
+				runtime.EventsEmit(a.ctx, "homework:error", err.Error())
+			}
+		})
+		if err != nil {
+			return err
+		}
+		a.homework.windows = manager
+	}
+	cards := append([]HomeworkCard{}, a.homework.items...)
+	for i := range cards {
+		if pref, ok := a.homework.preferences[cards[i].ID]; ok && pref.Revision == cards[i].UpdatedAt {
+			if pref.Visible != nil {
+				cards[i].Visible = *pref.Visible
+			}
+			if pref.AlwaysOnTop != nil {
+				cards[i].AlwaysOnTop = *pref.AlwaysOnTop
+			}
+		}
+	}
+	a.displayMu.Lock()
+	display := a.displayID
+	a.displayMu.Unlock()
+	return a.homework.windows.update(display, cards, a.homework.suspended)
+}
+func (a *App) GetHomeworkSettings() HomeworkSettings {
+	<-a.initDone
+	a.homework.mu.Lock()
+	defer a.homework.mu.Unlock()
+	copyPrefs := map[string]HomeworkPreference{}
+	for id, pref := range a.homework.preferences {
+		copyPrefs[id] = pref
+	}
+	return HomeworkSettings{Items: append([]HomeworkCard{}, a.homework.items...), Preferences: copyPrefs}
+}
+func (a *App) SetHomeworkPreference(id, action string) error {
+	<-a.initDone
+	if a.initErr != nil {
+		return a.initErr
+	}
+	a.homework.mu.Lock()
+	defer a.homework.mu.Unlock()
+	if a.homework.preferences == nil {
+		a.homework.preferences = map[string]HomeworkPreference{}
+	}
+	before := map[string]HomeworkPreference{}
+	for key, value := range a.homework.preferences {
+		before[key] = value
+	}
+	found := false
+	for _, card := range a.homework.items {
+		if card.ID != id && id != "*" {
+			continue
+		}
+		found = true
+		pref := a.homework.preferences[card.ID]
+		if pref.Revision != card.UpdatedAt {
+			pref = HomeworkPreference{Revision: card.UpdatedAt}
+		}
+		flag := true
+		switch action {
+		case "show":
+			pref.Visible = &flag
+		case "hide":
+			flag = false
+			pref.Visible = &flag
+		case "pin":
+			pref.AlwaysOnTop = &flag
+		case "unpin":
+			flag = false
+			pref.AlwaysOnTop = &flag
+		case "default":
+			delete(a.homework.preferences, card.ID)
+			continue
+		default:
+			return errors.New("未知的作业显示设置")
+		}
+		a.homework.preferences[card.ID] = pref
+	}
+	if !found && id != "*" {
+		return errors.New("作业不存在或已被删除")
+	}
+	data, err := json.Marshal(a.homework.preferences)
+	if err == nil {
+		err = atomicWrite(filepath.Join(a.dataDir, "homework-local.json"), data)
+	}
+	if err != nil {
+		a.homework.preferences = before
+		return err
+	}
+	if err = a.renderHomeworkLocked(); err != nil {
+		return err
+	}
+	if a.ctx != nil {
+		runtime.EventsEmit(a.ctx, "homework:settings")
+	}
+	return nil
+}
+func (a *App) suspendHomework(active bool) {
+	a.homework.mu.Lock()
+	defer a.homework.mu.Unlock()
+	a.homework.suspended = active
+	if a.homework.windows != nil {
+		_ = a.renderHomeworkLocked()
+	}
+}
+func (a *App) closeHomework() {
+	a.homework.mu.Lock()
+	defer a.homework.mu.Unlock()
+	if a.homework.windows != nil {
+		a.homework.windows.close()
+		a.homework.windows = nil
+	}
+}
+
+// Card geometry uses the monitor's work area, which excludes the taskbar.
+type homeworkGeometry struct{ X, Y, Width, Height, Font, Scale int }
+
+func homeworkLayout(left, top, width, height, count int) []homeworkGeometry {
+	if count < 1 || width < 200 || height < 200 {
+		return nil
+	}
+	if count > 12 {
+		count = 12
+	}
+	scale := height * 100 / 1080
+	if scale < 100 {
+		scale = 100
+	}
+	if scale > 220 {
+		scale = 220
+	}
+	gap := 12 * scale / 100
+	margin := 14 * scale / 100
+	cardW := 420 * scale / 100
+	if cardW > width/2 {
+		cardW = width / 2
+	}
+	if cardW < 200 {
+		cardW = 200
+	}
+	// Short work areas need fewer rows so the text stays above the controls.
+	maxRows := height / (240 * scale / 100)
+	if maxRows < 1 {
+		maxRows = 1
+	}
+	if maxRows > 4 {
+		maxRows = 4
+	}
+	rows := count
+	if rows > maxRows {
+		rows = maxRows
+	}
+	cardH := (height - 2*margin - (rows-1)*gap) / rows
+	if capH := 350 * scale / 100; cardH > capH {
+		cardH = capH
+	}
+	cols := (count + rows - 1) / rows
+	if cols*cardW+(cols-1)*gap+2*margin > width {
+		cardW = (width - 2*margin - (cols-1)*gap) / cols
+	}
+	result := make([]homeworkGeometry, 0, count)
+	for i := 0; i < count; i++ {
+		col, row := i/rows, i%rows
+		result = append(result, homeworkGeometry{X: left + width - margin - cardW - col*(cardW+gap), Y: top + height - margin - cardH - row*(cardH+gap), Width: cardW, Height: cardH, Font: 22 * scale / 100, Scale: scale})
+	}
+	return result
+}
