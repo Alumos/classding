@@ -9,11 +9,11 @@
     "./ws": "./src/ws.ts"
   },
   "scripts": {
-    "generate": "openapi-typescript ../../../api/openapi.yaml -o src/types.ts",
+    "generate": "pnpm --filter @classding/api-generator generate:rest",
     "typecheck": "tsc -p tsconfig.json",
     "build": "tsc -p tsconfig.json"
   },
   "devDependencies": {
-    "typescript": "6.0.3"
+    "typescript": "7.0.2"
   }
 }

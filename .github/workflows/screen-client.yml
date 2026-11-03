@@ -39,6 +39,7 @@ jobs:
 
       - name: Verify screen frontend
         run: |
+          pnpm check:toolchain
           pnpm --filter @classding/screen typecheck
           pnpm exec vitest run screen/frontend/tests/service.test.ts
 

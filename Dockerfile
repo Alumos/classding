@@ -3,7 +3,7 @@ FROM node:24-alpine AS web
 WORKDIR /src
 RUN npm install -g pnpm@11.25.0
 COPY . .
-RUN pnpm install --frozen-lockfile
+RUN pnpm install --frozen-lockfile && pnpm check:toolchain
 RUN pnpm --filter @classding/teacher build && pnpm --filter @classding/admin build
 RUN node scripts/prepare-static.mjs
 
