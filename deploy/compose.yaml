@@ -1,0 +1,46 @@
+services:
+  server:
+    image: ${CLASSDING_IMAGE:-ghcr.io/alumos/classding-server:v0.1.0}
+    restart: unless-stopped
+    environment:
+      DATA_DIR: /data
+      LISTEN_ADDR: :8080
+      JWT_SECRET: ${JWT_SECRET:?请设置至少32字符随机密钥}
+      ADMIN_TOTP_SECRET: ${ADMIN_TOTP_SECRET:?请设置管理员TOTP密钥}
+      BOOTSTRAP_ADMIN_USERNAME: ${BOOTSTRAP_ADMIN_USERNAME:-}
+      BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD:-}
+      BOOTSTRAP_ADMIN_NAME: ${BOOTSTRAP_ADMIN_NAME:-管理员}
+      TRUSTED_PROXY_CIDRS: 172.30.86.0/24
+      SENSITIVE_WORDS: ${SENSITIVE_WORDS:-}
+      TZ: Asia/Shanghai
+    volumes:
+      - classding_data:/data
+    expose:
+      - "8080"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      - server
+    environment:
+      DOMAIN: ${DOMAIN:?请设置已解析域名}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+volumes:
+  classding_data:
+  caddy_data:
+  caddy_config:
+networks:
+  default:
+    ipam:
+      config:
+        - subnet: 172.30.86.0/24

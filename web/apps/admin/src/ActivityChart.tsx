@@ -1,0 +1,5 @@
+import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis } from 'recharts';
+
+export default function ActivityChart({ activity }: { activity: { date: string; count: number }[] }) {
+  return <div className="chart-wrap"><ResponsiveContainer width="100%" height="100%"><AreaChart data={activity} margin={{ top: 20, right: 12, left: 0, bottom: 0 }}><defs><linearGradient id="activityFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#79a988" stopOpacity={0.28}/><stop offset="100%" stopColor="#79a988" stopOpacity={0.01}/></linearGradient></defs><CartesianGrid vertical={false} stroke="#edf0e9" strokeDasharray="3 4"/><XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fill: '#939b91', fontSize: 11 }} tickFormatter={(value: string) => value.slice(5)}/><Tooltip contentStyle={{ borderRadius: 12, border: '1px solid #e7ece3', fontSize: 12 }} formatter={(value) => [value, '发送数量']}/><Area type="monotone" dataKey="count" stroke="#4e8c67" strokeWidth={2.5} fill="url(#activityFill)"/></AreaChart></ResponsiveContainer></div>;
+}

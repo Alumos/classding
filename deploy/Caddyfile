@@ -1,0 +1,10 @@
+{$DOMAIN} {
+  encode zstd gzip
+  @private path /metrics
+  respond @private 404
+  header {
+    X-Content-Type-Options nosniff
+    Referrer-Policy same-origin
+  }
+  reverse_proxy server:8080
+}

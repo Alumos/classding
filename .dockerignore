@@ -1,0 +1,17 @@
+.git
+node_modules
+.pnpm-store
+**/node_modules
+**/dist
+tools
+data
+**/*.db*
+**/*.sqlite*
+.env
+.env.*
+!.env.example
+playwright-report
+test-results
+screen/build/bin
+server/static/teacher/assets
+server/static/admin/assets

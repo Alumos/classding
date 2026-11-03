@@ -1,0 +1,420 @@
+import { createContext, lazy, Suspense, useContext, useEffect, useState, type FormEvent, type ReactNode } from 'react';
+import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router';
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { api, ApiError, setAccessToken, type components } from '@classding/api';
+import { Badge, Brand, Button, Card, Dialog, Input } from '@classding/ui';
+import { toast } from 'sonner';
+import {
+  Activity, ArrowDownToLine, ArrowRight, BellRing, BookOpen, Check, ChevronDown,
+  ClipboardList, Copy, KeyRound, LayoutDashboard, LoaderCircle, LogOut, Monitor, RefreshCw,
+  Search, ShieldCheck, Users, XCircle, type LucideIcon,
+} from 'lucide-react';
+
+const ActivityChart = lazy(() => import('./ActivityChart'));
+
+type User = components['schemas']['User'] & { status?: string };
+type Classroom = components['schemas']['Class'];
+type Device = components['schemas']['Device'] & { last_ip?: string };
+type Message = components['schemas']['Message'];
+type ActivationCode = components['schemas']['ActivationCode'];
+type AuthResponse = { access_token: string; user: User };
+type Overview = {
+  online_devices: number; total_devices: number; today_messages: number; delivery_rate: number;
+  avg_delivery_ms: number; total_users: number; total_classes: number;
+  recent_messages: Message[]; activity: { date: string; count: number }[];
+};
+type AuditLog = { id: string; actor: string; action: string; target: string; at: string };
+type MessagePage = { items: Message[]; next_cursor: string | null };
+
+const json = (method: string, body?: unknown): RequestInit => ({
+  method,
+  headers: { 'Content-Type': 'application/json' },
+  ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+});
+const errorMessage = (error: unknown) => error instanceof Error ? error.message : '无法连接服务，请检查网络或稍后重试。';
+const dateTime = (value?: string | null) => {
+  if (!value) return '—';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false });
+};
+const dateOnly = (value?: string | null) => {
+  if (!value) return '长期有效';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString('zh-CN');
+};
+const localDate = (value?: string | null) => {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return [date.getFullYear(), String(date.getMonth() + 1).padStart(2, '0'), String(date.getDate()).padStart(2, '0')].join('-');
+};
+const number = (value?: number | null) => typeof value === 'number' && Number.isFinite(value) ? value.toLocaleString('zh-CN') : '—';
+const rate = (value?: number | null) => typeof value === 'number' && Number.isFinite(value) ? `${(value * 100).toFixed(1)}%` : '—';
+const codeStatus: Record<string, { text: string; variant: 'success' | 'warning' | 'secondary' | 'destructive' }> = {
+  active: { text: '已激活', variant: 'success' }, unused: { text: '未使用', variant: 'warning' },
+  revoked: { text: '已吊销', variant: 'destructive' }, released: { text: '已释放', variant: 'secondary' },
+};
+const targetStatus: Record<string, string> = { queued: '待送达', delivered: '已送达', played: '已播放', dismissed: '已关闭', expired: '已过期', failed: '发送失败', playing: '播放中' };
+const roleName: Record<string, string> = { super_admin: '运营管理员', school_admin: '学校管理员', user: '教师' };
+
+function StatusBadge({ status }: { status?: string | null }) {
+  const entry = status ? codeStatus[status] : undefined;
+  return <Badge variant={entry?.variant ?? 'secondary'}><span className="badge-dot" />{entry?.text ?? status ?? '未知'}</Badge>;
+}
+
+function ResultState({ loading, error, empty, children, emptyText = '这里暂时没有数据' }: { loading: boolean; error: unknown; empty: boolean; children: ReactNode; emptyText?: string }) {
+  if (loading) return <div className="state"><LoaderCircle className="spin" size={22}/><span>正在加载数据…</span></div>;
+  if (error) return <div className="state state-error" role="alert"><XCircle size={22}/><strong>数据加载失败</strong><span>{errorMessage(error)}</span></div>;
+  if (empty) return <div className="state"><span className="empty-icon"><BookOpen size={22}/></span><strong>{emptyText}</strong><span>有新的数据时会显示在这里</span></div>;
+  return <>{children}</>;
+}
+
+const SessionContext = createContext<{ user: User; logout: () => void } | null>(null);
+function useSession() {
+  const session = useContext(SessionContext);
+  if (!session) throw new Error('Missing session');
+  return session;
+}
+
+function Login({ onLogin, initialError }: { onLogin: (user: User) => void; initialError: string }) {
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [totp, setTotp] = useState('');
+  const [error, setError] = useState(initialError);
+  const login = useMutation({
+    mutationFn: () => api<AuthResponse>('/auth/login', json('POST', { username: username.trim(), password, ...(totp.trim() ? { totp_code: totp.trim() } : {}) })),
+    onSuccess: (result) => {
+      if (result.user.role !== 'super_admin' && result.user.role !== 'school_admin') {
+        setAccessToken('');
+        setError('此账号没有管理后台权限，请使用管理员账号登录。');
+        return;
+      }
+      setAccessToken(result.access_token);
+      onLogin(result.user);
+    },
+    onError: (err) => setError(errorMessage(err)),
+  });
+  function submit(event: FormEvent) {
+    event.preventDefault();
+    setError('');
+    if (!username.trim() || !password) { setError('请输入账号和密码。'); return; }
+    if (totp && !/^\d{6}$/.test(totp)) { setError('动态验证码应为 6 位数字。'); return; }
+    login.mutate();
+  }
+  return <div className="login-page">
+    <div className="login-brand"><Brand/><span className="login-brand-divider"/>管理后台</div>
+    <div className="login-layout">
+      <section className="login-intro">
+        <div className="eyebrow light"><span/> CLASSDING FOR SCHOOLS</div>
+        <h1>让每一声叮咚，<br/><em>都安心抵达。</em></h1>
+        <p>为每一间教室、每一位老师，<br/>把日常管理照顾得更简单一些。</p>
+        <div className="login-art" aria-hidden="true"><div className="art-orbit orbit-one"/><div className="art-orbit orbit-two"/><div className="art-bell"><BellRing size={55} strokeWidth={1.3}/></div><span className="art-spark spark-one">✳</span><span className="art-spark spark-two">✦</span></div>
+        <div className="intro-bottom"><span>01 / 管理工作台</span><span>MADE FOR EVERY CLASSROOM</span></div>
+      </section>
+      <section className="login-form-wrap">
+        <div className="login-card">
+          <div className="eyebrow"><span/> WELCOME BACK</div>
+          <h2>欢迎回来</h2>
+          <p className="muted">登录课堂叮咚管理后台，继续今天的工作。</p>
+          <form onSubmit={submit} className="form-stack">
+            <label>管理员账号<Input autoFocus autoComplete="username" placeholder="请输入账号" value={username} onChange={e => setUsername(e.target.value)} /></label>
+            <label>密码<Input type="password" autoComplete="current-password" placeholder="请输入密码" value={password} onChange={e => setPassword(e.target.value)} /></label>
+            <label>动态验证码 <small>按管理员配置填写</small><Input autoComplete="one-time-code" inputMode="numeric" maxLength={6} placeholder="输入 6 位验证码" value={totp} onChange={e => setTotp(e.target.value.replace(/\D/g, ''))} /></label>
+            {error && <p className="form-error" role="alert">{error}</p>}
+            <Button type="submit" className="login-submit" disabled={login.isPending}>{login.isPending ? '正在登录…' : <>登录管理后台 <ArrowRight size={17}/></>}</Button>
+          </form>
+          <div className="login-foot"><ShieldCheck size={16}/> 仅限授权管理员访问</div>
+        </div>
+      </section>
+    </div>
+    <div className="login-copyright">© ClassDing 课堂叮咚 <span>·</span> 把声音带到教室的每个角落</div>
+  </div>;
+}
+
+const navItems: { to: string; label: string; icon: LucideIcon; superOnly?: boolean }[] = [
+  { to: '/', label: '工作概览', icon: LayoutDashboard },
+  { to: '/activation-codes', label: '激活码管理', icon: KeyRound, superOnly: true },
+  { to: '/users', label: '教师管理', icon: Users },
+  { to: '/classes', label: '班级管理', icon: BookOpen },
+  { to: '/devices', label: '设备管理', icon: Monitor },
+  { to: '/messages', label: '消息审计', icon: BellRing },
+  { to: '/audit-logs', label: '操作日志', icon: ClipboardList, superOnly: true },
+];
+function Shell() {
+  const { user, logout } = useSession();
+  const queryClient = useQueryClient();
+  const location = useLocation();
+  const current = navItems.find(item => item.to === location.pathname)?.label ?? '管理后台';
+  const visible = navItems.filter(item => !item.superOnly || user.role === 'super_admin');
+  return <div className="app-layout">
+    <aside className="sidebar">
+      <div className="sidebar-brand"><Brand/><span>管理后台</span></div>
+      <div className="sidebar-caption">WORKSPACE <span>工作空间</span></div>
+      <nav className="side-nav" aria-label="管理后台导航">{visible.map(item => <NavLink key={item.to} to={item.to} end={item.to === '/'} className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}><item.icon size={19} strokeWidth={1.8}/><span>{item.label}</span>{item.to === '/' && <span className="nav-arrow">↗</span>}</NavLink>)}</nav>
+      <div className="sidebar-spacer"/>
+      <div className="sidebar-note"><span className="note-icon"><ShieldCheck size={17}/></span><div><strong>安全管理空间</strong><small>每一次操作都有迹可循</small></div></div>
+      <div className="sidebar-user"><span className="avatar">{(user.display_name || user.username || '管').slice(0, 1)}</span><div><strong>{user.display_name || user.username}</strong><small>{roleName[user.role] ?? user.role}</small></div><button onClick={logout} className="icon-button" title="退出登录" aria-label="退出登录"><LogOut size={17}/></button></div>
+    </aside>
+    <div className="main-column">
+      <header className="topbar"><div className="breadcrumbs"><span>管理后台</span><span>/</span><strong>{current}</strong></div><div className="top-actions"><span className="top-date">{new Date().toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' })}</span><button className="top-icon" aria-label="刷新数据" title="刷新数据" onClick={() => void queryClient.invalidateQueries()}><RefreshCw size={18}/></button><span className="top-separator"/><span className="avatar small">{(user.display_name || user.username || '管').slice(0, 1)}</span><span className="top-user">{user.display_name || user.username}<small>{roleName[user.role] ?? user.role}</small></span><ChevronDown size={15} className="top-chevron"/><button className="top-icon mobile-logout" onClick={logout} title="退出登录" aria-label="退出登录"><LogOut size={17}/></button></div></header>
+      <nav className="mobile-nav" aria-label="管理后台导航">{visible.map(item => <NavLink key={item.to} to={item.to} end={item.to === '/'} className={({ isActive }) => isActive ? 'active' : ''}><item.icon size={16}/>{item.label}</NavLink>)}</nav>
+      <main className="main-content"><Routes>
+        <Route path="/" element={<OverviewPage/>}/>
+        <Route path="/activation-codes" element={<SuperOnly><CodesPage/></SuperOnly>}/>
+        <Route path="/users" element={<UsersPage/>}/>
+        <Route path="/classes" element={<ClassesPage/>}/>
+        <Route path="/devices" element={<DevicesPage/>}/>
+        <Route path="/messages" element={<MessagesPage/>}/>
+        <Route path="/audit-logs" element={<SuperOnly><AuditPage/></SuperOnly>}/>
+        <Route path="*" element={<Navigate to="/" replace/>}/>
+      </Routes></main>
+      <footer className="app-footer"><span>© ClassDing 课堂叮咚</span><span>用心连接每一间教室 <span className="footer-star">✳</span></span></footer>
+    </div>
+  </div>;
+}
+function SuperOnly({ children }: { children: ReactNode }) {
+  const { user } = useSession();
+  if (user.role !== 'super_admin') return <div className="permission-state"><ShieldCheck size={32}/><h2>没有访问权限</h2><p>此页面仅对运营管理员开放。</p><NavLink to="/">返回工作概览</NavLink></div>;
+  return <>{children}</>;
+}
+function PageHead({ eyebrow, title, description, action }: { eyebrow: string; title: string; description: string; action?: ReactNode }) {
+  return <div className="page-head"><div><div className="eyebrow"><span/>{eyebrow}</div><h1>{title}</h1><p>{description}</p></div>{action && <div className="head-action">{action}</div>}</div>;
+}
+function Panel({ title, sub, action, children, className = '' }: { title: string; sub?: string; action?: ReactNode; children: ReactNode; className?: string }) {
+  return <Card className={`panel ${className}`}><div className="panel-head"><div><h2>{title}</h2>{sub && <p>{sub}</p>}</div>{action}</div>{children}</Card>;
+}
+function SearchBox({ value, onChange, placeholder }: { value: string; onChange: (value: string) => void; placeholder: string }) {
+  return <div className="search-box"><Search size={17}/><Input aria-label={placeholder} placeholder={placeholder} value={value} onChange={e => onChange(e.target.value)}/></div>;
+}
+function StatCard({ label, value, hint, icon: Icon, tone }: { label: string; value: string; hint: string; icon: LucideIcon; tone: string }) {
+  return <Card className="stat-card"><div className="stat-top"><span>{label}</span><span className={`stat-icon ${tone}`}><Icon size={19}/></span></div><div className="stat-value">{value}</div><div className="stat-hint">{hint}</div></Card>;
+}
+function receiptTone(status?: string) {
+  return status === 'failed' || status === 'expired' ? 'receipt-bad' : status === 'delivered' || status === 'played' || status === 'dismissed' ? 'receipt-ok' : '';
+}
+function messageSummary(message: Message) {
+  const targets = message.targets ?? [];
+  if (!targets.length) return '暂无回执';
+  return targets.map(t => targetStatus[t.status] ?? t.status).filter((v, i, a) => a.indexOf(v) === i).join('、');
+}
+function OverviewPage() {
+  const { user } = useSession();
+  const query = useQuery({ queryKey: ['admin', 'overview'], queryFn: () => api<Overview>('/admin/overview') });
+  const data = query.data;
+  return <>
+    <PageHead eyebrow="OVERVIEW" title="工作概览" description="从这里，了解每一间教室的连接状态。" />
+    <section className="welcome-banner"><div className="welcome-copy"><div className="welcome-kicker"><span/> CLASSDING DASHBOARD</div><h2>你好，{user.display_name || user.username} <span>✳</span></h2><p>今天也一起，让沟通及时抵达。</p><div className="welcome-chip"><span/> {user.role === 'super_admin' ? '全局管理视图' : '学校管理视图'}</div></div><div className="welcome-decoration" aria-hidden="true"><div className="welcome-ring ring-one"/><div className="welcome-ring ring-two"/><span className="welcome-bell"><BellRing size={52} strokeWidth={1.2}/></span><span className="welcome-spark">✦</span></div></section>
+    <div className="section-line"><div><h2>数据概览</h2><p>实时掌握课堂叮咚的运行情况</p></div><span>当前统计 <i/></span></div>
+    {query.isError ? <Card className="panel"><ResultState loading={false} error={query.error} empty={false}>{null}</ResultState></Card> : <>
+      <div className="stats-grid">
+        <StatCard label="在线设备" value={data ? number(data.online_devices) : '—'} hint={data ? `共 ${number(data.total_devices)} 台设备` : '正在获取设备状态'} icon={Monitor} tone="green"/>
+        <StatCard label="今日发送" value={data ? number(data.today_messages) : '—'} hint="今天发出的通知" icon={BellRing} tone="peach"/>
+        <StatCard label="通知送达率" value={data ? rate(data.delivery_rate) : '—'} hint="按服务端统计口径" icon={Activity} tone="blue"/>
+        <StatCard label="平均送达耗时" value={data && Number.isFinite(data.avg_delivery_ms) ? `${number(data.avg_delivery_ms)} ms` : '—'} hint="从发送到送达" icon={Check} tone="yellow"/>
+      </div>
+      <div className="dashboard-grid">
+        <Panel title="通知发送趋势" sub="了解近期教室通知的活跃情况" action={<span className="panel-tag"><i/> 发送数量</span>} className="chart-panel">
+          <ResultState loading={query.isLoading} error={null} empty={!data?.activity?.length} emptyText="暂无趋势数据"><Suspense fallback={<div className="state">正在加载图表…</div>}><ActivityChart activity={data?.activity ?? []}/></Suspense></ResultState>
+        </Panel>
+        <Panel title="连接中的课堂" sub="每个数字，都是一次安心连接" className="connection-panel"><ResultState loading={query.isLoading} error={null} empty={!data}><div className="connection-illustration"><div className="connection-circle"><Monitor size={34} strokeWidth={1.4}/><span><Check size={13}/></span></div><i className="connection-spark one">✳</i><i className="connection-spark two">✦</i></div><div className="connection-value">{number(data?.online_devices)} <small>/ {number(data?.total_devices)}</small></div><p className="connection-caption">台教室设备在线</p><div className="connection-divider"/><div className="connection-meta"><div><strong>{number(data?.total_users)}</strong><span>教师账号</span></div><div><strong>{number(data?.total_classes)}</strong><span>班级总数</span></div></div></ResultState></Panel>
+      </div>
+      <Panel title="最近通知" sub="查看最新的课堂消息与送达情况" action={<NavLink className="text-link" to="/messages">查看全部 <ArrowRight size={15}/></NavLink>}>
+        <ResultState loading={query.isLoading} error={null} empty={!data?.recent_messages?.length} emptyText="还没有通知记录"><MessageTable messages={data?.recent_messages ?? []} compact/></ResultState>
+      </Panel>
+    </>}
+  </>;
+}
+
+function downloadCodes(codes: ActivationCode[], filename = 'classding-activation-codes.csv') {
+  const fields = ['激活码', '状态', '教师上限', '设备上限', '有效期', '班级 ID', '学校 ID', '批次 ID', '备注', '核销时间'];
+  const quote = (value: unknown) => {
+    let s = String(value ?? '');
+    if (/^[\s]*[=+\-@\t\r]/.test(s)) s = `'${s}`;
+    return `"${s.replace(/"/g, '""')}"`;
+  };
+  const rows = codes.map(code => [code.code, codeStatus[code.status]?.text ?? code.status, code.max_teachers, code.max_devices, code.expires_at ?? '', code.class_id ?? '', code.org_id ?? '', code.batch_id ?? '', code.note ?? '', code.redeemed_at ?? '']);
+  const csv = '\ufeff' + [fields, ...rows].map(row => row.map(quote).join(',')).join('\r\n');
+  const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+  const anchor = document.createElement('a'); anchor.href = url; anchor.download = filename; document.body.appendChild(anchor); anchor.click(); anchor.remove(); window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+async function copyText(value: string) {
+  try { await navigator.clipboard.writeText(value); toast.success('已复制到剪贴板'); }
+  catch { toast.error('复制失败，请检查浏览器剪贴板权限'); }
+}
+const defaultCodeForm = { count: '10', max_teachers: '3', max_devices: '1', expires_at: '', org_id: '', note: '' };
+function CodesPage() {
+  const queryClient = useQueryClient();
+  const [search, setSearch] = useState('');
+  const [status, setStatus] = useState('');
+  const [form, setForm] = useState(defaultCodeForm);
+  const [formError, setFormError] = useState('');
+  const [createOpen, setCreateOpen] = useState(false);
+  const [created, setCreated] = useState<ActivationCode[]>([]);
+  const [editing, setEditing] = useState<ActivationCode | null>(null);
+  const [revoking, setRevoking] = useState<ActivationCode | null>(null);
+  const [editForm, setEditForm] = useState({ max_teachers: '', max_devices: '', expires_at: '' });
+  const params = new URLSearchParams();
+  if (search.trim()) params.set('search', search.trim());
+  if (status) params.set('status', status);
+  const query = useQuery({ queryKey: ['admin', 'codes', search.trim(), status], queryFn: () => api<ActivationCode[]>(`/admin/activation-codes${params.size ? `?${params}` : ''}`) });
+  const create = useMutation({
+    mutationFn: (body: unknown) => api<ActivationCode[]>('/admin/activation-codes', json('POST', body)),
+    onSuccess: result => { setCreated(result); setCreateOpen(false); setForm(defaultCodeForm); setFormError(''); void queryClient.invalidateQueries({ queryKey: ['admin', 'codes'] }); toast.success(`已生成 ${result.length} 个激活码`); },
+    onError: error => setFormError(errorMessage(error)),
+  });
+  const adjust = useMutation({
+    mutationFn: ({ code, body }: { code: string; body: unknown }) => api<ActivationCode>(`/admin/activation-codes/${encodeURIComponent(code)}`, json('PATCH', body)),
+    onSuccess: () => { setEditing(null); setRevoking(null); setFormError(''); void queryClient.invalidateQueries({ queryKey: ['admin', 'codes'] }); toast.success('激活码已更新'); },
+    onError: error => setFormError(errorMessage(error)),
+  });
+  function submitCreate(event: FormEvent) {
+    event.preventDefault(); setFormError('');
+    const count = Number(form.count), teachers = Number(form.max_teachers), devices = Number(form.max_devices);
+    if (!Number.isInteger(count) || count < 1 || count > 1000) { setFormError('生成数量须为 1 至 1000 的整数。'); return; }
+    if (!Number.isInteger(teachers) || teachers < 1 || !Number.isInteger(devices) || devices < 1) { setFormError('教师和设备上限须为大于 0 的整数。'); return; }
+    if (form.expires_at && Number.isNaN(new Date(`${form.expires_at}T23:59:59`).getTime())) { setFormError('请选择有效的到期日期。'); return; }
+    create.mutate({ count, max_teachers: teachers, max_devices: devices, ...(form.expires_at ? { expires_at: new Date(`${form.expires_at}T23:59:59`).toISOString() } : {}), ...(form.org_id.trim() ? { org_id: form.org_id.trim() } : {}), ...(form.note.trim() ? { note: form.note.trim() } : {}) });
+  }
+  function startEdit(code: ActivationCode) {
+    setFormError(''); setEditing(code);
+    setEditForm({ max_teachers: String(code.max_teachers), max_devices: String(code.max_devices), expires_at: localDate(code.expires_at) });
+  }
+  function submitEdit(event: FormEvent) {
+    event.preventDefault(); setFormError('');
+    if (!editing) return;
+    const teachers = Number(editForm.max_teachers), devices = Number(editForm.max_devices);
+    if (!Number.isInteger(teachers) || teachers < 1 || !Number.isInteger(devices) || devices < 1) { setFormError('教师和设备上限须为大于 0 的整数。'); return; }
+    adjust.mutate({ code: editing.code, body: { max_teachers: teachers, max_devices: devices, expires_at: editForm.expires_at ? new Date(`${editForm.expires_at}T23:59:59`).toISOString() : null } });
+  }
+  return <>
+    <PageHead eyebrow="ACTIVATION CODES" title="激活码管理" description="生成和管理授权，让每一间教室顺利开通。" action={<Button onClick={() => { setFormError(''); setCreateOpen(true); }}><span className="plus">＋</span> 生成激活码</Button>}/>
+    {created.length > 0 && <div className="created-banner"><div><span className="created-check"><Check size={17}/></span><div><strong>成功生成 {created.length} 个激活码</strong><p>请及时复制或导出本次生成的激活码。</p></div></div><div className="banner-actions"><Button variant="outline" size="sm" onClick={() => void copyText(created.map(c => c.code).join('\n'))}><Copy size={15}/> 复制全部</Button><Button variant="outline" size="sm" onClick={() => downloadCodes(created, 'classding-new-codes.csv')}><ArrowDownToLine size={15}/> 导出本批</Button><button className="icon-button" aria-label="关闭提示" onClick={() => setCreated([])}>×</button></div></div>}
+    <Panel title="全部激活码" sub="查看授权状态，按需调整使用额度" action={<Button variant="outline" size="sm" disabled={!query.data?.length} onClick={() => downloadCodes(query.data ?? [])}><ArrowDownToLine size={15}/> 导出 CSV</Button>}>
+      <div className="filter-row"><SearchBox value={search} onChange={setSearch} placeholder="搜索激活码、备注或批次"/><select aria-label="筛选激活码状态" value={status} onChange={e => setStatus(e.target.value)}><option value="">全部状态</option><option value="unused">未使用</option><option value="active">已激活</option><option value="released">已释放</option><option value="revoked">已吊销</option></select><span className="filter-count">{query.data ? `共 ${query.data.length} 条` : ''}</span></div>
+      <ResultState loading={query.isLoading} error={query.error} empty={!query.data?.length} emptyText="没有找到激活码"><div className="table-scroll"><table><thead><tr><th>激活码</th><th>状态</th><th>教师 / 设备上限</th><th>有效期</th><th>关联班级</th><th>备注</th><th>操作</th></tr></thead><tbody>{query.data?.map(code => <tr key={code.code}><td><div className="code-cell"><strong>{code.code}</strong><button className="inline-icon" onClick={() => void copyText(code.code)} aria-label={`复制激活码 ${code.code}`} title="复制"><Copy size={14}/></button></div><small>{code.batch_id || '—'}</small></td><td><StatusBadge status={code.status}/></td><td>{code.max_teachers} 位 / {code.max_devices} 台</td><td>{dateOnly(code.expires_at)}</td><td>{code.class_id || '—'}</td><td className="truncate-cell" title={code.note ?? ''}>{code.note || '—'}</td><td><div className="row-actions"><button onClick={() => startEdit(code)}>调整</button>{code.status !== 'revoked' && <button className="danger-link" onClick={() => { setFormError(''); setRevoking(code); }}>吊销</button>}</div></td></tr>)}</tbody></table></div></ResultState>
+    </Panel>
+    <Dialog open={createOpen} onClose={() => setCreateOpen(false)} title="生成激活码" description="设置授权额度，生成后可复制或导出。" footer={<><Button variant="outline" onClick={() => setCreateOpen(false)}>取消</Button><Button type="submit" form="create-codes" disabled={create.isPending}>{create.isPending ? '正在生成…' : '生成激活码'}</Button></>}>
+      <form id="create-codes" onSubmit={submitCreate} className="dialog-form"><label>生成数量<Input type="number" min="1" max="1000" value={form.count} onChange={e => setForm({ ...form, count: e.target.value })}/><small>单次可生成 1–1000 个</small></label><div className="form-grid"><label>教师上限<Input type="number" min="1" value={form.max_teachers} onChange={e => setForm({ ...form, max_teachers: e.target.value })}/></label><label>设备上限<Input type="number" min="1" value={form.max_devices} onChange={e => setForm({ ...form, max_devices: e.target.value })}/></label></div><label>有效期 <small>留空为长期有效</small><Input type="date" value={form.expires_at} onChange={e => setForm({ ...form, expires_at: e.target.value })}/></label><label>所属学校 ID <small>选填</small><Input placeholder="输入学校 ID" value={form.org_id} onChange={e => setForm({ ...form, org_id: e.target.value })}/></label><label>备注 <small>选填</small><Input maxLength={200} placeholder="例如：2026 年秋季采购" value={form.note} onChange={e => setForm({ ...form, note: e.target.value })}/></label>{formError && <p className="form-error" role="alert">{formError}</p>}</form>
+    </Dialog>
+    <Dialog open={!!editing} onClose={() => setEditing(null)} title="调整激活码" description={editing ? `调整 ${editing.code} 的授权设置。` : undefined} footer={<><Button variant="outline" onClick={() => setEditing(null)}>取消</Button><Button type="submit" form="edit-code" disabled={adjust.isPending}>{adjust.isPending ? '正在保存…' : '保存调整'}</Button></>}>
+      <form id="edit-code" onSubmit={submitEdit} className="dialog-form"><div className="form-grid"><label>教师上限<Input type="number" min="1" value={editForm.max_teachers} onChange={e => setEditForm({ ...editForm, max_teachers: e.target.value })}/></label><label>设备上限<Input type="number" min="1" value={editForm.max_devices} onChange={e => setEditForm({ ...editForm, max_devices: e.target.value })}/></label></div><label>有效期 <small>留空为长期有效</small><Input type="date" value={editForm.expires_at} onChange={e => setEditForm({ ...editForm, expires_at: e.target.value })}/></label>{formError && <p className="form-error" role="alert">{formError}</p>}</form>
+    </Dialog>
+    <Dialog open={!!revoking} onClose={() => setRevoking(null)} title="确认吊销激活码？" description={`吊销后，关联的教室将无法接收新通知。激活码：${revoking?.code ?? ''}`} footer={<><Button variant="outline" onClick={() => setRevoking(null)}>取消</Button><Button variant="destructive" disabled={adjust.isPending} onClick={() => revoking && adjust.mutate({ code: revoking.code, body: { status: 'revoked' } })}>{adjust.isPending ? '正在吊销…' : '确认吊销'}</Button></>}>
+      {formError && <p className="form-error" role="alert">{formError}</p>}
+    </Dialog>
+  </>;
+}
+
+function UsersPage() {
+  const queryClient = useQueryClient();
+  const [search, setSearch] = useState('');
+  const [changing, setChanging] = useState<{ user: User; status: 'active' | 'disabled' } | null>(null);
+  const { user: currentUser } = useSession();
+  const [mutationError, setMutationError] = useState('');
+  const query = useQuery({ queryKey: ['admin', 'users'], queryFn: () => api<User[]>('/admin/users') });
+  const users = (query.data ?? []).filter(user => `${user.display_name} ${user.username} ${user.org_id ?? ''}`.toLowerCase().includes(search.trim().toLowerCase()));
+  const update = useMutation({
+    mutationFn: ({ user, status }: { user: User; status: 'active' | 'disabled' }) => api<User>(`/admin/users/${encodeURIComponent(user.id)}`, json('PATCH', { status })),
+    onSuccess: () => { setChanging(null); setMutationError(''); void queryClient.invalidateQueries({ queryKey: ['admin', 'users'] }); toast.success('教师账号状态已更新'); },
+    onError: error => setMutationError(errorMessage(error)),
+  });
+  return <><PageHead eyebrow="TEACHERS" title="教师管理" description="查看教师账号和所属学校，管理账号使用状态。"/>
+    <Panel title="教师账号" sub="管理当前权限范围内的教师" action={<span className="panel-count">{query.data ? `${query.data.length} 位账号` : '账号列表'}</span>}>
+      <div className="filter-row"><SearchBox value={search} onChange={setSearch} placeholder="搜索姓名、账号或学校 ID"/><span className="filter-count">{query.data ? `共 ${users.length} 条` : ''}</span></div>
+      <ResultState loading={query.isLoading} error={query.error} empty={!users.length} emptyText="没有找到教师账号"><div className="table-scroll"><table><thead><tr><th>教师</th><th>账号</th><th>角色</th><th>所属学校 ID</th><th>状态</th><th>操作</th></tr></thead><tbody>{users.map(user => <tr key={user.id}><td><div className="person-cell"><span className="person-avatar">{(user.display_name || user.username || '师').slice(0, 1)}</span><div><strong>{user.display_name || '—'}</strong><small>{user.id}</small></div></div></td><td>{user.username}</td><td>{roleName[user.role] ?? user.role}</td><td>{user.org_id || '—'}</td><td><Badge variant={user.status === 'active' ? 'success' : user.status === 'disabled' ? 'destructive' : 'secondary'}><span className="badge-dot"/>{user.status === 'active' ? '正常' : user.status === 'disabled' ? '已禁用' : '未知'}</Badge></td><td><div className="row-actions">{user.id === currentUser.id ? <span className="subtle">当前账号</span> : <>{user.status !== 'active' && <button onClick={() => { setMutationError(''); setChanging({ user, status: 'active' }); }}>启用</button>}{user.status !== 'disabled' && <button className="danger-link" onClick={() => { setMutationError(''); setChanging({ user, status: 'disabled' }); }}>禁用</button>}</>}</div></td></tr>)}</tbody></table></div></ResultState>
+    </Panel>
+    <Dialog open={!!changing} onClose={() => setChanging(null)} title={`${changing?.status === 'active' ? '启用' : '禁用'}教师账号？`} description={`${changing?.user.display_name || changing?.user.username || '该账号'}的使用状态将被更新。`} footer={<><Button variant="outline" onClick={() => setChanging(null)}>取消</Button><Button variant={changing?.status === 'active' ? 'default' : 'destructive'} disabled={update.isPending} onClick={() => changing && update.mutate(changing)}>{update.isPending ? '正在保存…' : '确认'}</Button></>}>{mutationError && <p className="form-error" role="alert">{mutationError}</p>}</Dialog>
+  </>;
+}
+function ClassesPage() {
+  const [search, setSearch] = useState('');
+  const query = useQuery({ queryKey: ['admin', 'classes'], queryFn: () => api<Classroom[]>('/admin/classes') });
+  const classes = (query.data ?? []).filter(item => `${item.name} ${item.grade ?? ''} ${item.org_id ?? ''}`.toLowerCase().includes(search.trim().toLowerCase()));
+  return <><PageHead eyebrow="CLASSROOMS" title="班级管理" description="查看班级及其教师、设备的连接情况。"/>
+    <Panel title="班级列表" sub="每一间教室都在这里" action={<span className="panel-count">{query.data ? `${query.data.length} 个班级` : '班级列表'}</span>}>
+      <div className="filter-row"><SearchBox value={search} onChange={setSearch} placeholder="搜索班级、年级或学校 ID"/><span className="filter-count">{query.data ? `共 ${classes.length} 条` : ''}</span></div>
+      <ResultState loading={query.isLoading} error={query.error} empty={!classes.length} emptyText="没有找到班级"><div className="table-scroll"><table><thead><tr><th>班级名称</th><th>年级</th><th>所属学校 ID</th><th>教师</th><th>设备</th><th>创建时间</th></tr></thead><tbody>{classes.map(item => <tr key={item.id}><td><div className="person-cell"><span className="class-avatar"><BookOpen size={17}/></span><div><strong>{item.name}</strong><small>{item.id}</small></div></div></td><td>{item.grade || '—'}</td><td>{item.org_id || '—'}</td><td>{number(item.teachers_count)} / {number(item.max_teachers)} 位</td><td><span className="online-dot"/> {number(item.online_devices)} 在线 <span className="subtle">/ {number(item.devices_count)} 台</span></td><td>{dateTime(item.created_at)}</td></tr>)}</tbody></table></div></ResultState>
+    </Panel></>;
+}
+function DevicesPage() {
+  const [search, setSearch] = useState('');
+  const [status, setStatus] = useState('');
+  const query = useQuery({ queryKey: ['admin', 'devices'], queryFn: () => api<Device[]>('/admin/devices') });
+  const devices = (query.data ?? []).filter(item => `${item.name} ${item.class_id} ${item.os ?? ''} ${item.client_version ?? ''}`.toLowerCase().includes(search.trim().toLowerCase()) && (!status || (status === 'online' ? item.online : !item.online)));
+  return <><PageHead eyebrow="DEVICES" title="设备管理" description="了解教室大屏的在线状态和客户端信息。"/>
+    <Panel title="设备列表" sub="连接状态以服务端数据为准" action={<span className="panel-count">{query.data ? `${query.data.length} 台设备` : '设备列表'}</span>}>
+      <div className="filter-row"><SearchBox value={search} onChange={setSearch} placeholder="搜索设备、班级 ID 或版本"/><select aria-label="筛选设备状态" value={status} onChange={e => setStatus(e.target.value)}><option value="">全部状态</option><option value="online">在线</option><option value="offline">离线</option></select><span className="filter-count">{query.data ? `共 ${devices.length} 条` : ''}</span></div>
+      <ResultState loading={query.isLoading} error={query.error} empty={!devices.length} emptyText="没有找到设备"><div className="table-scroll"><table><thead><tr><th>设备名称</th><th>连接状态</th><th>班级 ID</th><th>系统 / 版本</th><th>最后心跳</th><th>IP 地址</th></tr></thead><tbody>{devices.map(item => <tr key={item.id}><td><div className="person-cell"><span className="device-avatar"><Monitor size={17}/></span><div><strong>{item.name}</strong><small>{item.id}</small></div></div></td><td><Badge variant={item.online ? 'success' : 'secondary'}><span className="badge-dot"/>{item.online ? '在线' : '离线'}</Badge></td><td>{item.class_id}</td><td>{item.os || '—'} <span className="subtle">/ {item.client_version || '—'}</span></td><td>{dateTime(item.last_seen_at)}</td><td>{item.last_ip || '—'}</td></tr>)}</tbody></table></div></ResultState>
+    </Panel></>;
+}
+function MessageTable({ messages, compact = false, onSelect }: { messages: Message[]; compact?: boolean; onSelect?: (message: Message) => void }) {
+  return <div className="table-scroll"><table><thead><tr><th>通知内容</th><th>发送人</th><th>目标班级</th><th>发送时间</th><th>回执状态</th>{onSelect && <th>操作</th>}</tr></thead><tbody>{messages.map(item => <tr key={item.id}><td><div className="message-content"><span className={`message-icon ${item.style === 'urgent' ? 'urgent' : item.style === 'praise' ? 'praise' : ''}`}><BellRing size={16}/></span><div><strong>{item.student_name ? `${item.student_name} · ` : ''}{item.text || (item.kind === 'voice' ? '语音通知' : '课堂通知')}</strong>{!compact && <small>{item.id}</small>}</div></div></td><td>{item.signature || item.sender_id || '—'}</td><td>{item.targets?.length ? [...new Set(item.targets.map(t => t.class_name || t.class_id))].join('、') : '—'}</td><td>{dateTime(item.created_at)}</td><td><span className={`receipt ${receiptTone(item.targets?.some(t => t.status === 'failed' || t.status === 'expired') ? 'failed' : item.targets?.length && item.targets.every(t => ['delivered', 'played', 'dismissed'].includes(t.status)) ? 'delivered' : undefined)}`}><i/>{messageSummary(item)}</span></td>{onSelect && <td><div className="row-actions"><button onClick={() => onSelect(item)}>查看回执</button></div></td>}</tr>)}</tbody></table></div>;
+}
+function MessagesPage() {
+  const [search, setSearch] = useState('');
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
+  const [selected, setSelected] = useState<Message | null>(null);
+  const query = useInfiniteQuery({ queryKey: ['admin', 'messages'], initialPageParam: '', queryFn: ({ pageParam }) => api<MessagePage>(`/admin/messages${pageParam ? `?cursor=${encodeURIComponent(pageParam)}` : ''}`), getNextPageParam: page => page.next_cursor ?? undefined });
+  const loadedMessages = query.data?.pages.flatMap(page => page.items ?? []) ?? [];
+  const messages = loadedMessages.filter(item => {
+    const matches = `${item.text ?? ''} ${item.student_name ?? ''} ${item.signature ?? ''} ${item.targets?.map(t => `${t.class_name} ${t.class_id}`).join(' ') ?? ''}`.toLowerCase().includes(search.trim().toLowerCase());
+    const date = localDate(item.created_at);
+    return matches && (!from || date >= from) && (!to || date <= to);
+  });
+  return <><PageHead eyebrow="MESSAGE AUDIT" title="消息审计" description="查看通知内容与回执，及时了解课堂沟通情况。"/>
+    <Panel title="消息记录" sub="仅展示当前权限范围内的记录" action={<span className="panel-count">{query.data ? `${loadedMessages.length} 条记录` : '消息记录'}</span>}>
+      <div className="filter-row"><SearchBox value={search} onChange={setSearch} placeholder="搜索消息、学生、教师或班级"/><label className="date-filter">从 <input aria-label="开始日期" type="date" value={from} onChange={e => setFrom(e.target.value)}/></label><label className="date-filter">至 <input aria-label="结束日期" type="date" value={to} onChange={e => setTo(e.target.value)}/></label><span className="filter-count">{query.data ? `共 ${messages.length} 条` : ''}</span></div>
+      <ResultState loading={query.isLoading} error={query.data ? null : query.error} empty={!messages.length} emptyText="没有找到消息记录"><MessageTable messages={messages} onSelect={setSelected}/></ResultState>
+      {query.isFetchNextPageError && <p className="form-error table-note" role="alert">加载更多失败：{errorMessage(query.error)}</p>}
+      {query.hasNextPage && <div className="load-more"><Button variant="outline" size="sm" disabled={query.isFetchingNextPage} onClick={() => void query.fetchNextPage()}>{query.isFetchingNextPage ? '正在加载…' : '加载更多'}</Button></div>}
+    </Panel>
+    <Dialog open={!!selected} onClose={() => setSelected(null)} title="通知回执" description={selected ? `发送于 ${dateTime(selected.created_at)} · ${selected.signature || selected.sender_id}` : undefined} footer={<Button variant="outline" onClick={() => setSelected(null)}>关闭</Button>}>
+      {selected && <><div className="message-detail-text">{selected.student_name && <strong>{selected.student_name} · </strong>}{selected.text || (selected.kind === 'voice' ? '语音通知' : '课堂通知')}</div><div className="receipt-list">{selected.targets?.length ? selected.targets.map((target, index) => <div className="receipt-row" key={`${target.class_id}-${target.device_id}-${index}`}><div><strong>{target.class_name || target.class_id}</strong><small>{target.device_name || target.device_id || '未指定设备'}</small></div><div className="receipt-row-meta"><span className={`receipt ${receiptTone(target.status)}`}><i/>{targetStatus[target.status] ?? target.status}</span><small>{target.played_at ? `播放于 ${dateTime(target.played_at)}` : target.delivered_at ? `送达于 ${dateTime(target.delivered_at)}` : ''}</small></div></div>) : <p className="muted">暂无回执</p>}</div></>}
+    </Dialog>
+  </>;
+}
+function AuditPage() {
+  const [search, setSearch] = useState('');
+  const query = useQuery({ queryKey: ['admin', 'audit-logs'], queryFn: () => api<AuditLog[]>('/admin/audit-logs') });
+  const logs = (query.data ?? []).filter(item => `${item.actor} ${item.action} ${item.target}`.toLowerCase().includes(search.trim().toLowerCase()));
+  return <><PageHead eyebrow="AUDIT LOG" title="操作日志" description="查看后台操作记录，让每一次管理都有迹可循。"/>
+    <Panel title="操作记录" sub="记录管理员在后台的操作" action={<span className="panel-count">{query.data ? `${query.data.length} 条记录` : '审计日志'}</span>}>
+      <div className="filter-row"><SearchBox value={search} onChange={setSearch} placeholder="搜索操作人、操作或对象"/><span className="filter-count">{query.data ? `共 ${logs.length} 条` : ''}</span></div>
+      <ResultState loading={query.isLoading} error={query.error} empty={!logs.length} emptyText="没有找到操作记录"><div className="table-scroll"><table><thead><tr><th>操作时间</th><th>操作人</th><th>操作</th><th>操作对象</th><th>记录 ID</th></tr></thead><tbody>{logs.map(item => <tr key={item.id}><td>{dateTime(item.at)}</td><td><strong>{item.actor || '—'}</strong></td><td><Badge variant="secondary">{item.action}</Badge></td><td>{item.target || '—'}</td><td className="subtle">{item.id}</td></tr>)}</tbody></table></div></ResultState>
+    </Panel></>;
+}
+
+export default function App() {
+  const [user, setUser] = useState<User | null>(null);
+  const [restoring, setRestoring] = useState(true);
+  const [startupError, setStartupError] = useState('');
+  const queryClient = useQueryClient();
+  useEffect(() => {
+    let cancelled = false;
+    api<AuthResponse>('/auth/refresh', json('POST')).then(result => {
+      if (cancelled) return;
+      if (result.user.role === 'super_admin' || result.user.role === 'school_admin') { setAccessToken(result.access_token); setUser(result.user); }
+    }).catch(error => { if (!cancelled && error instanceof ApiError && (error.status === 0 || error.status >= 500)) setStartupError(error.message); }).finally(() => { if (!cancelled) setRestoring(false); });
+    return () => { cancelled = true; };
+  }, []);
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    const timer = window.setInterval(() => {
+      api<AuthResponse>('/auth/refresh', json('POST')).then(result => {
+        if (cancelled) return;
+        if (result.user.role !== 'super_admin' && result.user.role !== 'school_admin') throw new Error('权限已变更');
+        setAccessToken(result.access_token); setUser(result.user);
+      }).catch(() => { if (!cancelled) { setAccessToken(''); setUser(null); queryClient.clear(); toast.error('登录已过期，请重新登录'); } });
+    }, 13 * 60 * 1000);
+    return () => { cancelled = true; window.clearInterval(timer); };
+  }, [!!user, queryClient]);
+  function logout() {
+    void api('/auth/logout', json('POST')).catch(() => undefined);
+    setAccessToken(''); setUser(null); queryClient.clear();
+  }
+  if (restoring) return <div className="app-loading"><LoaderCircle className="spin" size={26}/><span>正在进入管理后台…</span></div>;
+  if (!user) return <Login onLogin={setUser} initialError={startupError}/>;
+  return <SessionContext.Provider value={{ user, logout }}><Shell/></SessionContext.Provider>;
+}

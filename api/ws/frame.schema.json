@@ -1,0 +1,516 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ClassDing WS Frame",
+  "oneOf": [
+    {
+      "type": "object",
+      "properties": {
+        "t": {
+          "const": "hello"
+        },
+        "id": {
+          "type": "string"
+        },
+        "seq": {
+          "type": "integer"
+        },
+        "ts": {
+          "type": "integer"
+        },
+        "d": {
+          "type": "object",
+          "properties": {
+            "token": {
+              "type": "string"
+            },
+            "last_seq": {
+              "type": "integer"
+            },
+            "client_version": {
+              "type": "string"
+            },
+            "os": {
+              "type": "string"
+            },
+            "pending_ids": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 4096
+            }
+          },
+          "required": [
+            "token"
+          ]
+        }
+      },
+      "required": [
+        "t",
+        "d"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "t": {
+          "const": "ack"
+        },
+        "id": {
+          "type": "string"
+        },
+        "seq": {
+          "type": "integer"
+        },
+        "ts": {
+          "type": "integer"
+        },
+        "d": {
+          "type": "object",
+          "properties": {
+            "message_id": {
+              "type": "string"
+            },
+            "status": {
+              "type": "string",
+              "enum": [
+                "delivered",
+                "playing",
+                "played",
+                "dismissed",
+                "failed"
+              ]
+            },
+            "err": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "message_id",
+            "status"
+          ]
+        }
+      },
+      "required": [
+        "t",
+        "d"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "t": {
+          "const": "welcome"
+        },
+        "id": {
+          "type": "string"
+        },
+        "seq": {
+          "type": "integer"
+        },
+        "ts": {
+          "type": "integer"
+        },
+        "d": {
+          "type": "object",
+          "properties": {
+            "class": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "name"
+              ]
+            },
+            "volume": {
+              "type": "integer"
+            },
+            "server_time": {
+              "type": "integer"
+            },
+            "recalled_ids": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": [
+            "server_time"
+          ]
+        }
+      },
+      "required": [
+        "t",
+        "d"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "t": {
+          "const": "notify"
+        },
+        "id": {
+          "type": "string"
+        },
+        "seq": {
+          "type": "integer"
+        },
+        "ts": {
+          "type": "integer"
+        },
+        "d": {
+          "type": "object",
+          "properties": {
+            "message_id": {
+              "type": "string"
+            },
+            "style": {
+              "type": "string"
+            },
+            "text": {
+              "type": "string"
+            },
+            "student_name": {
+              "type": "string"
+            },
+            "signature": {
+              "type": "string"
+            },
+            "class_name": {
+              "type": "string"
+            },
+            "audio_url": {
+              "type": "string"
+            },
+            "chime": {
+              "type": "boolean"
+            },
+            "repeat": {
+              "type": "integer"
+            },
+            "display_sec": {
+              "type": "integer"
+            },
+            "volume": {
+              "type": "integer"
+            },
+            "sent_at": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "expires_at": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          "required": [
+            "message_id",
+            "style",
+            "text",
+            "student_name",
+            "signature",
+            "class_name",
+            "audio_url",
+            "chime",
+            "repeat",
+            "display_sec",
+            "volume",
+            "sent_at",
+            "expires_at"
+          ]
+        }
+      },
+      "required": [
+        "t",
+        "d"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "t": {
+          "const": "recall"
+        },
+        "id": {
+          "type": "string"
+        },
+        "seq": {
+          "type": "integer"
+        },
+        "ts": {
+          "type": "integer"
+        },
+        "d": {
+          "type": "object",
+          "properties": {
+            "message_id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "message_id"
+          ]
+        }
+      },
+      "required": [
+        "t",
+        "d"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "t": {
+          "const": "tool"
+        },
+        "id": {
+          "type": "string"
+        },
+        "seq": {
+          "type": "integer"
+        },
+        "ts": {
+          "type": "integer"
+        },
+        "d": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "enum": [
+                "countdown",
+                "rollcall",
+                "stop"
+              ]
+            },
+            "params": {
+              "type": "object"
+            }
+          },
+          "required": [
+            "name",
+            "params"
+          ]
+        }
+      },
+      "required": [
+        "t",
+        "d"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "t": {
+          "const": "config"
+        },
+        "id": {
+          "type": "string"
+        },
+        "seq": {
+          "type": "integer"
+        },
+        "ts": {
+          "type": "integer"
+        },
+        "d": {
+          "type": "object",
+          "properties": {
+            "volume": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "volume"
+          ]
+        }
+      },
+      "required": [
+        "t",
+        "d"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "t": {
+          "const": "unbind"
+        },
+        "id": {
+          "type": "string"
+        },
+        "seq": {
+          "type": "integer"
+        },
+        "ts": {
+          "type": "integer"
+        },
+        "d": {
+          "type": "object",
+          "properties": {},
+          "required": []
+        }
+      },
+      "required": [
+        "t",
+        "d"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "t": {
+          "const": "ping"
+        },
+        "id": {
+          "type": "string"
+        },
+        "seq": {
+          "type": "integer"
+        },
+        "ts": {
+          "type": "integer"
+        },
+        "d": {
+          "type": "object",
+          "properties": {},
+          "required": []
+        }
+      },
+      "required": [
+        "t",
+        "d"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "t": {
+          "const": "pong"
+        },
+        "id": {
+          "type": "string"
+        },
+        "seq": {
+          "type": "integer"
+        },
+        "ts": {
+          "type": "integer"
+        },
+        "d": {
+          "type": "object",
+          "properties": {
+            "server_time": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "server_time"
+          ]
+        }
+      },
+      "required": [
+        "t",
+        "d"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "t": {
+          "const": "receipt"
+        },
+        "id": {
+          "type": "string"
+        },
+        "seq": {
+          "type": "integer"
+        },
+        "ts": {
+          "type": "integer"
+        },
+        "d": {
+          "type": "object",
+          "properties": {
+            "message_id": {
+              "type": "string"
+            },
+            "class_id": {
+              "type": "string"
+            },
+            "device_id": {
+              "type": "string"
+            },
+            "status": {
+              "type": "string"
+            },
+            "at": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          "required": [
+            "message_id",
+            "class_id",
+            "device_id",
+            "status",
+            "at"
+          ]
+        }
+      },
+      "required": [
+        "t",
+        "d"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "t": {
+          "const": "presence"
+        },
+        "id": {
+          "type": "string"
+        },
+        "seq": {
+          "type": "integer"
+        },
+        "ts": {
+          "type": "integer"
+        },
+        "d": {
+          "type": "object",
+          "properties": {
+            "class_id": {
+              "type": "string"
+            },
+            "device_id": {
+              "type": "string"
+            },
+            "online": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "class_id",
+            "device_id",
+            "online"
+          ]
+        }
+      },
+      "required": [
+        "t",
+        "d"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,43 @@
+import {writeFileSync} from 'node:fs';
+const str={type:'string'},num={type:'integer'},bool={type:'boolean'},timestamp={type:'string',format:'date-time'},nullable={type:['string','null']},ref=name=>({$ref:`#/components/schemas/${name}`}),arr=items=>({type:'array',items}),obj=(properties,required=Object.keys(properties))=>({type:'object',properties,required});
+const schemas={
+Error:obj({code:str,message:str}),OK:obj({ok:bool}),
+User:obj({id:str,username:str,display_name:str,role:{type:'string',enum:['user','school_admin','super_admin']},org_id:str,status:{type:'string',enum:['active','disabled']}}),
+Class:obj({id:str,name:str,grade:str,owner_id:str,org_id:str,volume:num,role:{type:'string',enum:['owner','collaborator']},max_teachers:num,max_devices:num,teachers_count:num,devices_count:num,online_devices:num,created_at:timestamp}),
+Device:obj({id:str,class_id:str,name:str,os:str,client_version:str,online:bool,last_seen_at:nullable}),
+Member:obj({user_id:str,display_name:str,username:str,role:{type:'string',enum:['owner','collaborator']},joined_at:timestamp}),
+Phrase:obj({id:str,text:str,sort:num}),
+MessageTarget:obj({class_id:str,class_name:str,device_id:str,device_name:str,status:{type:'string',enum:['queued','delivered','playing','played','dismissed','expired','failed']},seq:num,delivered_at:nullable,played_at:nullable}),
+Message:obj({id:str,kind:{type:'string',enum:['text','voice','tool']},text:str,student_name:str,signature:str,style:{type:'string',enum:['notice','praise','urgent']},display_sec:num,repeat:num,chime:bool,play_mode:{type:'string',enum:['tts','voice']},sender_id:str,created_at:timestamp,expires_at:timestamp,recalled_at:nullable,targets:arr(ref('MessageTarget'))}),
+MessageList:obj({items:arr(ref('Message')),next_cursor:nullable}),
+ActivationCode:obj({code:str,max_teachers:num,max_devices:num,expires_at:nullable,status:{type:'string',enum:['unused','active','revoked','released']},class_id:nullable,org_id:str,batch_id:str,note:str,redeemed_at:nullable}),
+AuthResponse:obj({access_token:str,user:ref('User')}),
+BindCode:obj({code:str,expires_at:timestamp}),
+ClientRelease:obj({version:str,url:str,sha256:str,notes:str,min_supported:str}),
+Config:obj({speech_enabled:bool,registration_enabled:bool,version:str}),
+AuditLog:obj({id:str,actor:str,action:str,target:str,at:timestamp}),
+Overview:obj({online_devices:num,total_devices:num,today_messages:num,delivery_rate:{type:'number'},avg_delivery_ms:{type:'number'},total_users:num,total_classes:num,recent_messages:arr(ref('Message')),activity:arr(obj({date:str,count:num}))}),
+Audio:obj({audio_id:str,url:str,transcript:str},['audio_id','url']),
+DeviceBinding:obj({device_token:str,device:ref('Device'),class:obj({id:str,name:str}),volume:num}),
+DeviceMe:obj({device:ref('Device'),class:obj({id:str,name:str}),volume:num}),
+MessageInput:obj({class_ids:arr(str),kind:{type:'string',enum:['text','voice']},text:{type:'string',maxLength:200},student_name:str,signature:str,style:{type:'string',enum:['notice','praise','urgent']},display_sec:{type:'integer',minimum:15,maximum:180},repeat:{type:'integer',minimum:1,maximum:3},chime:bool,play_mode:{type:'string',enum:['tts','voice']},audio_id:str},['class_ids','kind','text','style','display_sec','repeat','chime','play_mode'])
+};
+const paths={};let seq=0;
+function add(path,method,response,body,publicRoute=false){const params=[...path.matchAll(/\{(.*?)\}/g)].map(m=>({name:m[1],in:'path',required:true,schema:str}));if(method==='get'&&['/messages','/admin/messages','/admin/activation-codes'].includes(path))params.push(...['class_id','cursor','search','status'].map(name=>({name,in:'query',required:false,schema:str})));(paths[path]??={})[method]={operationId:`${method}_${path.replace(/[^a-z0-9]/gi,'_')}_${seq++}`,summary:`${method.toUpperCase()} ${path}`,security:publicRoute?[]:[{bearerAuth:[]}],...(params.length?{parameters:params}:{}),...(body?{requestBody:{required:true,content:{'application/json':{schema:body}}}}:{}),responses:{'200':{description:'成功',content:{'application/json':{schema:response}}},default:{description:'业务错误',content:{'application/json':{schema:ref('Error')}}}}};}
+add('/config','get',ref('Config'),null,true);
+for(const action of ['register','login'])add(`/auth/${action}`,'post',ref('AuthResponse'),obj({username:str,password:str,display_name:str,totp_code:str},action==='register'?['username','password','display_name']:['username','password']),true);
+add('/auth/refresh','post',ref('AuthResponse'),null,true);add('/auth/logout','post',ref('OK'),null,true);
+add('/me','get',ref('User'));add('/me','patch',ref('User'),obj({display_name:str}));add('/me/password','put',ref('OK'),obj({current_password:str,new_password:str}));
+add('/classes','get',arr(ref('Class')));add('/classes','post',ref('Class'),obj({name:str,grade:str,activation_code:str},['name','activation_code']));
+add('/classes/join','post',ref('Class'),obj({code:str}));add('/classes/{id}','patch',ref('Class'),obj({name:str,volume:num},[]));add('/classes/{id}','delete',ref('OK'));
+add('/classes/{id}/members','get',arr(ref('Member')));add('/classes/{id}/members/{uid}','delete',ref('OK'));add('/classes/{id}/invites','post',ref('BindCode'));add('/classes/{id}/bind-code','post',ref('BindCode'));add('/classes/{id}/devices','get',arr(ref('Device')));add('/classes/{id}/transfer','post',ref('Class'),obj({user_id:str}));add('/classes/{id}/leave','post',ref('OK'));
+add('/devices/{id}','patch',ref('Device'),obj({name:str}));add('/devices/{id}','delete',ref('OK'));
+add('/device/bind','post',ref('DeviceBinding'),obj({code:str,name:str,os:str,client_version:str}),true);add('/device/me','get',ref('DeviceMe'));add('/client/latest','get',ref('ClientRelease'),null,true);
+add('/messages','get',ref('MessageList'));add('/messages','post',ref('Message'),ref('MessageInput'));add('/messages/{id}','get',ref('Message'));for(const action of ['recall','resend'])add(`/messages/{id}/${action}`,'post',ref('Message'));
+add('/phrases','get',arr(ref('Phrase')));add('/phrases','post',ref('Phrase'),obj({text:str}));add('/phrases/{id}','patch',ref('Phrase'),obj({text:str}));add('/phrases/{id}','delete',ref('OK'));
+for(const [tool,body] of [['countdown',obj({seconds:num})],['rollcall',obj({names:arr(str)})],['stop',null]])add(`/classes/{id}/tools/${tool}`,'post',ref('OK'),body);
+add('/audio','post',ref('Audio'));paths['/audio'].post.requestBody={required:true,content:{'multipart/form-data':{schema:obj({file:{type:'string',format:'binary'}})}}};
+add('/admin/overview','get',ref('Overview'));add('/admin/activation-codes','get',arr(ref('ActivationCode')));add('/admin/activation-codes','post',arr(ref('ActivationCode')),obj({count:num,max_teachers:num,max_devices:num,expires_at:nullable,org_id:str,note:str},['count','max_teachers','max_devices']));add('/admin/activation-codes/{code}','patch',ref('ActivationCode'),obj({max_teachers:num,max_devices:num,expires_at:nullable,status:str},[]));add('/admin/users','get',arr(ref('User')));add('/admin/users/{id}','patch',ref('User'),obj({status:str,display_name:str},[]));add('/admin/classes','get',arr(ref('Class')));add('/admin/devices','get',arr(ref('Device')));add('/admin/messages','get',ref('MessageList'));add('/admin/audit-logs','get',arr(ref('AuditLog')));
+writeFileSync('api/openapi.yaml',JSON.stringify({openapi:'3.1.0',info:{title:'课堂叮咚 API',version:'0.1.0'},servers:[{url:'/api/v1'}],paths,components:{securitySchemes:{bearerAuth:{type:'http',scheme:'bearer'}},schemas}},null,2)+'\n');
+const frames={hello:obj({token:str,last_seq:num,client_version:str,os:str,pending_ids:{type:'array',items:str,maxItems:4096}},['token']),ack:obj({message_id:str,status:{type:'string',enum:['delivered','playing','played','dismissed','failed']},err:str},['message_id','status']),welcome:obj({class:obj({id:str,name:str}),volume:num,server_time:num,recalled_ids:arr(str)},['server_time']),notify:obj({message_id:str,style:str,text:str,student_name:str,signature:str,class_name:str,audio_url:str,chime:bool,repeat:num,display_sec:num,volume:num,sent_at:timestamp,expires_at:timestamp}),recall:obj({message_id:str}),tool:obj({name:{type:'string',enum:['countdown','rollcall','stop']},params:{type:'object'}}),config:obj({volume:num}),unbind:obj({}),ping:obj({}),pong:obj({server_time:num}),receipt:obj({message_id:str,class_id:str,device_id:str,status:str,at:timestamp}),presence:obj({class_id:str,device_id:str,online:bool})};
+writeFileSync('api/ws/frame.schema.json',JSON.stringify({$schema:'https://json-schema.org/draft/2020-12/schema',title:'ClassDing WS Frame',oneOf:Object.entries(frames).map(([t,d])=>obj({t:{const:t},id:str,seq:num,ts:num,d},['t','d']))},null,2)+'\n');
