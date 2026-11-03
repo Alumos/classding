@@ -200,8 +200,8 @@ test('登录页与管理页的备案号位于页脚底部内容区中央，长�
         const anchor = element.querySelector('a')!;
         const link = anchor.getBoundingClientRect();
         const style = getComputedStyle(anchor);
-        const column = document.querySelector('.main-column') ?? document.documentElement;
-        return {contentCenter:column.getBoundingClientRect().left+column.clientWidth/2,linkCenter:(link.left+link.right)/2,copyrightCenter:(copyright.left+copyright.right)/2,copyrightLeft:copyright.left,linkLeft:link.left,sidebarRight:document.querySelector('.sidebar')?.getBoundingClientRect().right??0,copyrightBottom:copyright.bottom,linkTop:link.top,linkHeight:link.height,lineHeight:parseFloat(style.lineHeight),textAlign:style.textAlign};
+        const column = element.parentElement!.getBoundingClientRect();
+        return {contentCenter:(column.left+column.right)/2,linkCenter:(link.left+link.right)/2,copyrightCenter:(copyright.left+copyright.right)/2,copyrightLeft:copyright.left,linkLeft:link.left,sidebarRight:document.querySelector('.sidebar')?.getBoundingClientRect().right??0,copyrightBottom:copyright.bottom,linkTop:link.top,linkHeight:link.height,lineHeight:parseFloat(style.lineHeight),textAlign:style.textAlign};
       });
       expect(Math.abs(geometry.linkCenter-geometry.contentCenter)).toBeLessThanOrEqual(1);
       expect(Math.abs(geometry.copyrightCenter-geometry.contentCenter)).toBeLessThanOrEqual(1);
