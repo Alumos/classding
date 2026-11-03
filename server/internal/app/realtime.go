@@ -6,8 +6,10 @@ import (
 	"github.com/coder/websocket"
 	"github.com/coder/websocket/wsjson"
 	"log/slog"
+	"net"
 	"net/http"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 )
@@ -228,13 +230,19 @@ func (a *App) deviceWS(w http.ResponseWriter, r *http.Request) {
 	}
 	defer p.close()
 	var in struct {
-		Token      string   `json:"token"`
-		LastSeq    int64    `json:"last_seq"`
-		PendingIDs []string `json:"pending_ids"`
+		Token           string   `json:"token"`
+		LastSeq         int64    `json:"last_seq"`
+		PendingIDs      []string `json:"pending_ids"`
+		ClientVersion   string   `json:"client_version"`
+		OS              string   `json:"os"`
+		LANIPs          []string `json:"lan_ips"`
+		ServerURL       string   `json:"server_url"`
+		AppliedRevision string   `json:"applied_revision"`
 	}
 	if json.Unmarshal(hello.D, &in) != nil || len(in.PendingIDs) > 4096 {
 		return
 	}
+	publicIP := a.clientIP(r)
 	a.mu.Lock()
 	d, err := a.deviceFromToken(in.Token)
 	if err != nil {
@@ -257,6 +265,7 @@ func (a *App) deviceWS(w http.ResponseWriter, r *http.Request) {
 		old.close()
 	}
 	d.LastSeenAt = now()
+	recordDeviceHello(&d, in.ClientVersion, in.OS, in.LANIPs, in.ServerURL, in.AppliedRevision, publicIP)
 	a.state.Devices[d.ID] = d
 	if err = a.Save(); err != nil {
 		a.hub.RemoveDevice(d.ID)
@@ -443,5 +452,32 @@ func (a *App) teacherWS(w http.ResponseWriter, r *http.Request) {
 		if frame.T == "ping" {
 			p.send(Frame{T: "pong", D: map[string]any{"server_time": time.Now().Unix()}})
 		}
+	}
+}
+
+// recordDeviceHello stores what a classroom client reports about itself.
+// Values are bounded because they come straight from the device.
+func recordDeviceHello(d *Device, clientVersion, os string, lanIPs []string, serverURL, appliedRevision, publicIP string) {
+	if version := strings.TrimSpace(clientVersion); version != "" && len(version) <= 32 {
+		d.ClientVersion = version
+	}
+	if name := strings.TrimSpace(os); name != "" && len(name) <= 32 {
+		d.OS = name
+	}
+	addresses := []string{}
+	for _, value := range lanIPs {
+		if ip := net.ParseIP(strings.TrimSpace(value)); ip != nil && ip.To4() != nil && len(addresses) < 8 {
+			addresses = append(addresses, ip.To4().String())
+		}
+	}
+	d.LANIPs = addresses
+	if validServerURL(serverURL) {
+		d.ServerURL = strings.TrimSuffix(serverURL, "/")
+	}
+	if len(appliedRevision) <= 128 {
+		d.AppliedRevision = appliedRevision
+	}
+	if ip := net.ParseIP(publicIP); ip != nil {
+		d.PublicIP = ip.String()
 	}
 }

@@ -1,5 +1,6 @@
 import {createContext,useContext,useEffect,useRef,useState,type ReactNode} from 'react';
 import {api,onSessionExpired,refreshSession,setAccessToken} from '@classding/api';
+import {applyUiScale} from '@classding/ui/components/classding';
 import {useQueryClient} from '@tanstack/react-query';
 import {toast} from 'sonner';
 import type {AuthResponse,User} from './models';
@@ -11,6 +12,9 @@ export function AuthProvider({children}:{children:ReactNode}){
   const [ready,setReady]=useState(false);
   const revision=useRef(0);
   const cache=useQueryClient();
+
+  // Each teacher's last chosen text size follows them to any device.
+  useEffect(()=>{applyUiScale(user?.ui_scale);},[user?.ui_scale]);
 
   useEffect(()=>onSessionExpired(()=>{
     revision.current++;

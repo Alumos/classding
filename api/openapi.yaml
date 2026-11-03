@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "课堂叮咚 API",
-    "version": "0.2.0"
+    "version": "0.3.0"
   },
   "servers": [
     {
@@ -541,11 +541,12 @@
                 "properties": {
                   "display_name": {
                     "type": "string"
+                  },
+                  "ui_scale": {
+                    "type": "integer"
                   }
                 },
-                "required": [
-                  "display_name"
-                ]
+                "required": []
               }
             }
           }
@@ -1838,11 +1839,52 @@
             }
           }
         }
+      },
+      "delete": {
+        "operationId": "delete__messages__id__39",
+        "summary": "DELETE /messages/{id}",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OK"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "业务错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/messages/{id}/recall": {
       "post": {
-        "operationId": "post__messages__id__recall_39",
+        "operationId": "post__messages__id__recall_40",
         "summary": "POST /messages/{id}/recall",
         "security": [
           {
@@ -1885,7 +1927,7 @@
     },
     "/messages/{id}/resend": {
       "post": {
-        "operationId": "post__messages__id__resend_40",
+        "operationId": "post__messages__id__resend_41",
         "summary": "POST /messages/{id}/resend",
         "security": [
           {
@@ -1928,7 +1970,7 @@
     },
     "/phrases": {
       "get": {
-        "operationId": "get__phrases_41",
+        "operationId": "get__phrases_42",
         "summary": "GET /phrases",
         "security": [
           {
@@ -1962,7 +2004,7 @@
         }
       },
       "post": {
-        "operationId": "post__phrases_42",
+        "operationId": "post__phrases_43",
         "summary": "POST /phrases",
         "security": [
           {
@@ -2013,7 +2055,7 @@
     },
     "/phrases/{id}": {
       "patch": {
-        "operationId": "patch__phrases__id__43",
+        "operationId": "patch__phrases__id__44",
         "summary": "PATCH /phrases/{id}",
         "security": [
           {
@@ -2072,7 +2114,7 @@
         }
       },
       "delete": {
-        "operationId": "delete__phrases__id__44",
+        "operationId": "delete__phrases__id__45",
         "summary": "DELETE /phrases/{id}",
         "security": [
           {
@@ -2115,7 +2157,7 @@
     },
     "/classes/{id}/tools/countdown": {
       "post": {
-        "operationId": "post__classes__id__tools_countdown_45",
+        "operationId": "post__classes__id__tools_countdown_46",
         "summary": "POST /classes/{id}/tools/countdown",
         "security": [
           {
@@ -2176,7 +2218,7 @@
     },
     "/classes/{id}/tools/rollcall": {
       "post": {
-        "operationId": "post__classes__id__tools_rollcall_46",
+        "operationId": "post__classes__id__tools_rollcall_47",
         "summary": "POST /classes/{id}/tools/rollcall",
         "security": [
           {
@@ -2240,7 +2282,7 @@
     },
     "/classes/{id}/tools/stop": {
       "post": {
-        "operationId": "post__classes__id__tools_stop_47",
+        "operationId": "post__classes__id__tools_stop_48",
         "summary": "POST /classes/{id}/tools/stop",
         "security": [
           {
@@ -2283,7 +2325,7 @@
     },
     "/audio": {
       "post": {
-        "operationId": "post__audio_48",
+        "operationId": "post__audio_49",
         "summary": "POST /audio",
         "security": [
           {
@@ -2335,7 +2377,7 @@
     },
     "/admin/overview": {
       "get": {
-        "operationId": "get__admin_overview_49",
+        "operationId": "get__admin_overview_50",
         "summary": "GET /admin/overview",
         "security": [
           {
@@ -2368,7 +2410,7 @@
     },
     "/admin/activation-codes": {
       "get": {
-        "operationId": "get__admin_activation_codes_50",
+        "operationId": "get__admin_activation_codes_51",
         "summary": "GET /admin/activation-codes",
         "security": [
           {
@@ -2436,7 +2478,7 @@
         }
       },
       "post": {
-        "operationId": "post__admin_activation_codes_51",
+        "operationId": "post__admin_activation_codes_52",
         "summary": "POST /admin/activation-codes",
         "security": [
           {
@@ -2510,7 +2552,7 @@
     },
     "/admin/activation-codes/{code}": {
       "patch": {
-        "operationId": "patch__admin_activation_codes__code__52",
+        "operationId": "patch__admin_activation_codes__code__53",
         "summary": "PATCH /admin/activation-codes/{code}",
         "security": [
           {
@@ -2581,7 +2623,7 @@
     },
     "/admin/users": {
       "get": {
-        "operationId": "get__admin_users_53",
+        "operationId": "get__admin_users_54",
         "summary": "GET /admin/users",
         "security": [
           {
@@ -2615,7 +2657,7 @@
         }
       },
       "post": {
-        "operationId": "post__admin_users_54",
+        "operationId": "post__admin_users_55",
         "summary": "POST /admin/users",
         "security": [
           {
@@ -2677,7 +2719,7 @@
     },
     "/admin/users/{id}": {
       "patch": {
-        "operationId": "patch__admin_users__id__55",
+        "operationId": "patch__admin_users__id__56",
         "summary": "PATCH /admin/users/{id}",
         "security": [
           {
@@ -2743,7 +2785,7 @@
         }
       },
       "delete": {
-        "operationId": "delete__admin_users__id__56",
+        "operationId": "delete__admin_users__id__57",
         "summary": "DELETE /admin/users/{id}",
         "security": [
           {
@@ -2786,7 +2828,7 @@
     },
     "/admin/users/{id}/unlock-login": {
       "post": {
-        "operationId": "post__admin_users__id__unlock_login_57",
+        "operationId": "post__admin_users__id__unlock_login_58",
         "summary": "POST /admin/users/{id}/unlock-login",
         "security": [
           {
@@ -2829,7 +2871,7 @@
     },
     "/admin/classes": {
       "get": {
-        "operationId": "get__admin_classes_58",
+        "operationId": "get__admin_classes_59",
         "summary": "GET /admin/classes",
         "security": [
           {
@@ -2863,7 +2905,7 @@
         }
       },
       "post": {
-        "operationId": "post__admin_classes_59",
+        "operationId": "post__admin_classes_60",
         "summary": "POST /admin/classes",
         "security": [
           {
@@ -2929,7 +2971,7 @@
     },
     "/admin/classes/{id}": {
       "patch": {
-        "operationId": "patch__admin_classes__id__60",
+        "operationId": "patch__admin_classes__id__61",
         "summary": "PATCH /admin/classes/{id}",
         "security": [
           {
@@ -2998,7 +3040,7 @@
         }
       },
       "delete": {
-        "operationId": "delete__admin_classes__id__61",
+        "operationId": "delete__admin_classes__id__62",
         "summary": "DELETE /admin/classes/{id}",
         "security": [
           {
@@ -3041,7 +3083,7 @@
     },
     "/admin/devices": {
       "get": {
-        "operationId": "get__admin_devices_62",
+        "operationId": "get__admin_devices_63",
         "summary": "GET /admin/devices",
         "security": [
           {
@@ -3077,7 +3119,7 @@
     },
     "/admin/messages": {
       "get": {
-        "operationId": "get__admin_messages_63",
+        "operationId": "get__admin_messages_64",
         "summary": "GET /admin/messages",
         "security": [
           {
@@ -3142,9 +3184,52 @@
         }
       }
     },
+    "/admin/messages/{id}": {
+      "delete": {
+        "operationId": "delete__admin_messages__id__65",
+        "summary": "DELETE /admin/messages/{id}",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OK"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "业务错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/admin/audit-logs": {
       "get": {
-        "operationId": "get__admin_audit_logs_64",
+        "operationId": "get__admin_audit_logs_66",
         "summary": "GET /admin/audit-logs",
         "security": [
           {
@@ -3246,6 +3331,9 @@
           "login_locked_until": {
             "type": "string",
             "format": "date-time"
+          },
+          "ui_scale": {
+            "type": "integer"
           }
         },
         "required": [
@@ -3396,6 +3484,21 @@
                 "type": "null"
               }
             ]
+          },
+          "lan_ips": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "public_ip": {
+            "type": "string"
+          },
+          "server_url": {
+            "type": "string"
+          },
+          "applied_revision": {
+            "type": "string"
           }
         },
         "required": [

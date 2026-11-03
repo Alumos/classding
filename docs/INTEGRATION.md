@@ -14,7 +14,7 @@
 - AuthResponse: {access_token,user}；refresh token 放 HttpOnly Cookie。
 
 ## REST
-GET config => {speech_enabled:false,registration_enabled:true,version:'0.2.0'}
+GET config => {speech_enabled:false,registration_enabled:true,version:'0.3.0'}
 POST auth/register {username,password,display_name} => AuthResponse
 POST auth/login {username,password} => AuthResponse
 POST auth/refresh => AuthResponse；POST auth/logout => {ok:true}
@@ -80,6 +80,6 @@ POST admin/users/:id/unlock-login => {ok:true}，解除教师密码错误造成�
 
 - `/config` 返回 `site_name, icp_number, theme`；`GET/PUT /admin/settings` 仅运营管理员可用。
 - `GET /admin/backup` 下载 ZIP；`POST /admin/restore` 上传 `application/zip`，需 `X-ClassDing-Restore: replace`，恢复后所有用户重新登录。
-- `POST /admin/devices/{id}/config` 接收 `{server_url}`，空字符串取消迁移；配置保存在 `device.remote_config`，通过 welcome/config 帧传递。
+- `POST /admin/devices/{id}/config` 接收 `{server_url}`，空字符串撤销切换；v0.3.0 起客户端收到后直接切换，新站不认可或 10 分钟无法连接时回退；配置保存在 `device.remote_config`，通过 welcome/config 帧传递。
 - `GET /device/me` 与设备 welcome 返回 `sequence`。`POST /device/migration-check` 用设备令牌接收 `{min_sequence,pending_ids,min_homework_revision?}`；成功返回 `{device,class,volume,sequence,notifications,recalled_ids,homeworks,homework_revision}`，通知使用目标站重新签名的录音 URL；数据不全返回 409。迁移前设备应从源站取最新 `homework_revision` 并作为 `min_homework_revision` 提交，目标站修订号落后时拒绝迁移。该字段对旧设备可省略；省略时无法检测源站备份后的作业变动。迁移期间仍需停止源站写入，并在源站最后一次变更后重新备份和探测。
 - 通知时长 15–600 秒；普通/表扬通知强制关闭提示音，紧急通知可主动开启。

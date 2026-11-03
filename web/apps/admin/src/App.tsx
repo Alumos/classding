@@ -19,7 +19,7 @@ import {
   SidebarInset, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarProvider, SidebarRail, SidebarTrigger,
 } from '@classding/ui/components/ui/sidebar';
 import { Spinner } from '@classding/ui/components/ui/spinner';
-import { Brand, SiteFooter } from '@classding/ui/components/classding';
+import { Brand, SiteFooter, UiScaleMenu, applyUiScale } from '@classding/ui/components/classding';
 import { cn } from '@classding/ui/lib/utils';
 import { SessionProvider, errorMessage, initial, json, roleName, useSession, type AuthResponse, type User } from './lib';
 import OverviewPage from './pages/Overview';
@@ -153,7 +153,7 @@ function AppSidebar({ items }: { items: typeof navItems }) {
 }
 
 function Shell() {
-  const { user, logout } = useSession();
+  const { user, logout, updateUser } = useSession();
   const queryClient = useQueryClient();
   const location = useLocation();
   const visible = navItems.filter(item => !item.superOnly || user.role === 'super_admin');
@@ -176,6 +176,12 @@ function Shell() {
         </Breadcrumb>
         <div className="ml-auto flex items-center gap-1">
           <span className="mr-2 hidden text-sm text-muted-foreground lg:inline">{new Date().toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' })}</span>
+          <UiScaleMenu value={user.ui_scale} onChange={scale => {
+            applyUiScale(scale);
+            const previous = user;
+            updateUser({ ...user, ui_scale: scale });
+            api<User>('/me', json('PATCH', { ui_scale: scale })).then(updateUser).catch(error => { applyUiScale(previous.ui_scale); updateUser(previous); toast.error(`字号保存失败：${errorMessage(error)}`); });
+          }} />
           <Button variant="ghost" size="icon" aria-label="刷新数据" title="刷新数据" onClick={() => void queryClient.invalidateQueries()}><RefreshCw /></Button>
           <Button variant="ghost" size="icon" className="md:hidden" onClick={logout} title="退出登录" aria-label="退出登录"><LogOut /></Button>
         </div>
@@ -253,7 +259,9 @@ export default function App() {
     void api('/auth/logout', json('POST')).catch(() => undefined);
     setAccessToken(''); setUser(null); queryClient.clear();
   }
+  // Each administrator's last chosen text size follows them to any browser.
+  useEffect(() => { applyUiScale(user?.ui_scale); }, [user?.ui_scale]);
   if (restoring) return <div className="flex min-h-svh items-center justify-center gap-2 text-sm text-muted-foreground"><Spinner />正在进入管理后台…</div>;
   if (!user) return <Login onLogin={setUser} initialError={startupError} />;
-  return <SessionProvider value={{ user, logout }}><Shell /></SessionProvider>;
+  return <SessionProvider value={{ user, logout, updateUser: setUser }}><Shell /></SessionProvider>;
 }

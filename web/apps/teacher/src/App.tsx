@@ -13,7 +13,10 @@ import {
   SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarProvider, SidebarRail, SidebarTrigger,
 } from '@classding/ui/components/ui/sidebar';
 import { Spinner } from '@classding/ui/components/ui/spinner';
-import { Brand, SiteFooter } from '@classding/ui/components/classding';
+import { Brand, SiteFooter, UiScaleMenu } from '@classding/ui/components/classding';
+import { api } from '@classding/api';
+import { toast } from 'sonner';
+import type { User } from './models';
 import { cn } from '@classding/ui/lib/utils';
 import { useAuth } from './auth';
 import { useTeacherSocket } from './hooks';
@@ -54,8 +57,14 @@ function HelpDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open
 }
 
 function Layout() {
-  const { user, logout } = useAuth();
+  const { user, logout, updateUser } = useAuth();
   const online = useTeacherSocket();
+  function changeScale(scale: number) {
+    if (!user) return;
+    const previous = user;
+    updateUser({ ...user, ui_scale: scale });
+    api<User>('/me', { method: 'PATCH', body: JSON.stringify({ ui_scale: scale }) }).then(updateUser).catch(error => { updateUser(previous); toast.error(error instanceof Error ? `字号保存失败：${error.message}` : '字号保存失败'); });
+  }
   const location = useLocation();
   const [help, setHelp] = useState(false);
   const active = links.find(link => location.pathname.startsWith(link.to)) ?? links[0];
@@ -114,6 +123,7 @@ function Layout() {
             <span className={cn('size-1.5 rounded-full', online ? 'bg-emerald-500' : 'animate-pulse bg-amber-500')} />
             {online ? '实时连接已开启' : '正在连接实时通道'}
           </Badge>
+          <UiScaleMenu value={user?.ui_scale} onChange={changeScale} />
           <span className="hidden text-sm text-muted-foreground lg:inline">{new Intl.DateTimeFormat('zh-CN', { month: 'long', day: 'numeric', weekday: 'long' }).format(new Date())}</span>
         </div>
       </header>

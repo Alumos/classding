@@ -1,5 +1,5 @@
 import * as React from "react"
-import { AlertCircle, BellRing } from "lucide-react"
+import { AlertCircle, ALargeSmall, BellRing, ChevronLeft, ChevronRight } from "lucide-react"
 
 import { cn } from "@classding/ui/lib/utils"
 import { copyText } from "@classding/ui/lib/copy"
@@ -17,7 +17,9 @@ import {
 } from "@classding/ui/components/ui/alert-dialog"
 import { Button } from "@classding/ui/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@classding/ui/components/ui/dialog"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger } from "@classding/ui/components/ui/dropdown-menu"
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@classding/ui/components/ui/empty"
+import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem } from "@classding/ui/components/ui/pagination"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@classding/ui/components/ui/select"
 import { Spinner } from "@classding/ui/components/ui/spinner"
 import { Textarea } from "@classding/ui/components/ui/textarea"
@@ -93,7 +95,7 @@ export function ErrorState({ error, retry, title = "暂时无法获取数据" }:
 
 export function EmptyState({ icon, title, description, action, className }: { icon: React.ReactNode; title: string; description?: string; action?: React.ReactNode; className?: string }) {
   return (
-    <Empty className={cn("border border-dashed", className)}>
+    <Empty className={cn("flex-none border border-dashed py-12", className)}>
       <EmptyHeader>
         <EmptyMedia variant="icon">{icon}</EmptyMedia>
         <EmptyTitle>{title}</EmptyTitle>
@@ -172,5 +174,79 @@ export function ConfirmDialog({ open, onOpenChange, title, description, confirmL
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
+  )
+}
+
+/** Client-side paging; returns to the first page whenever resetKey changes. */
+export function usePagination<T>(items: T[], pageSize = 10, resetKey?: unknown) {
+  const [page, setPage] = React.useState(1)
+  React.useEffect(() => { setPage(1) }, [resetKey])
+  const pageCount = Math.max(1, Math.ceil(items.length / pageSize))
+  const current = Math.min(page, pageCount)
+  return { page: current, pageCount, setPage, total: items.length, pageItems: items.slice((current - 1) * pageSize, current * pageSize) }
+}
+
+function pageNumbers(page: number, count: number): (number | "gap")[] {
+  if (count <= 7) return Array.from({ length: count }, (_, index) => index + 1)
+  const pages: (number | "gap")[] = [1]
+  const start = Math.max(2, Math.min(page - 1, count - 4))
+  const end = Math.min(count - 1, Math.max(page + 1, 5))
+  if (start > 2) pages.push("gap")
+  for (let value = start; value <= end; value++) pages.push(value)
+  if (end < count - 1) pages.push("gap")
+  pages.push(count)
+  return pages
+}
+
+/** Page controls under a list; hasMore lets cursor-based lists fetch the next server page. */
+export function PaginationBar({ page, pageCount, total, onPageChange, hasMore = false, loadingMore = false, onLoadMore, className }: { page: number; pageCount: number; total: number; onPageChange: (page: number) => void; hasMore?: boolean; loadingMore?: boolean; onLoadMore?: () => Promise<unknown>; className?: string }) {
+  if (pageCount <= 1 && !hasMore) return null
+  const next = async () => {
+    if (page < pageCount) { onPageChange(page + 1); return }
+    if (hasMore && onLoadMore) { await onLoadMore(); onPageChange(page + 1) }
+  }
+  return (
+    <div className={cn("flex flex-wrap items-center justify-between gap-3 border-t px-4 py-3 text-sm text-muted-foreground md:px-6", className)}>
+      <span className="tabular-nums">共 {total}{hasMore ? "+" : ""} 条 · 第 {page} / {pageCount}{hasMore ? "+" : ""} 页</span>
+      <Pagination className="mx-0 w-auto">
+        <PaginationContent>
+          <PaginationItem><Button variant="ghost" size="sm" aria-label="上一页" disabled={page <= 1} onClick={() => onPageChange(page - 1)}><ChevronLeft /><span className="hidden sm:inline">上一页</span></Button></PaginationItem>
+          {pageNumbers(page, pageCount).map((value, index) => value === "gap"
+            ? <PaginationItem key={`gap-${index}`} className="hidden sm:block"><PaginationEllipsis /></PaginationItem>
+            : <PaginationItem key={value} className={value === page ? undefined : "hidden sm:block"}><Button variant={value === page ? "outline" : "ghost"} size="icon-sm" aria-label={`第 ${value} 页`} aria-current={value === page ? "page" : undefined} onClick={() => onPageChange(value)}>{value}</Button></PaginationItem>)}
+          <PaginationItem><Button variant="ghost" size="sm" aria-label="下一页" disabled={(page >= pageCount && !hasMore) || loadingMore} onClick={() => void next()}>{loadingMore ? <Spinner /> : null}<span className="hidden sm:inline">下一页</span><ChevronRight /></Button></PaginationItem>
+        </PaginationContent>
+      </Pagination>
+    </div>
+  )
+}
+
+export const uiScales = [
+  { value: 90, label: "小" },
+  { value: 100, label: "标准" },
+  { value: 115, label: "大" },
+  { value: 130, label: "特大" },
+] as const
+
+/** Scales every rem-based size; the value is stored per user on the server. */
+export function applyUiScale(scale?: number | null) {
+  const value = typeof scale === "number" && scale >= 85 && scale <= 150 ? scale : 100
+  document.documentElement.style.fontSize = value === 100 ? "" : `${value}%`
+}
+
+export function UiScaleMenu({ value, onChange }: { value?: number | null; onChange: (scale: number) => void }) {
+  const current = String(value || 100)
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger render={<Button variant="ghost" size="icon" aria-label="调整字号" title="调整字号" />}><ALargeSmall /></DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-40">
+        <DropdownMenuGroup>
+          <DropdownMenuLabel>界面字号</DropdownMenuLabel>
+          <DropdownMenuRadioGroup value={current} onValueChange={next => onChange(Number(next))}>
+            {uiScales.map(scale => <DropdownMenuRadioItem key={scale.value} value={String(scale.value)}>{scale.label}<span className="ml-auto text-xs text-muted-foreground tabular-nums">{scale.value}%</span></DropdownMenuRadioItem>)}
+          </DropdownMenuRadioGroup>
+        </DropdownMenuGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }

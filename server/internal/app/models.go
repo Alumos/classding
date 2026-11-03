@@ -12,6 +12,7 @@ type User struct {
 	PasswordHash     string `json:"password_hash,omitempty"`
 	TokenVersion     int    `json:"token_version,omitempty"`
 	LoginLockedUntil string `json:"login_locked_until,omitempty"`
+	UIScale          int    `json:"ui_scale,omitempty"` // Interface text size in percent; 0 means the default.
 }
 type Class struct {
 	ID               string `json:"id"`
@@ -61,6 +62,11 @@ type Device struct {
 	TokenHash     string        `json:"token_hash,omitempty"`
 	Sequence      int64         `json:"sequence,omitempty"`
 	RemoteConfig  *RemoteConfig `json:"remote_config,omitempty"`
+	// Reported by the client on each connection.
+	LANIPs          []string `json:"lan_ips,omitempty"`
+	PublicIP        string   `json:"public_ip,omitempty"`
+	ServerURL       string   `json:"server_url,omitempty"`
+	AppliedRevision string   `json:"applied_revision,omitempty"`
 }
 type RemoteConfig struct {
 	ServerURL string `json:"server_url"`

@@ -14,6 +14,11 @@ import (
 
 const refreshGrace = 30 * time.Second
 
+const (
+	minUIScale = 85
+	maxUIScale = 150
+)
+
 func authScope(u User) string {
 	if u.Role == "user" {
 		return "teacher"
@@ -245,16 +250,28 @@ func (a *App) logout(w http.ResponseWriter, r *http.Request, _ *User) (any, erro
 }
 func (a *App) updateMe(w http.ResponseWriter, r *http.Request, u *User) (any, error) {
 	var in struct {
-		Name string `json:"display_name"`
+		Name    *string `json:"display_name"`
+		UIScale *int    `json:"ui_scale"`
 	}
 	if err := decode(r, &in); err != nil {
 		return nil, err
 	}
-	in.Name = strings.TrimSpace(in.Name)
-	if utf8.RuneCountInString(in.Name) < 1 || utf8.RuneCountInString(in.Name) > 24 {
-		return nil, bad("落款需为 1–24 字。")
+	if in.Name == nil && in.UIScale == nil {
+		return nil, bad("没有需要保存的内容。")
 	}
-	u.DisplayName = in.Name
+	if in.Name != nil {
+		name := strings.TrimSpace(*in.Name)
+		if utf8.RuneCountInString(name) < 1 || utf8.RuneCountInString(name) > 24 {
+			return nil, bad("落款需为 1–24 字。")
+		}
+		u.DisplayName = name
+	}
+	if in.UIScale != nil {
+		if *in.UIScale < minUIScale || *in.UIScale > maxUIScale {
+			return nil, bad("界面字号需在 85% 至 150% 之间。")
+		}
+		u.UIScale = *in.UIScale
+	}
 	a.state.Users[u.ID] = *u
 	return publicUser(*u), nil
 }

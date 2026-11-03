@@ -78,18 +78,21 @@ test('系统配置同步两后台，备案固定链接，备份可下载并恢�
   await expect(page.locator('.app-footer')).toContainText('课堂叮咚');
 });
 
-test('设备管理可保存和取消指定设备的服务器切换计划',async({page},info)=>{
+test('设备管理可二次确认后下发新服务器地址并撤销',async({page},info)=>{
   await adminLogin(page);await page.getByRole('link',{name:'设备管理',exact:true}).filter({visible:true}).first().click();
   // Refreshes can return a different row order. Follow the selected device ID.
-  const deviceID=await page.locator('tbody tr').first().locator('.person-cell small').innerText();
-  const row=page.locator('tbody tr').filter({has:page.getByText(deviceID,{exact:true})});
-  await expect(row).toHaveCount(1);await row.getByRole('button',{name:'配置服务器'}).click();
-  let dialog=page.getByRole('dialog');
-  await dialog.getByLabel('服务器地址').fill(`https://migration-${info.project.name}.example`);
-  await dialog.getByRole('button',{name:'保存配置'}).click();
-  await expect(row).toContainText(`https://migration-${info.project.name}.example`);
-  await row.getByRole('button',{name:'配置服务器'}).click();dialog=page.getByRole('dialog');
-  await dialog.getByLabel('服务器地址').fill('');await dialog.getByRole('button',{name:'保存配置'}).click();
+  const deviceID=await page.locator('tbody tr[data-device-id]').first().getAttribute('data-device-id');
+  const row=page.locator(`tbody tr[data-device-id="${deviceID}"]`);
+  await expect(row).toHaveCount(1);await row.getByRole('button',{name:'切换服务器'}).click();
+  const dialog=page.getByRole('dialog');
+  const url=`https://migration-${info.project.name}.example`;
+  await dialog.getByLabel('新服务器地址').fill(`${url}/`);
+  await dialog.getByRole('button',{name:'下一步'}).click();
+  await expect(dialog.getByTestId('confirm-server-url')).toHaveText(url);
+  await dialog.getByRole('button',{name:'确认切换 1 台设备'}).click();
+  await expect(row).toContainText(url);await expect(row).toContainText(/等待设备切换|已切换/);
+  await row.getByRole('button',{name:'撤销'}).click();
+  await page.getByRole('alertdialog').getByRole('button',{name:'确认撤销'}).click();
   await expect(row).toContainText('未设置');await noOverflow(page);
 });
 

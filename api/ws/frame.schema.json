@@ -38,6 +38,19 @@
                 "type": "string"
               },
               "maxItems": 4096
+            },
+            "lan_ips": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 8
+            },
+            "server_url": {
+              "type": "string"
+            },
+            "applied_revision": {
+              "type": "string"
             }
           },
           "required": [

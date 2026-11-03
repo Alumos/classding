@@ -15,7 +15,7 @@ import { Label } from '@classding/ui/components/ui/label';
 import { Spinner } from '@classding/ui/components/ui/spinner';
 import { Switch } from '@classding/ui/components/ui/switch';
 import { Textarea } from '@classding/ui/components/ui/textarea';
-import { ConfirmDialog, SimpleSelect } from '@classding/ui/components/classding';
+import { ConfirmDialog, PaginationBar, SimpleSelect, usePagination } from '@classding/ui/components/classding';
 import { cn } from '@classding/ui/lib/utils';
 import { useAuth } from '../auth';
 import { useClasses, useHomeworks } from '../hooks';
@@ -36,6 +36,7 @@ export default function HomeworkPage() {
   const activeClass = classes.data?.find(item => item.id === selectedId) ?? classes.data?.[0];
   const query = useHomeworks(activeClass?.id ?? '');
   const items = query.data?.items ?? [];
+  const pager = usePagination(items, 6, activeClass?.id);
   const mayManage = (item: Homework) => item.teacher_id === user?.id || activeClass?.role === 'owner' || user?.role === 'school_admin' || user?.role === 'super_admin';
   const refresh = () => cache.invalidateQueries({ queryKey: ['homeworks'] });
   const updateOption = useMutation({
@@ -68,7 +69,7 @@ export default function HomeworkPage() {
           {query.error && <ErrorState error={query.error} retry={() => void query.refetch()} />}
           <div><h2 className="text-lg font-semibold">班级作业</h2><p className="text-sm text-muted-foreground">{activeClass?.name} · 共 {items.length} 条</p></div>
           {!items.length ? <EmptyState icon={<BookOpenCheck />} title="还没有布置作业" description="新建第一条作业，让同学在教室电脑上看到学习任务。" action={<Button onClick={create}><Plus />新建作业</Button>} />
-            : <div className="grid gap-4 md:grid-cols-2">{items.map(item => {
+            : <><div className="grid gap-4 md:grid-cols-2">{pager.pageItems.map(item => {
               const manageable = mayManage(item);
               const busy = !manageable || updateOption.isPending || remove.isPending;
               return <Card className="homework-card" key={item.id}>
@@ -89,7 +90,8 @@ export default function HomeworkPage() {
                   </div>
                 </CardFooter>
               </Card>;
-            })}</div>}
+            })}</div>
+            <PaginationBar page={pager.page} pageCount={pager.pageCount} total={pager.total} onPageChange={pager.setPage} className="rounded-xl border px-4" /></>}
         </>}
       </>}
     {editor && classes.data && <HomeworkEditor key={editor.kind === 'create' ? `new-${editor.classId}` : editor.item.id} editor={editor} classes={classes.data} teacherName={user?.display_name ?? '老师'} onClose={() => setEditor(null)} onSaved={classId => { setSelectedId(classId); setEditor(null); }} />}

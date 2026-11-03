@@ -533,7 +533,8 @@ export interface paths {
         get: operations["get__messages__id__38"];
         put?: never;
         post?: never;
-        delete?: never;
+        /** DELETE /messages/{id} */
+        delete: operations["delete__messages__id__39"];
         options?: never;
         head?: never;
         patch?: never;
@@ -549,7 +550,7 @@ export interface paths {
         get?: never;
         put?: never;
         /** POST /messages/{id}/recall */
-        post: operations["post__messages__id__recall_39"];
+        post: operations["post__messages__id__recall_40"];
         delete?: never;
         options?: never;
         head?: never;
@@ -566,7 +567,7 @@ export interface paths {
         get?: never;
         put?: never;
         /** POST /messages/{id}/resend */
-        post: operations["post__messages__id__resend_40"];
+        post: operations["post__messages__id__resend_41"];
         delete?: never;
         options?: never;
         head?: never;
@@ -581,10 +582,10 @@ export interface paths {
             cookie?: never;
         };
         /** GET /phrases */
-        get: operations["get__phrases_41"];
+        get: operations["get__phrases_42"];
         put?: never;
         /** POST /phrases */
-        post: operations["post__phrases_42"];
+        post: operations["post__phrases_43"];
         delete?: never;
         options?: never;
         head?: never;
@@ -602,11 +603,11 @@ export interface paths {
         put?: never;
         post?: never;
         /** DELETE /phrases/{id} */
-        delete: operations["delete__phrases__id__44"];
+        delete: operations["delete__phrases__id__45"];
         options?: never;
         head?: never;
         /** PATCH /phrases/{id} */
-        patch: operations["patch__phrases__id__43"];
+        patch: operations["patch__phrases__id__44"];
         trace?: never;
     };
     "/classes/{id}/tools/countdown": {
@@ -619,7 +620,7 @@ export interface paths {
         get?: never;
         put?: never;
         /** POST /classes/{id}/tools/countdown */
-        post: operations["post__classes__id__tools_countdown_45"];
+        post: operations["post__classes__id__tools_countdown_46"];
         delete?: never;
         options?: never;
         head?: never;
@@ -636,7 +637,7 @@ export interface paths {
         get?: never;
         put?: never;
         /** POST /classes/{id}/tools/rollcall */
-        post: operations["post__classes__id__tools_rollcall_46"];
+        post: operations["post__classes__id__tools_rollcall_47"];
         delete?: never;
         options?: never;
         head?: never;
@@ -653,7 +654,7 @@ export interface paths {
         get?: never;
         put?: never;
         /** POST /classes/{id}/tools/stop */
-        post: operations["post__classes__id__tools_stop_47"];
+        post: operations["post__classes__id__tools_stop_48"];
         delete?: never;
         options?: never;
         head?: never;
@@ -670,7 +671,7 @@ export interface paths {
         get?: never;
         put?: never;
         /** POST /audio */
-        post: operations["post__audio_48"];
+        post: operations["post__audio_49"];
         delete?: never;
         options?: never;
         head?: never;
@@ -685,7 +686,7 @@ export interface paths {
             cookie?: never;
         };
         /** GET /admin/overview */
-        get: operations["get__admin_overview_49"];
+        get: operations["get__admin_overview_50"];
         put?: never;
         post?: never;
         delete?: never;
@@ -702,10 +703,10 @@ export interface paths {
             cookie?: never;
         };
         /** GET /admin/activation-codes */
-        get: operations["get__admin_activation_codes_50"];
+        get: operations["get__admin_activation_codes_51"];
         put?: never;
         /** POST /admin/activation-codes */
-        post: operations["post__admin_activation_codes_51"];
+        post: operations["post__admin_activation_codes_52"];
         delete?: never;
         options?: never;
         head?: never;
@@ -726,7 +727,7 @@ export interface paths {
         options?: never;
         head?: never;
         /** PATCH /admin/activation-codes/{code} */
-        patch: operations["patch__admin_activation_codes__code__52"];
+        patch: operations["patch__admin_activation_codes__code__53"];
         trace?: never;
     };
     "/admin/users": {
@@ -737,10 +738,10 @@ export interface paths {
             cookie?: never;
         };
         /** GET /admin/users */
-        get: operations["get__admin_users_53"];
+        get: operations["get__admin_users_54"];
         put?: never;
         /** POST /admin/users */
-        post: operations["post__admin_users_54"];
+        post: operations["post__admin_users_55"];
         delete?: never;
         options?: never;
         head?: never;
@@ -758,11 +759,11 @@ export interface paths {
         put?: never;
         post?: never;
         /** DELETE /admin/users/{id} */
-        delete: operations["delete__admin_users__id__56"];
+        delete: operations["delete__admin_users__id__57"];
         options?: never;
         head?: never;
         /** PATCH /admin/users/{id} */
-        patch: operations["patch__admin_users__id__55"];
+        patch: operations["patch__admin_users__id__56"];
         trace?: never;
     };
     "/admin/users/{id}/unlock-login": {
@@ -775,7 +776,7 @@ export interface paths {
         get?: never;
         put?: never;
         /** POST /admin/users/{id}/unlock-login */
-        post: operations["post__admin_users__id__unlock_login_57"];
+        post: operations["post__admin_users__id__unlock_login_58"];
         delete?: never;
         options?: never;
         head?: never;
@@ -790,10 +791,10 @@ export interface paths {
             cookie?: never;
         };
         /** GET /admin/classes */
-        get: operations["get__admin_classes_58"];
+        get: operations["get__admin_classes_59"];
         put?: never;
         /** POST /admin/classes */
-        post: operations["post__admin_classes_59"];
+        post: operations["post__admin_classes_60"];
         delete?: never;
         options?: never;
         head?: never;
@@ -811,11 +812,11 @@ export interface paths {
         put?: never;
         post?: never;
         /** DELETE /admin/classes/{id} */
-        delete: operations["delete__admin_classes__id__61"];
+        delete: operations["delete__admin_classes__id__62"];
         options?: never;
         head?: never;
         /** PATCH /admin/classes/{id} */
-        patch: operations["patch__admin_classes__id__60"];
+        patch: operations["patch__admin_classes__id__61"];
         trace?: never;
     };
     "/admin/devices": {
@@ -826,7 +827,7 @@ export interface paths {
             cookie?: never;
         };
         /** GET /admin/devices */
-        get: operations["get__admin_devices_62"];
+        get: operations["get__admin_devices_63"];
         put?: never;
         post?: never;
         delete?: never;
@@ -843,10 +844,27 @@ export interface paths {
             cookie?: never;
         };
         /** GET /admin/messages */
-        get: operations["get__admin_messages_63"];
+        get: operations["get__admin_messages_64"];
         put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/messages/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** DELETE /admin/messages/{id} */
+        delete: operations["delete__admin_messages__id__65"];
         options?: never;
         head?: never;
         patch?: never;
@@ -860,7 +878,7 @@ export interface paths {
             cookie?: never;
         };
         /** GET /admin/audit-logs */
-        get: operations["get__admin_audit_logs_64"];
+        get: operations["get__admin_audit_logs_66"];
         put?: never;
         post?: never;
         delete?: never;
@@ -891,6 +909,7 @@ export interface components {
             status: "active" | "disabled";
             /** Format: date-time */
             login_locked_until?: string;
+            ui_scale?: number;
         };
         Class: {
             id: string;
@@ -928,6 +947,10 @@ export interface components {
             online: boolean;
             last_seen_at: string | null;
             remote_config?: components["schemas"]["RemoteConfig"] | null;
+            lan_ips?: string[];
+            public_ip?: string;
+            server_url?: string;
+            applied_revision?: string;
         };
         Member: {
             user_id: string;
@@ -1548,7 +1571,8 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": {
-                    display_name: string;
+                    display_name?: string;
+                    ui_scale?: number;
                 };
             };
         };
@@ -2435,133 +2459,7 @@ export interface operations {
             };
         };
     };
-    post__messages__id__recall_39: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description 成功 */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Message"];
-                };
-            };
-            /** @description 业务错误 */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    post__messages__id__resend_40: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description 成功 */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Message"];
-                };
-            };
-            /** @description 业务错误 */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    get__phrases_41: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description 成功 */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Phrase"][];
-                };
-            };
-            /** @description 业务错误 */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    post__phrases_42: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    text: string;
-                };
-            };
-        };
-        responses: {
-            /** @description 成功 */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Phrase"];
-                };
-            };
-            /** @description 业务错误 */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    delete__phrases__id__44: {
+    delete__messages__id__39: {
         parameters: {
             query?: never;
             header?: never;
@@ -2592,7 +2490,164 @@ export interface operations {
             };
         };
     };
-    patch__phrases__id__43: {
+    post__messages__id__recall_40: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 成功 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Message"];
+                };
+            };
+            /** @description 业务错误 */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    post__messages__id__resend_41: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 成功 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Message"];
+                };
+            };
+            /** @description 业务错误 */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    get__phrases_42: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 成功 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Phrase"][];
+                };
+            };
+            /** @description 业务错误 */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    post__phrases_43: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    text: string;
+                };
+            };
+        };
+        responses: {
+            /** @description 成功 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Phrase"];
+                };
+            };
+            /** @description 业务错误 */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    delete__phrases__id__45: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 成功 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OK"];
+                };
+            };
+            /** @description 业务错误 */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    patch__phrases__id__44: {
         parameters: {
             query?: never;
             header?: never;
@@ -2629,7 +2684,7 @@ export interface operations {
             };
         };
     };
-    post__classes__id__tools_countdown_45: {
+    post__classes__id__tools_countdown_46: {
         parameters: {
             query?: never;
             header?: never;
@@ -2666,7 +2721,7 @@ export interface operations {
             };
         };
     };
-    post__classes__id__tools_rollcall_46: {
+    post__classes__id__tools_rollcall_47: {
         parameters: {
             query?: never;
             header?: never;
@@ -2703,7 +2758,7 @@ export interface operations {
             };
         };
     };
-    post__classes__id__tools_stop_47: {
+    post__classes__id__tools_stop_48: {
         parameters: {
             query?: never;
             header?: never;
@@ -2734,7 +2789,7 @@ export interface operations {
             };
         };
     };
-    post__audio_48: {
+    post__audio_49: {
         parameters: {
             query?: never;
             header?: never;
@@ -2770,7 +2825,7 @@ export interface operations {
             };
         };
     };
-    get__admin_overview_49: {
+    get__admin_overview_50: {
         parameters: {
             query?: never;
             header?: never;
@@ -2799,7 +2854,7 @@ export interface operations {
             };
         };
     };
-    get__admin_activation_codes_50: {
+    get__admin_activation_codes_51: {
         parameters: {
             query?: {
                 class_id?: string;
@@ -2833,7 +2888,7 @@ export interface operations {
             };
         };
     };
-    post__admin_activation_codes_51: {
+    post__admin_activation_codes_52: {
         parameters: {
             query?: never;
             header?: never;
@@ -2873,7 +2928,7 @@ export interface operations {
             };
         };
     };
-    patch__admin_activation_codes__code__52: {
+    patch__admin_activation_codes__code__53: {
         parameters: {
             query?: never;
             header?: never;
@@ -2913,7 +2968,7 @@ export interface operations {
             };
         };
     };
-    get__admin_users_53: {
+    get__admin_users_54: {
         parameters: {
             query?: never;
             header?: never;
@@ -2942,7 +2997,7 @@ export interface operations {
             };
         };
     };
-    post__admin_users_54: {
+    post__admin_users_55: {
         parameters: {
             query?: never;
             header?: never;
@@ -2980,7 +3035,7 @@ export interface operations {
             };
         };
     };
-    delete__admin_users__id__56: {
+    delete__admin_users__id__57: {
         parameters: {
             query?: never;
             header?: never;
@@ -3011,7 +3066,7 @@ export interface operations {
             };
         };
     };
-    patch__admin_users__id__55: {
+    patch__admin_users__id__56: {
         parameters: {
             query?: never;
             header?: never;
@@ -3051,7 +3106,7 @@ export interface operations {
             };
         };
     };
-    post__admin_users__id__unlock_login_57: {
+    post__admin_users__id__unlock_login_58: {
         parameters: {
             query?: never;
             header?: never;
@@ -3082,7 +3137,7 @@ export interface operations {
             };
         };
     };
-    get__admin_classes_58: {
+    get__admin_classes_59: {
         parameters: {
             query?: never;
             header?: never;
@@ -3111,7 +3166,7 @@ export interface operations {
             };
         };
     };
-    post__admin_classes_59: {
+    post__admin_classes_60: {
         parameters: {
             query?: never;
             header?: never;
@@ -3150,7 +3205,7 @@ export interface operations {
             };
         };
     };
-    delete__admin_classes__id__61: {
+    delete__admin_classes__id__62: {
         parameters: {
             query?: never;
             header?: never;
@@ -3181,7 +3236,7 @@ export interface operations {
             };
         };
     };
-    patch__admin_classes__id__60: {
+    patch__admin_classes__id__61: {
         parameters: {
             query?: never;
             header?: never;
@@ -3222,7 +3277,7 @@ export interface operations {
             };
         };
     };
-    get__admin_devices_62: {
+    get__admin_devices_63: {
         parameters: {
             query?: never;
             header?: never;
@@ -3251,7 +3306,7 @@ export interface operations {
             };
         };
     };
-    get__admin_messages_63: {
+    get__admin_messages_64: {
         parameters: {
             query?: {
                 class_id?: string;
@@ -3285,7 +3340,38 @@ export interface operations {
             };
         };
     };
-    get__admin_audit_logs_64: {
+    delete__admin_messages__id__65: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 成功 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OK"];
+                };
+            };
+            /** @description 业务错误 */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    get__admin_audit_logs_66: {
         parameters: {
             query?: never;
             header?: never;

@@ -432,3 +432,65 @@ func (a *App) downloadAudio(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "private, max-age=60")
 	http.ServeFile(w, r, audio.Path)
 }
+
+// deleteMessage removes a notification from the sender's or class owner's history.
+func (a *App) deleteMessage(w http.ResponseWriter, r *http.Request, u *User) (any, error) {
+	m, exists := a.state.Messages[chi.URLParam(r, "id")]
+	if !exists {
+		return nil, missing()
+	}
+	for _, t := range m.Targets {
+		c, exists := a.state.Classes[t.ClassID]
+		if !exists || !a.canClass(u, c) || m.SenderID != u.ID && !a.owns(u, c) {
+			return nil, forbidden()
+		}
+	}
+	if len(m.Targets) == 0 && m.SenderID != u.ID {
+		return nil, forbidden()
+	}
+	a.removeMessage(u, m, "message.delete")
+	return map[string]bool{"ok": true}, nil
+}
+
+// adminDeleteMessage removes a notification within the administrator's scope.
+func (a *App) adminDeleteMessage(w http.ResponseWriter, r *http.Request, u *User) (any, error) {
+	if !a.isAdmin(u) {
+		return nil, forbidden()
+	}
+	m, exists := a.state.Messages[chi.URLParam(r, "id")]
+	if !exists {
+		return nil, missing()
+	}
+	if len(m.Targets) == 0 && u.Role != "super_admin" {
+		return nil, forbidden()
+	}
+	for _, t := range m.Targets {
+		if c, exists := a.state.Classes[t.ClassID]; exists && !a.adminScope(u, c) || !exists && u.Role != "super_admin" {
+			return nil, forbidden()
+		}
+	}
+	a.removeMessage(u, m, "admin.message.delete")
+	return map[string]bool{"ok": true}, nil
+}
+
+// removeMessage deletes the record and recalls deliveries that have not finished,
+// so a deleted notification never appears on a classroom screen afterwards.
+func (a *App) removeMessage(u *User, m Message, action string) {
+	delete(a.state.Messages, m.ID)
+	a.audit(u, action, m.ID)
+	if m.RecalledAt != nil {
+		return
+	}
+	pending := []string{}
+	for _, t := range m.Targets {
+		switch t.Status {
+		case "queued", "delivered", "playing":
+			pending = append(pending, t.DeviceID)
+		}
+	}
+	a.deferJob(func() {
+		for _, id := range pending {
+			a.hub.Device(id, Frame{T: "recall", D: map[string]any{"message_id": m.ID}})
+		}
+	})
+}

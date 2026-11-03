@@ -47,7 +47,7 @@ v0.2.0 起，教师工作台（`web/apps/teacher`）和管理后台（`web/apps/
   - 增改删：`POST /homeworks`、`PATCH /homeworks/{id}`、`DELETE /homeworks/{id}`。
   - 限制：科目最多 24 字，内容最多 300 字。
   - 权限：作者、班级创建者和管理员可以管理，其他人只能查看。
-- **发送记录**：`GET /messages?class_id=&cursor=` 分页。重发 `POST /messages/{id}/resend`，撤回 `POST /messages/{id}/recall`。
+- **发送记录**：`GET /messages?class_id=&cursor=` 按游标加载，前端每页 10 条。重发 `POST /messages/{id}/resend`，撤回 `POST /messages/{id}/recall`，删除 `DELETE /messages/{id}`（发送者或班级创建者，未完成的投递会同时撤回）。
 - **个人中心**：
   - 修改落款：`PATCH /me`。修改密码：`PUT /me/password`，成功后退出登录。
   - 客户端下载：`GET /client/latest`。
@@ -64,8 +64,8 @@ v0.2.0 起，教师工作台（`web/apps/teacher`）和管理后台（`web/apps/
   - CSV 导出会防止公式注入，以 `'` 前缀转义。
 - **教师**：`/admin/users` 的增删改查，以及解除登录限制 `POST /admin/users/{id}/unlock-login`。用户名 3–32 位；密码 10–128 字节，须含字母和数字。
 - **班级**：`/admin/classes` 的增删改查。负责人只能选状态正常、且属于同一学校的教师。
-- **设备**：`GET /admin/devices`；为单台或批量设备下发迁移地址：`POST /admin/devices/{id}/config`，见 `deviceConfig.ts`。
-- **消息审计**：`GET /admin/messages?cursor=` 分页，前端按关键词和日期筛选。
+- **设备**：`GET /admin/devices` 返回大屏上报的 `lan_ips`（内网 IPv4）、`server_url`（实际连接的服务器）、`public_ip`（服务端看到的出口地址）和 `applied_revision`。批量切换服务器调用 `POST /admin/devices/{id}/config`，见 `deviceConfig.ts`；界面要求在确认页再次核对地址。大屏收到后直接切换，新站不认可设备或 10 分钟内无法连接时回到原服务器；若原服务器看到设备在线，且 `applied_revision` 等于配置版本，就显示「切换失败，已回退」。
+- **消息审计**：`GET /admin/messages?cursor=` 按游标加载，前端按关键词和日期筛选后分页显示；`DELETE /admin/messages/{id}` 删除记录，未完成的投递会同时撤回。
 - **系统配置**：
   - 站点信息：`PUT /admin/settings`。
   - 备份：`GET /admin/backup`，返回 ZIP，前端会校验文件头。
@@ -77,6 +77,8 @@ v0.2.0 起，教师工作台（`web/apps/teacher`）和管理后台（`web/apps/
 - 内容区最大宽度一致（`max-w-6xl`），页面标题统一使用 `PageHeader`。
 - `html` 预留滚动条位置，页面切换不会左右跳动。
 - 备案号居中于内容区底部，链接到 `https://beian.miit.gov.cn/`。
+- 所有列表和表格都分页显示，不会无限拉长页面：表格每页 10 条，作业卡片每页 6 张；分页用 `usePagination` 与 `PaginationBar`，按游标加载的列表到最后一页时会自动加载下一批。
+- 顶栏的字号菜单（小 90% / 标准 100% / 大 115% / 特大 130%）通过 `PATCH /me {ui_scale}` 保存在每个用户的账号上，登录后在任何设备上自动应用；实现方式是修改 `<html>` 的字号，所有基于 rem 的尺寸会一起缩放。
 
 ## 测试依赖
 

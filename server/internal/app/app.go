@@ -368,7 +368,7 @@ func (a *App) routes() {
 		})
 	})
 	r.Get("/healthz", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, 200, map[string]string{"status": "ok", "version": "0.2.0"})
+		writeJSON(w, 200, map[string]string{"status": "ok", "version": "0.3.0"})
 	})
 	r.Get("/metrics", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/plain; version=0.0.4")
@@ -377,7 +377,7 @@ func (a *App) routes() {
 	r.Route("/api/v1", func(r chi.Router) {
 		h := a.handle
 		r.Get("/config", h(false, false, func(w http.ResponseWriter, r *http.Request, u *User) (any, error) {
-			return map[string]any{"speech_enabled": false, "registration_enabled": true, "version": "0.2.0", "site_name": a.state.Settings["site_name"], "icp_number": a.state.Settings["icp_number"], "theme": a.state.Settings["theme"]}, nil
+			return map[string]any{"speech_enabled": false, "registration_enabled": true, "version": "0.3.0", "site_name": a.state.Settings["site_name"], "icp_number": a.state.Settings["icp_number"], "theme": a.state.Settings["theme"]}, nil
 		}))
 		r.Post("/auth/register", h(false, true, a.register))
 		r.Post("/auth/login", h(false, true, a.login))
@@ -411,6 +411,7 @@ func (a *App) routes() {
 		r.Get("/messages", h(true, false, a.listMessages))
 		r.Post("/messages", h(true, true, a.sendMessage))
 		r.Get("/messages/{id}", h(true, false, a.getMessage))
+		r.Delete("/messages/{id}", h(true, true, a.deleteMessage))
 		r.Post("/messages/{id}/recall", h(true, true, a.recallMessage))
 		r.Post("/messages/{id}/resend", h(true, true, a.resendMessage))
 		r.Get("/phrases", h(true, false, a.listPhrases))
@@ -423,7 +424,7 @@ func (a *App) routes() {
 			r.Post("/classes/{id}/tools/"+tool, h(true, true, a.tool))
 		}
 		r.Get("/client/latest", h(false, false, func(w http.ResponseWriter, r *http.Request, u *User) (any, error) {
-			return map[string]string{"version": "0.2.0", "url": "https://github.com/Alumos/classding/releases/download/v0.2.0/ClassDingScreen-amd64-installer.exe", "sha256": "", "notes": "新版作业悬浮窗与设备迁移，SHA-256 校验文件见对应 GitHub Release。", "min_supported": "0.1.0"}, nil
+			return map[string]string{"version": "0.3.0", "url": "https://github.com/Alumos/classding/releases/download/v0.3.0/ClassDingScreen-amd64-installer.exe", "sha256": "", "notes": "上报内网地址，收到新服务器地址后直接切换，SHA-256 校验文件见对应 GitHub Release。", "min_supported": "0.1.0"}, nil
 		}))
 		r.Get("/admin/overview", h(true, false, a.overview))
 		r.Get("/admin/activation-codes", h(true, false, a.listCodes))
@@ -445,6 +446,7 @@ func (a *App) routes() {
 		r.Get("/admin/backup", a.backup)
 		r.Post("/admin/restore", a.restore)
 		r.Get("/admin/messages", h(true, true, a.adminMessages))
+		r.Delete("/admin/messages/{id}", h(true, true, a.adminDeleteMessage))
 		r.Get("/admin/audit-logs", h(true, false, a.auditLogs))
 	})
 	r.Get("/ws/device", a.deviceWS)

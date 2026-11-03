@@ -6,7 +6,6 @@ const mocks=vi.hoisted(()=>({
   failSave:false,
   saves:0,
   saveGate:null as null|((value:string)=>Promise<void>),
-  probe:vi.fn(),
   configure:vi.fn(async (server:string)=>server),
 }));
 vi.mock('../src/native',async importOriginal=>({
@@ -14,7 +13,6 @@ vi.mock('../src/native',async importOriginal=>({
   loadState:async()=>mocks.disk,
   saveState:async(value:string)=>{mocks.saves++;if(mocks.failSave)throw new Error('磁盘不可写');if(mocks.saveGate)await mocks.saveGate(value);mocks.disk=value;},
   configureServer:mocks.configure,
-  probeServer:mocks.probe,
 }));
 vi.mock('../src/audio',()=>({playNotice:vi.fn(),playChime:vi.fn()}));
 import {ScreenService} from '../src/service';
@@ -44,7 +42,7 @@ let services:ScreenService[]=[];
 const makeService=()=>{const service=new ScreenService();services.push(service);return service;};
 
 beforeEach(()=>{
-  mocks.disk=JSON.stringify(saved());mocks.failSave=false;mocks.saves=0;mocks.saveGate=null;mocks.probe.mockReset();mocks.configure.mockClear();Socket.instances=[];services=[];
+  mocks.disk=JSON.stringify(saved());mocks.failSave=false;mocks.saves=0;mocks.saveGate=null;mocks.configure.mockClear();Socket.instances=[];services=[];
   vi.stubGlobal('window',{location:{origin:'http://localhost:5175',href:'http://localhost:5175/'}});
   vi.stubGlobal('navigator',{userAgent:'test browser'});
   vi.stubGlobal('WebSocket',Socket);
@@ -100,71 +98,5 @@ describe('大屏作业同步',()=>{
     await vi.advanceTimersByTimeAsync(0);
     expect(service.getSnapshot().homeworks).toEqual([card('实时新作业')]);
     expect(JSON.parse(mocks.disk).homeworkRevision).toBe(3);
-  });
-});
-
-describe('大屏作业迁移',()=>{
-  it.each([
-    {name:'目标版本落后',revision:2,items:[card('旧站数据')]},
-    {name:'目标缺少作业列表',revision:3,items:undefined},
-    {name:'目标版本不是整数',revision:3.5,items:[card('目标站作业')]},
-  ])('$name，继续使用源站',async({revision,items})=>{
-    mocks.disk=JSON.stringify(saved([card('源站作业')],3));
-    vi.stubGlobal('fetch',vi.fn(async()=>({ok:true,status:200,json:async()=>({items:[card('源站作业')],homework_revision:3})})));
-    mocks.probe.mockResolvedValue({device:{id:'d1',class_id:'c1'},sequence:0,notifications:[],recalled_ids:[],homework_revision:revision,homeworks:items});
-    const service=makeService();await service.init();socket().open();socket().frame(welcome([card('源站作业')],3));
-    await vi.waitFor(()=>expect(service.getSnapshot().connection).toBe('online'));
-    socket().frame({t:'config',d:{remote_config:plan}});
-    await vi.waitFor(()=>expect(service.getSnapshot().error).toContain('未恢复完整数据'));
-    expect(mocks.probe).toHaveBeenCalledWith(plan.server_url,'secret',0,[],3);
-    expect(JSON.parse(mocks.disk)).toMatchObject({server:'https://old.example',remoteConfig:plan,homeworks:[card('源站作业')],homeworkRevision:3});
-  });
-
-  it('源站无作业而目标站已有作业时，目标必须提供完整列表',async()=>{
-    mocks.disk=JSON.stringify(saved([],0));
-    vi.stubGlobal('fetch',vi.fn(async()=>({ok:true,status:200,json:async()=>({items:[],homework_revision:0})})));
-    mocks.probe.mockResolvedValue({device:{id:'d1',class_id:'c1'},sequence:0,notifications:[],recalled_ids:[],homework_revision:1});
-    const service=makeService();await service.init();socket().open();socket().frame(welcome([],0));
-    await vi.waitFor(()=>expect(service.getSnapshot().connection).toBe('online'));
-    socket().frame({t:'config',d:{remote_config:plan}});
-    await vi.waitFor(()=>expect(service.getSnapshot().error).toContain('未恢复完整数据'));
-    expect(JSON.parse(mocks.disk)).toMatchObject({server:'https://old.example',remoteConfig:plan,homeworks:[],homeworkRevision:0});
-  });
-
-  it('目标站版本更新时成功迁移并保存目标作业',async()=>{
-    mocks.disk=JSON.stringify(saved([card('源站作业')],3));
-    vi.stubGlobal('fetch',vi.fn(async()=>({ok:true,status:200,json:async()=>({items:[card('源站作业')],homework_revision:3})})));
-    mocks.probe.mockResolvedValue({device:{id:'d1',class_id:'c1'},sequence:0,notifications:[],recalled_ids:[],homework_revision:4,homeworks:[card('目标站作业')]});
-    const service=makeService();await service.init();socket().open();socket().frame(welcome([card('源站作业')],3));
-    await vi.waitFor(()=>expect(service.getSnapshot().connection).toBe('online'));
-    socket().frame({t:'config',d:{remote_config:plan}});
-    await vi.waitFor(()=>expect(JSON.parse(mocks.disk)).toMatchObject({server:plan.server_url,homeworks:[card('目标站作业')],homeworkRevision:4}));
-    expect(mocks.probe).toHaveBeenCalledWith(plan.server_url,'secret',0,[],3);
-  });
-
-  it('迁移保存期间源站到达目标版本但内容不同时取消切换',async()=>{
-    vi.useFakeTimers();
-    mocks.disk=JSON.stringify(saved([card('源站作业')],3));
-    let completePoll!:(value:unknown)=>void;
-    vi.stubGlobal('fetch',vi.fn(()=>new Promise(resolve=>{completePoll=resolve;})));
-    mocks.probe.mockResolvedValue({device:{id:'d1',class_id:'c1'},sequence:0,notifications:[],recalled_ids:[],homework_revision:4,homeworks:[card('目标站作业')]});
-    let releaseSave!:()=>void;
-    let saveStarted=false;
-    mocks.saveGate=async value=>{
-      if(JSON.parse(value).server===plan.server_url){saveStarted=true;await new Promise<void>(resolve=>{releaseSave=resolve;});}
-    };
-    const service=makeService();await service.init();socket().open();socket().frame(welcome([card('源站作业')],3));
-    await vi.advanceTimersByTimeAsync(0);
-    await vi.advanceTimersByTimeAsync(30000);
-    expect(completePoll).toBeDefined();
-    socket().frame({t:'config',d:{remote_config:plan}});
-    await vi.advanceTimersByTimeAsync(0);
-    expect(saveStarted).toBe(true);
-    completePoll({ok:true,status:200,json:async()=>({items:[card('源站更新')],homework_revision:4})});
-    await vi.advanceTimersByTimeAsync(0);
-    releaseSave();
-    await vi.advanceTimersByTimeAsync(0);
-    expect(JSON.parse(mocks.disk)).toMatchObject({server:'https://old.example',remoteConfig:plan,homeworks:[card('源站更新')],homeworkRevision:4});
-    expect(mocks.configure.mock.calls.map(call=>call[0])).not.toContain(plan.server_url);
   });
 });

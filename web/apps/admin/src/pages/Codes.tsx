@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from '@classding/ui/components/ui/field';
 import { Input } from '@classding/ui/components/ui/input';
 import { TableBody, TableCell, TableHead, TableHeader, TableRow } from '@classding/ui/components/ui/table';
-import { ConfirmDialog, CopyButton, PageHeader, SimpleSelect } from '@classding/ui/components/classding';
+import { ConfirmDialog, CopyButton, PageHeader, PaginationBar, SimpleSelect, usePagination } from '@classding/ui/components/classding';
 import { DataTable, Panel, ResultState, SearchInput, StatusBadge, Toolbar, codeStatusText, dateOnly, errorMessage, json, localDate, type ActivationCode } from '../lib';
 
 function downloadCodes(codes: ActivationCode[], filename = 'classding-activation-codes.csv') {
@@ -45,6 +45,7 @@ export default function CodesPage() {
   if (search.trim()) params.set('search', search.trim());
   if (status !== 'all') params.set('status', status);
   const query = useQuery({ queryKey: ['admin', 'codes', search.trim(), status], queryFn: () => api<ActivationCode[]>(`/admin/activation-codes${params.size ? `?${params}` : ''}`) });
+  const pager = usePagination(query.data ?? [], 10, `${search}|${status}`);
   const create = useMutation({
     mutationFn: (body: unknown) => api<ActivationCode[]>('/admin/activation-codes', json('POST', body)),
     onSuccess: result => { setCreated(result); setCreateOpen(false); setForm(defaultCodeForm); setFormError(''); void queryClient.invalidateQueries({ queryKey: ['admin', 'codes'] }); toast.success(`已生成 ${result.length} 个激活码`); },
@@ -96,7 +97,7 @@ export default function CodesPage() {
       <ResultState loading={query.isLoading} error={query.error} empty={!query.data?.length} emptyText="没有找到激活码">
         <DataTable>
           <TableHeader><TableRow><TableHead>激活码</TableHead><TableHead>状态</TableHead><TableHead>教师 / 设备上限</TableHead><TableHead>有效期</TableHead><TableHead>关联班级</TableHead><TableHead>备注</TableHead><TableHead className="text-right">操作</TableHead></TableRow></TableHeader>
-          <TableBody>{query.data?.map(code => <TableRow key={code.code}>
+          <TableBody>{pager.pageItems.map(code => <TableRow key={code.code}>
             <TableCell>
               <div className="flex items-center gap-1">
                 <span className="font-mono font-medium tracking-wide">{code.code}</span>
@@ -117,6 +118,7 @@ export default function CodesPage() {
             </TableCell>
           </TableRow>)}</TableBody>
         </DataTable>
+        <PaginationBar page={pager.page} pageCount={pager.pageCount} total={pager.total} onPageChange={pager.setPage} />
       </ResultState>
     </Panel>
     <Dialog open={createOpen} onOpenChange={setCreateOpen}>

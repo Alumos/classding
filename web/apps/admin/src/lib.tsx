@@ -10,7 +10,7 @@ import { cn } from '@classding/ui/lib/utils';
 
 export type User = components['schemas']['User'] & { status?: string; login_locked_until?: string | null };
 export type Classroom = components['schemas']['Class'];
-export type Device = components['schemas']['Device'] & { last_ip?: string; remote_config?: { server_url: string; revision: string | number } | null };
+export type Device = components['schemas']['Device'];
 export type Message = components['schemas']['Message'];
 export type ActivationCode = components['schemas']['ActivationCode'];
 export type AuthResponse = { access_token: string; user: User };
@@ -73,7 +73,7 @@ export function messageSummary(message: Message) {
   return { text, variant: failed ? 'destructive' as const : done ? 'default' as const : 'secondary' as const };
 }
 
-const SessionContext = createContext<{ user: User; logout: () => void } | null>(null);
+const SessionContext = createContext<{ user: User; logout: () => void; updateUser: (user: User) => void } | null>(null);
 export const SessionProvider = SessionContext.Provider;
 export function useSession() {
   const session = useContext(SessionContext);

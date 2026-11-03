@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from '@classding/ui/components/ui/field';
 import { Input } from '@classding/ui/components/ui/input';
 import { TableBody, TableCell, TableHead, TableHeader, TableRow } from '@classding/ui/components/ui/table';
-import { ConfirmDialog, PageHeader, SimpleSelect } from '@classding/ui/components/classding';
+import { ConfirmDialog, PageHeader, PaginationBar, SimpleSelect, usePagination } from '@classding/ui/components/classding';
 import { DataTable, Panel, ResultState, SearchInput, Toolbar, dateTime, errorMessage, initial, json, roleName, useSession, type User } from '../lib';
 
 type TeacherForm = { username: string; display_name: string; password: string; org_id: string; status: 'active' | 'disabled' };
@@ -27,6 +27,7 @@ export default function UsersPage() {
   const [formError, setFormError] = useState('');
   const query = useQuery({ queryKey: ['admin', 'users'], queryFn: () => api<User[]>('/admin/users') });
   const users = (query.data ?? []).filter(user => `${user.display_name} ${user.username} ${user.org_id ?? ''}`.toLowerCase().includes(search.trim().toLowerCase()));
+  const pager = usePagination(users, 10, search);
   const save = useMutation({
     mutationFn: ({ user, body }: { user: User | null; body: unknown }) => user
       ? api<User>(`/admin/users/${encodeURIComponent(user.id)}`, json('PATCH', body))
@@ -84,7 +85,7 @@ export default function UsersPage() {
       <ResultState loading={query.isLoading} error={query.error} empty={!users.length} emptyText="没有找到教师账号">
         <DataTable>
           <TableHeader><TableRow><TableHead>教师</TableHead><TableHead>账号</TableHead><TableHead>角色</TableHead><TableHead>所属学校 ID</TableHead><TableHead>状态</TableHead><TableHead className="text-right">操作</TableHead></TableRow></TableHeader>
-          <TableBody>{users.map(user => <TableRow key={user.id}>
+          <TableBody>{pager.pageItems.map(user => <TableRow key={user.id}>
             <TableCell>
               <div className="person-cell flex items-center gap-3">
                 <Avatar><AvatarFallback>{initial(user, '师')}</AvatarFallback></Avatar>
@@ -107,6 +108,7 @@ export default function UsersPage() {
             </TableCell>
           </TableRow>)}</TableBody>
         </DataTable>
+        <PaginationBar page={pager.page} pageCount={pager.pageCount} total={pager.total} onPageChange={pager.setPage} />
       </ResultState>
     </Panel>
     <Dialog open={formOpen} onOpenChange={setFormOpen}>

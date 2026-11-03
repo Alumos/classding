@@ -1,19 +1,20 @@
 import { useState } from 'react';
-import { useInfiniteQuery } from '@tanstack/react-query';
+import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@classding/api';
 import { BellRing } from 'lucide-react';
+import { toast } from 'sonner';
 import { Badge } from '@classding/ui/components/ui/badge';
 import { Button } from '@classding/ui/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@classding/ui/components/ui/dialog';
 import { Input } from '@classding/ui/components/ui/input';
 import { TableBody, TableCell, TableHead, TableHeader, TableRow } from '@classding/ui/components/ui/table';
-import { PageHeader } from '@classding/ui/components/classding';
+import { ConfirmDialog, PageHeader, PaginationBar, usePagination } from '@classding/ui/components/classding';
 import { cn } from '@classding/ui/lib/utils';
-import { DataTable, Panel, ResultState, SearchInput, Toolbar, dateTime, errorMessage, localDate, messageSummary, receiptVariant, targetStatus, type Message, type MessagePage } from '../lib';
+import { DataTable, Panel, ResultState, SearchInput, Toolbar, dateTime, errorMessage, json, localDate, messageSummary, receiptVariant, targetStatus, type Message, type MessagePage } from '../lib';
 
 const styleTone: Record<string, string> = { urgent: 'bg-destructive/10 text-destructive', praise: 'bg-amber-500/10 text-amber-600 dark:text-amber-400' };
 
-export function MessageTable({ messages, compact = false, onSelect }: { messages: Message[]; compact?: boolean; onSelect?: (message: Message) => void }) {
+export function MessageTable({ messages, compact = false, onSelect, onDelete }: { messages: Message[]; compact?: boolean; onSelect?: (message: Message) => void; onDelete?: (message: Message) => void }) {
   return <DataTable>
     <TableHeader><TableRow><TableHead>通知内容</TableHead><TableHead>发送人</TableHead><TableHead>目标班级</TableHead><TableHead>发送时间</TableHead><TableHead>回执状态</TableHead>{onSelect && <TableHead className="text-right">操作</TableHead>}</TableRow></TableHeader>
     <TableBody>{messages.map(item => {
@@ -32,7 +33,12 @@ export function MessageTable({ messages, compact = false, onSelect }: { messages
         <TableCell>{item.targets?.length ? [...new Set(item.targets.map(t => t.class_name || t.class_id))].join('、') : '—'}</TableCell>
         <TableCell className="text-muted-foreground">{dateTime(item.created_at)}</TableCell>
         <TableCell><Badge variant={summary.variant}>{summary.text}</Badge></TableCell>
-        {onSelect && <TableCell className="text-right"><Button variant="link" size="sm" className="px-0" onClick={() => onSelect(item)}>查看回执</Button></TableCell>}
+        {onSelect && <TableCell className="text-right">
+          <div className="flex justify-end gap-1">
+            <Button variant="ghost" size="sm" onClick={() => onSelect(item)}>查看回执</Button>
+            {onDelete && <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={() => onDelete(item)}>删除</Button>}
+          </div>
+        </TableCell>}
       </TableRow>;
     })}</TableBody>
   </DataTable>;
@@ -43,12 +49,20 @@ export default function MessagesPage() {
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [selected, setSelected] = useState<Message | null>(null);
+  const [deleting, setDeleting] = useState<Message | null>(null);
+  const queryClient = useQueryClient();
   const query = useInfiniteQuery({ queryKey: ['admin', 'messages'], initialPageParam: '', queryFn: ({ pageParam }) => api<MessagePage>(`/admin/messages${pageParam ? `?cursor=${encodeURIComponent(pageParam)}` : ''}`), getNextPageParam: page => page.next_cursor ?? undefined });
   const loaded = query.data?.pages.flatMap(page => page.items ?? []) ?? [];
   const messages = loaded.filter(item => {
     const matches = `${item.text ?? ''} ${item.student_name ?? ''} ${item.signature ?? ''} ${item.targets?.map(t => `${t.class_name} ${t.class_id}`).join(' ') ?? ''}`.toLowerCase().includes(search.trim().toLowerCase());
     const date = localDate(item.created_at);
     return matches && (!from || date >= from) && (!to || date <= to);
+  });
+  const pager = usePagination(messages, 10, `${search}|${from}|${to}`);
+  const remove = useMutation({
+    mutationFn: (message: Message) => api(`/admin/messages/${encodeURIComponent(message.id)}`, json('DELETE')),
+    onSuccess: () => { setDeleting(null); void queryClient.invalidateQueries({ queryKey: ['admin', 'messages'] }); void queryClient.invalidateQueries({ queryKey: ['admin', 'overview'] }); toast.success('消息记录已删除'); },
+    onError: error => toast.error(errorMessage(error)),
   });
   return <>
     <PageHeader title="消息审计" description="查看通知内容与回执，及时了解课堂沟通情况。" />
@@ -58,9 +72,11 @@ export default function MessagesPage() {
         <label className="flex items-center gap-2 text-sm text-muted-foreground">从<Input aria-label="开始日期" type="date" className="w-40" value={from} onChange={e => setFrom(e.target.value)} /></label>
         <label className="flex items-center gap-2 text-sm text-muted-foreground">至<Input aria-label="结束日期" type="date" className="w-40" value={to} onChange={e => setTo(e.target.value)} /></label>
       </Toolbar>
-      <ResultState loading={query.isLoading} error={query.data ? null : query.error} empty={!messages.length} emptyText="没有找到消息记录"><MessageTable messages={messages} onSelect={setSelected} /></ResultState>
+      <ResultState loading={query.isLoading} error={query.data ? null : query.error} empty={!messages.length && !query.hasNextPage} emptyText="没有找到消息记录">
+        <MessageTable messages={pager.pageItems} onSelect={setSelected} onDelete={setDeleting} />
+        <PaginationBar page={pager.page} pageCount={pager.pageCount} total={pager.total} onPageChange={pager.setPage} hasMore={!!query.hasNextPage} loadingMore={query.isFetchingNextPage} onLoadMore={() => query.fetchNextPage()} />
+      </ResultState>
       {query.isFetchNextPageError && <p className="px-6 py-3 text-sm text-destructive" role="alert">加载更多失败：{errorMessage(query.error)}</p>}
-      {query.hasNextPage && <div className="flex justify-center border-t p-4"><Button variant="outline" size="sm" disabled={query.isFetchingNextPage} onClick={() => void query.fetchNextPage()}>{query.isFetchingNextPage ? '正在加载…' : '加载更多'}</Button></div>}
     </Panel>
     <Dialog open={!!selected} onOpenChange={open => { if (!open) setSelected(null); }}>
       <DialogContent className="sm:max-w-lg" showCloseButton={false}>
@@ -78,5 +94,6 @@ export default function MessagesPage() {
         <DialogFooter><Button variant="outline" onClick={() => setSelected(null)}>关闭</Button></DialogFooter>
       </DialogContent>
     </Dialog>
+    <ConfirmDialog open={!!deleting} onOpenChange={open => { if (!open) setDeleting(null); }} title="删除这条消息记录？" description="删除后无法恢复。尚未播放的通知会同时从教室大屏撤回。" confirmLabel={remove.isPending ? '正在删除…' : '确认删除'} pending={remove.isPending} onConfirm={() => deleting && remove.mutate(deleting)} />
   </>;
 }

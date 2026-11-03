@@ -16,6 +16,9 @@ export interface components {
                 client_version?: string;
                 os?: string;
                 pending_ids?: string[];
+                lan_ips?: string[];
+                server_url?: string;
+                applied_revision?: string;
             };
         } | {
             /** @constant */

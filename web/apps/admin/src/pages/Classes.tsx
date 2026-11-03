@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from '@classding/ui/components/ui/field';
 import { Input } from '@classding/ui/components/ui/input';
 import { TableBody, TableCell, TableHead, TableHeader, TableRow } from '@classding/ui/components/ui/table';
-import { ConfirmDialog, PageHeader, SimpleSelect } from '@classding/ui/components/classding';
+import { ConfirmDialog, PageHeader, PaginationBar, SimpleSelect, usePagination } from '@classding/ui/components/classding';
 import { DataTable, Panel, ResultState, SearchInput, Toolbar, dateTime, errorMessage, json, number, type Classroom, type User } from '../lib';
 
 type ClassForm = { name: string; grade: string; owner_id: string; max_teachers: string; max_devices: string };
@@ -31,6 +31,7 @@ export default function ClassesPage() {
     return user ? `${user.display_name || user.username}（${user.username}）` : id || '—';
   };
   const classes = (query.data ?? []).filter(item => `${item.name} ${item.grade ?? ''} ${item.org_id ?? ''} ${ownerName(item.owner_id)}`.toLowerCase().includes(search.trim().toLowerCase()));
+  const pager = usePagination(classes, 10, search);
   const ownerOptions = [
     ...(editing && !teachers.some(user => user.id === editing.owner_id) ? [{ value: editing.owner_id, label: users.isLoading ? '正在加载当前负责人…' : '当前负责人不可用，请重新选择' }] : []),
     ...teachers.map(user => ({ value: user.id, label: `${user.display_name || user.username}（${user.username}）${user.org_id ? ` · ${user.org_id}` : ''}` })),
@@ -77,7 +78,7 @@ export default function ClassesPage() {
       <ResultState loading={query.isLoading} error={query.error} empty={!classes.length} emptyText="没有找到班级">
         <DataTable>
           <TableHeader><TableRow><TableHead>班级名称</TableHead><TableHead>年级</TableHead><TableHead>负责人</TableHead><TableHead>所属学校 ID</TableHead><TableHead>教师</TableHead><TableHead>设备</TableHead><TableHead>创建时间</TableHead><TableHead className="text-right">操作</TableHead></TableRow></TableHeader>
-          <TableBody>{classes.map(item => <TableRow key={item.id}>
+          <TableBody>{pager.pageItems.map(item => <TableRow key={item.id}>
             <TableCell>
               <div className="person-cell flex items-center gap-3">
                 <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted"><BookOpen className="size-4" /></span>
@@ -98,6 +99,7 @@ export default function ClassesPage() {
             </TableCell>
           </TableRow>)}</TableBody>
         </DataTable>
+        <PaginationBar page={pager.page} pageCount={pager.pageCount} total={pager.total} onPageChange={pager.setPage} />
       </ResultState>
     </Panel>
     <Dialog open={formOpen} onOpenChange={setFormOpen}>
