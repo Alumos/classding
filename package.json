@@ -14,9 +14,10 @@
     "dev:server": "node scripts/dev-server.mjs",
     "build": "pnpm -r --if-present build",
     "typecheck": "pnpm -r --if-present typecheck",
+    "check:toolchain": "node scripts/check-toolchain.mjs",
     "test": "vitest run screen/frontend/tests",
     "test:e2e": "playwright test",
-    "api:generate": "node scripts/generate-contract.mjs && pnpm --filter @classding/api generate && node scripts/generate-ws-types.mjs",
+    "api:generate": "node scripts/generate-contract.mjs && pnpm --filter @classding/api-generator generate",
     "prepare:static": "node scripts/prepare-static.mjs"
   },
   "devDependencies": {
@@ -26,7 +27,6 @@
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
     "@vitejs/plugin-react": "6.2.1",
-    "openapi-typescript": "7.13.0",
     "tailwindcss": "4.3.4",
     "typescript": "7.0.2",
     "vite": "8.3.5",

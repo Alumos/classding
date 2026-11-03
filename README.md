@@ -43,6 +43,7 @@ pnpm dev:screen   # 大屏浏览器预览，默认 http://localhost:5175
 
 ```sh
 pnpm typecheck
+pnpm check:toolchain
 pnpm test
 pnpm build
 pnpm exec playwright install chromium  # 首次运行浏览器测试前
@@ -57,5 +58,7 @@ go test -race ./...
 管理后台已通过首版本地试用。版本标签触发 GitHub Actions：原生 Windows amd64 环境构建安装包并上传 Release，Linux amd64 环境构建服务端镜像并推送至 `ghcr.io/alumos/classding-server`，无需 QEMU。构建状态和下载文件以 Actions 与 Release 为准；Windows 安装及系统集成功能仍需在目标设备验收。
 
 本次后台试用步骤见 [本地验收](docs/LOCAL_TESTING.md)。
+
+应用使用 TypeScript 7.0.2。接口生成器在独立工作区使用微软的 `@typescript/typescript6` 兼容包，以继续提供 `openapi-typescript` 所需的 AST API；该依赖不参与应用类型检查。
 
 更多说明：[教师端](web/apps/teacher/README.md) · [管理后台](web/apps/admin/README.md) · [大屏端](screen/README.md) · [部署](deploy/README.md) · [更新记录](CHANGELOG.md)

@@ -1,0 +1,15 @@
+{
+  "name": "@classding/api-generator",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "generate": "pnpm generate:rest && pnpm generate:ws",
+    "generate:rest": "openapi-typescript ../../api/openapi.yaml -o ../../web/packages/api/src/types.ts",
+    "generate:ws": "node generate-ws-types.mjs"
+  },
+  "devDependencies": {
+    "openapi-typescript": "7.13.0",
+    "typescript": "npm:@typescript/typescript6@6.0.2"
+  }
+}

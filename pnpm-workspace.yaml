@@ -2,6 +2,7 @@ packages:
   - web/apps/*
   - web/packages/*
   - screen/frontend
+  - scripts/api-generator
 minimumReleaseAgeExclude:
   - '@tailwindcss/node@4.3.4'
   - '@tailwindcss/oxide-android-arm64@4.3.4'
@@ -25,6 +26,8 @@ minimumReleaseAgeExclude:
   - '@vitest/spy@5.1.0'
   - tailwindcss@4.3.4
   - vitest@5.1.0
-overrides:
-  typescript: 6.0.3
+peerDependencyRules:
+  allowedVersions:
+    # 微软的兼容包保留生成器需要的旧版 AST API，版本声明仍按上游的 5.x 发布。
+    openapi-typescript>typescript: 6.0.2
 verifyDepsBeforeRun: false
