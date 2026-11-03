@@ -107,3 +107,33 @@ func TestHomeworkPreferencesPersistAndTeacherRevisionWins(t *testing.T) {
 		t.Fatal("removed homework remains locally")
 	}
 }
+
+func TestHomeworkCardMetricsKeepBodyAboveControls(t *testing.T) {
+	for _, area := range []struct{ w, h int }{{1366, 728}, {1920, 1032}, {3840, 2072}} {
+		for n := 1; n <= 12; n++ {
+			for _, g := range homeworkLayout(0, 0, area.w, area.h, n) {
+				for _, scrollable := range []bool{false, true} {
+					m := homeworkCardMetrics(g, scrollable)
+					if m.BodyBottom-m.BodyTop < g.Font*2 {
+						t.Fatalf("card body shorter than two lines: %+v %+v", g, m)
+					}
+					if scrollable && (m.HintTop < m.BodyBottom || m.HintTop+26*g.Scale/100 > m.HitTop) {
+						t.Fatalf("scroll hint overlaps body or controls: %+v %+v", g, m)
+					}
+					if m.HitTop < m.BodyBottom || m.FooterTop+m.FooterHeight > g.Height || m.HitTop > g.Height-20 {
+						t.Fatalf("controls are outside the bottom strip: %+v %+v", g, m)
+					}
+				}
+			}
+		}
+	}
+}
+
+func TestHomeworkSubjectColor(t *testing.T) {
+	if homeworkSubjectColor("初二数学") == homeworkSubjectColor("语文") {
+		t.Fatal("different subjects should have different accents")
+	}
+	if homeworkSubjectColor("自习") != [3]uint8{25, 108, 80} {
+		t.Fatal("unknown subjects should use the brand accent")
+	}
+}

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
@@ -275,4 +276,52 @@ func homeworkLayout(left, top, width, height, count int) []homeworkGeometry {
 		result = append(result, homeworkGeometry{X: left + width - margin - cardW - col*(cardW+gap), Y: top + height - margin - cardH - row*(cardH+gap), Width: cardW, Height: cardH, Font: 22 * scale / 100, Scale: scale})
 	}
 	return result
+}
+
+// homeworkCardLayout keeps native card painting and hit testing in sync.
+type homeworkCardLayout struct {
+	Pad, Accent, ChipHeight, BodyTop, BodyBottom, HintTop, FooterTop, FooterHeight, HitTop int
+}
+
+func homeworkCardMetrics(g homeworkGeometry, scrollable bool) homeworkCardLayout {
+	s := g.Scale
+	l := homeworkCardLayout{Pad: 18 * s / 100, Accent: 4 * s / 100, ChipHeight: 36 * s / 100, FooterHeight: 44 * s / 100}
+	l.BodyTop = l.Pad + l.ChipHeight + 14*s/100
+	l.FooterTop = g.Height - l.Pad - l.FooterHeight
+	// The whole bottom strip is a touch target, larger than the painted buttons.
+	l.HitTop = l.FooterTop - 8*s/100
+	l.BodyBottom = l.FooterTop - 12*s/100
+	if scrollable {
+		l.HintTop = l.BodyBottom - 26*s/100
+		l.BodyBottom = l.HintTop - 4*s/100
+	}
+	return l
+}
+
+var homeworkSubjectPalette = []struct {
+	keys  []string
+	color [3]uint8
+}{
+	{[]string{"语文"}, [3]uint8{196, 64, 52}},
+	{[]string{"数学"}, [3]uint8{37, 99, 190}},
+	{[]string{"英语", "外语"}, [3]uint8{124, 77, 186}},
+	{[]string{"物理"}, [3]uint8{14, 120, 140}},
+	{[]string{"化学"}, [3]uint8{184, 98, 16}},
+	{[]string{"生物"}, [3]uint8{46, 130, 68}},
+	{[]string{"历史"}, [3]uint8{150, 96, 52}},
+	{[]string{"地理"}, [3]uint8{22, 114, 166}},
+	{[]string{"政治", "道德", "道法"}, [3]uint8{176, 52, 96}},
+	{[]string{"科学"}, [3]uint8{16, 128, 114}},
+}
+
+// homeworkSubjectColor gives common subjects a stable accent readable on a light card.
+func homeworkSubjectColor(subject string) [3]uint8 {
+	for _, entry := range homeworkSubjectPalette {
+		for _, key := range entry.keys {
+			if strings.Contains(subject, key) {
+				return entry.color
+			}
+		}
+	}
+	return [3]uint8{25, 108, 80}
 }
