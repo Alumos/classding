@@ -21,10 +21,10 @@ import (
 )
 
 type Config struct {
-	TrustedProxies                      []string
-	DataDir, JWTSecret, AdminTOTPSecret string
-	DevSeed, SecureCookies              bool
-	SendCooldown                        time.Duration
+	TrustedProxies                   []string
+	DataDir, JWTSecret, CookieSecure string
+	DevSeed                          bool
+	SendCooldown                     time.Duration
 }
 type bucket struct {
 	Count   int
@@ -62,6 +62,9 @@ func New(c Config) (*App, error) {
 	if len(c.JWTSecret) < 32 {
 		return nil, errors.New("JWT_SECRET must contain at least 32 characters")
 	}
+	if c.CookieSecure != "" && c.CookieSecure != "auto" && c.CookieSecure != "true" && c.CookieSecure != "false" {
+		return nil, errors.New("COOKIE_SECURE must be auto, true or false")
+	}
 	if c.DataDir == "" {
 		c.DataDir = "data"
 	}
@@ -80,6 +83,15 @@ func New(c Config) (*App, error) {
 	for key, d := range a.state.Devices {
 		d.Online = false
 		a.state.Devices[key] = d
+	}
+	// Backfill licenses redeemed before they inherited their class organization.
+	for key, code := range a.state.Codes {
+		if code.OrgID == "" && code.ClassID != nil {
+			if class, exists := a.state.Classes[*code.ClassID]; exists {
+				code.OrgID = class.OrgID
+				a.state.Codes[key] = code
+			}
+		}
 	}
 	// Preserve the sequence of databases created before devices stored a counter.
 	for _, message := range a.state.Messages {
@@ -277,9 +289,6 @@ func (a *App) authenticate(r *http.Request) (User, error) {
 	if !exists || u.Status != "active" || u.TokenVersion != c.Version {
 		return User{}, fail(401, "UNAUTHORIZED", "账号已失效，请重新登录。")
 	}
-	if u.Role != "user" && !c.Admin {
-		return User{}, forbidden()
-	}
 	return u, nil
 }
 func (a *App) isAdmin(u *User) bool {
@@ -289,14 +298,20 @@ func (a *App) canClass(u *User, c Class) bool {
 	if u == nil {
 		return false
 	}
-	if u.Role == "super_admin" || u.Role == "school_admin" && u.OrgID == c.OrgID {
-		return true
+	if a.isAdmin(u) {
+		return a.adminScope(u, c)
 	}
 	_, exists := a.state.Members[c.ID+"|"+u.ID]
 	return exists
 }
 func (a *App) owns(u *User, c Class) bool {
-	return u != nil && (c.OwnerID == u.ID || u.Role == "super_admin" || u.Role == "school_admin" && u.OrgID == c.OrgID)
+	if u == nil {
+		return false
+	}
+	if a.isAdmin(u) {
+		return a.adminScope(u, c)
+	}
+	return c.OwnerID == u.ID
 }
 func (a *App) getClass(u *User, classID string, owner bool) (Class, error) {
 	c, exists := a.state.Classes[classID]
@@ -348,7 +363,7 @@ func (a *App) routes() {
 		})
 	})
 	r.Get("/healthz", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, 200, map[string]string{"status": "ok", "version": "0.1.1"})
+		writeJSON(w, 200, map[string]string{"status": "ok", "version": "0.1.2"})
 	})
 	r.Get("/metrics", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/plain; version=0.0.4")
@@ -357,7 +372,7 @@ func (a *App) routes() {
 	r.Route("/api/v1", func(r chi.Router) {
 		h := a.handle
 		r.Get("/config", h(false, false, func(w http.ResponseWriter, r *http.Request, u *User) (any, error) {
-			return map[string]any{"speech_enabled": false, "registration_enabled": true, "version": "0.1.1"}, nil
+			return map[string]any{"speech_enabled": false, "registration_enabled": true, "version": "0.1.2"}, nil
 		}))
 		r.Post("/auth/register", h(false, true, a.register))
 		r.Post("/auth/login", h(false, true, a.login))
@@ -397,15 +412,21 @@ func (a *App) routes() {
 			r.Post("/classes/{id}/tools/"+tool, h(true, true, a.tool))
 		}
 		r.Get("/client/latest", h(false, false, func(w http.ResponseWriter, r *http.Request, u *User) (any, error) {
-			return map[string]string{"version": "0.1.1", "url": "", "sha256": "", "notes": "尚未发布签名安装包", "min_supported": "0.1.0"}, nil
+			return map[string]string{"version": "0.1.2", "url": "", "sha256": "", "notes": "尚未发布签名安装包", "min_supported": "0.1.0"}, nil
 		}))
 		r.Get("/admin/overview", h(true, false, a.overview))
 		r.Get("/admin/activation-codes", h(true, false, a.listCodes))
 		r.Post("/admin/activation-codes", h(true, true, a.createCodes))
 		r.Patch("/admin/activation-codes/{code}", h(true, true, a.updateCode))
 		r.Get("/admin/users", h(true, false, a.adminUsers))
+		r.Post("/admin/users", h(true, true, a.adminCreateUser))
+		r.Post("/admin/users/{id}/unlock-login", h(true, true, a.adminUnlockLogin))
 		r.Patch("/admin/users/{id}", h(true, true, a.adminUpdateUser))
+		r.Delete("/admin/users/{id}", h(true, true, a.adminDeleteUser))
 		r.Get("/admin/classes", h(true, false, a.adminClasses))
+		r.Post("/admin/classes", h(true, true, a.adminCreateClass))
+		r.Patch("/admin/classes/{id}", h(true, true, a.adminUpdateClass))
+		r.Delete("/admin/classes/{id}", h(true, true, a.adminDeleteClass))
 		r.Get("/admin/devices", h(true, false, a.adminDevices))
 		r.Get("/admin/messages", h(true, true, a.adminMessages))
 		r.Get("/admin/audit-logs", h(true, false, a.auditLogs))
@@ -460,7 +481,7 @@ func (a *App) maintenanceSweep(at time.Time) error {
 	var receipts []pendingReceipt
 	var audioPaths []string
 	for key, session := range a.state.Sessions {
-		if expired(session.ExpiresAt) {
+		if expired(session.ExpiresAt) || session.RotationUntil != "" && expired(session.RotationUntil) {
 			delete(a.state.Sessions, key)
 		}
 	}

@@ -1,22 +1,100 @@
 package app
 
 import (
-	"encoding/base32"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/base64"
+	"net"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
 )
 
-func (a *App) cookie(w http.ResponseWriter, value string, age int) {
-	http.SetCookie(w, &http.Cookie{Name: "classding_refresh", Value: value, Path: "/api/v1/auth", MaxAge: age, HttpOnly: true, Secure: a.config.SecureCookies, SameSite: http.SameSiteStrictMode})
+const refreshGrace = 30 * time.Second
+
+func authScope(u User) string {
+	if u.Role == "user" {
+		return "teacher"
+	}
+	return "admin"
 }
-func (a *App) issue(w http.ResponseWriter, u User, verified bool) any {
+
+func refreshCookieName(scope string) string { return "classding_refresh_" + scope }
+
+// A forwarding header is only meaningful when the immediate peer is a trusted proxy.
+func (a *App) secureCookie(r *http.Request) bool {
+	switch a.config.CookieSecure {
+	case "true":
+		return true
+	case "false":
+		return false
+	}
+	if r.TLS != nil {
+		return true
+	}
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		host = r.RemoteAddr
+	}
+	peer := net.ParseIP(host)
+	forwarded := r.Header.Values("X-Forwarded-Proto")
+	return peer != nil && a.isTrustedProxy(peer) && len(forwarded) == 1 && strings.EqualFold(strings.TrimSpace(forwarded[0]), "https")
+}
+
+func (a *App) cookie(w http.ResponseWriter, r *http.Request, name, value string, age int) {
+	http.SetCookie(w, &http.Cookie{Name: name, Value: value, Path: "/api/v1/auth", MaxAge: age, HttpOnly: true, Secure: a.secureCookie(r), SameSite: http.SameSiteStrictMode})
+}
+
+func (a *App) issue(w http.ResponseWriter, r *http.Request, u User) any {
 	raw := random(32)
 	key := hash(raw)
-	a.state.Sessions[key] = Session{key, u.ID, after(30 * 24 * time.Hour), u.TokenVersion, verified}
-	a.cookie(w, raw, 30*24*3600)
-	return map[string]any{"access_token": a.access(u, verified), "user": publicUser(u)}
+	scope := requestScope(r)
+	if scope == "" {
+		scope = authScope(u)
+	}
+	a.state.Sessions[key] = Session{ID: key, UserID: u.ID, ExpiresAt: after(30 * 24 * time.Hour), Version: u.TokenVersion, Scope: scope}
+	a.cookie(w, r, refreshCookieName(scope), raw, 30*24*3600)
+	return map[string]any{"access_token": a.access(u), "user": publicUser(u)}
+}
+
+// A server-secret-derived successor lets simultaneous refreshes converge without
+// persisting bearer tokens. Rotated tokens are accepted only for a short grace period.
+func (a *App) refreshSuccessor(raw string) string {
+	mac := hmac.New(sha256.New, []byte(a.config.JWTSecret))
+	mac.Write([]byte("classding-refresh-rotation-v1\x00"))
+	mac.Write([]byte(raw))
+	return base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
+}
+
+func requestScope(r *http.Request) string {
+	switch r.Header.Get("X-ClassDing-Auth-Scope") {
+	case "admin", "teacher":
+		return r.Header.Get("X-ClassDing-Auth-Scope")
+	default:
+		return ""
+	}
+}
+
+func refreshCookie(r *http.Request) (*http.Cookie, error) {
+	if scope := requestScope(r); scope != "" {
+		if cookie, err := r.Cookie(refreshCookieName(scope)); err == nil {
+			return cookie, nil
+		}
+	}
+	// Existing installations can migrate their original shared cookie.
+	if cookie, err := r.Cookie("classding_refresh"); err == nil {
+		return cookie, nil
+	}
+	if requestScope(r) == "" {
+		for _, scope := range []string{"teacher", "admin"} {
+			if cookie, err := r.Cookie(refreshCookieName(scope)); err == nil {
+				return cookie, nil
+			}
+		}
+	}
+	return nil, http.ErrNoCookie
 }
 func (a *App) register(w http.ResponseWriter, r *http.Request, _ *User) (any, error) {
 	var in struct {
@@ -46,19 +124,21 @@ func (a *App) register(w http.ResponseWriter, r *http.Request, _ *User) (any, er
 	u := User{ID: id("u"), Username: in.Username, DisplayName: strings.TrimSpace(in.Name), Role: "user", OrgID: id("org"), Status: "active", PasswordHash: passwordHash(in.Password)}
 	a.state.Users[u.ID] = u
 	a.audit(&u, "auth.register", u.ID)
-	return a.issue(w, u, false), nil
+	return a.issue(w, r, u), nil
 }
 func (a *App) login(w http.ResponseWriter, r *http.Request, _ *User) (any, error) {
 	var in struct {
 		Username, Password string
-		TOTP               string `json:"totp_code"`
 	}
 	if err := decode(r, &in); err != nil {
 		return nil, err
 	}
 	username := strings.ToLower(strings.TrimSpace(in.Username))
-	if !a.limit("login:"+a.clientIP(r)+":"+username, 8, time.Minute) || !a.limit("login-ip:"+a.clientIP(r), 30, time.Minute) {
-		return nil, fail(429, "RATE_LIMITED", "登录尝试过于频繁，请稍后再试。")
+	ip := a.clientIP(r)
+	if wait := a.loginWait(ip, username); wait > 0 {
+		seconds := int(wait.Seconds()) + 1
+		w.Header().Set("Retry-After", strconv.Itoa(seconds))
+		return nil, fail(429, "RATE_LIMITED", "密码错误次数过多，请在 "+strconv.Itoa(seconds)+" 秒后重试，或联系管理员解除登录限制。")
 	}
 	var found User
 	for _, u := range a.state.Users {
@@ -68,52 +148,78 @@ func (a *App) login(w http.ResponseWriter, r *http.Request, _ *User) (any, error
 		}
 	}
 	if found.ID == "" || !passwordMatches(in.Password, found.PasswordHash) || found.Status != "active" {
+		a.limit("login:"+ip+":"+username, 8, time.Minute)
+		a.limit("login-ip:"+ip, 30, time.Minute)
 		return nil, fail(401, "INVALID_CREDENTIALS", "用户名或密码不正确，或账号已被停用。")
 	}
-	verified := false
-	if found.Role != "user" {
-		if a.config.AdminTOTPSecret == "" {
-			if !a.config.DevSeed {
-				return nil, fail(403, "TOTP_NOT_CONFIGURED", "管理员尚未配置二次验证，请联系运营方。")
-			}
-			verified = true
-		} else {
-			if !validTOTP(a.config.AdminTOTPSecret, in.TOTP) {
-				return nil, fail(401, "TOTP_REQUIRED", "请输入有效的 6 位动态验证码。")
-			}
-			verified = true
-		}
+	if requestScope(r) == "admin" && !a.isAdmin(&found) {
+		return nil, forbidden()
 	}
+	delete(a.limits, "login:"+ip+":"+username)
 	a.audit(&found, "auth.login", found.ID)
-	return a.issue(w, found, verified), nil
+	return a.issue(w, r, found), nil
 }
 func (a *App) refresh(w http.ResponseWriter, r *http.Request, _ *User) (any, error) {
-	cookie, err := r.Cookie("classding_refresh")
+	cookie, err := refreshCookie(r)
 	if err != nil {
 		return nil, fail(401, "UNAUTHORIZED", "请先登录。")
 	}
-	key := hash(cookie.Value)
-	session, exists := a.state.Sessions[key]
+	raw := cookie.Value
+	session, exists := a.state.Sessions[hash(raw)]
 	if !exists || elapsed(session.ExpiresAt) {
-		a.cookie(w, "", -1)
 		return nil, fail(401, "UNAUTHORIZED", "登录已过期。")
 	}
 	u, exists := a.state.Users[session.UserID]
-	if !exists || u.Status != "active" || u.TokenVersion != session.Version || u.Role != "user" && !session.AdminVerified {
+	if !exists || u.Status != "active" || u.TokenVersion != session.Version || requestScope(r) == "admin" && !a.isAdmin(&u) || session.Scope != "" && requestScope(r) != "" && session.Scope != requestScope(r) {
 		return nil, fail(401, "UNAUTHORIZED", "账号状态已改变，请重新登录。")
 	}
-	delete(a.state.Sessions, key)
-	return a.issue(w, u, session.AdminVerified), nil
+	scope := session.Scope
+	if scope == "" {
+		scope = requestScope(r)
+		if scope == "" {
+			scope = authScope(u)
+		}
+	}
+	if session.RotationUntil == "" {
+		session.RotationUntil = after(refreshGrace)
+		a.state.Sessions[hash(raw)] = session
+		raw = a.refreshSuccessor(raw)
+		key := hash(raw)
+		a.state.Sessions[key] = Session{ID: key, UserID: u.ID, ExpiresAt: after(30 * 24 * time.Hour), Version: u.TokenVersion, Scope: scope}
+	} else {
+		// Follow concurrent rotations to the latest successor. Every link must
+		// still be within its grace period and belong to the same session user.
+		for session.RotationUntil != "" {
+			if elapsed(session.RotationUntil) {
+				return nil, fail(401, "UNAUTHORIZED", "登录已过期。")
+			}
+			raw = a.refreshSuccessor(raw)
+			session, exists = a.state.Sessions[hash(raw)]
+			if !exists || session.UserID != u.ID || session.Version != u.TokenVersion || elapsed(session.ExpiresAt) {
+				return nil, fail(401, "UNAUTHORIZED", "登录已过期。")
+			}
+		}
+	}
+	a.cookie(w, r, refreshCookieName(scope), raw, 30*24*3600)
+	if cookie.Name == "classding_refresh" {
+		a.cookie(w, r, cookie.Name, "", -1)
+	}
+	return map[string]any{"access_token": a.access(u), "user": publicUser(u)}, nil
 }
 func (a *App) logout(w http.ResponseWriter, r *http.Request, _ *User) (any, error) {
 	var uid string
-	if cookie, err := r.Cookie("classding_refresh"); err == nil {
+	cookie, cookieErr := refreshCookie(r)
+	if cookieErr == nil {
 		if session, ok := a.state.Sessions[hash(cookie.Value)]; ok {
-			uid = session.UserID
+			if user, exists := a.state.Users[session.UserID]; exists && (requestScope(r) != "admin" || a.isAdmin(&user)) {
+				uid = session.UserID
+			}
 		}
 	}
 	if claims, err := a.verify(strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")); err == nil {
-		uid = claims.Subject
+		if user, exists := a.state.Users[claims.Subject]; exists && (requestScope(r) != "admin" || a.isAdmin(&user)) {
+			uid = claims.Subject
+		}
 	}
 	if uid != "" {
 		user := a.state.Users[uid]
@@ -126,7 +232,15 @@ func (a *App) logout(w http.ResponseWriter, r *http.Request, _ *User) (any, erro
 		}
 		a.deferJob(func() { a.hub.RemoveTeacher(uid) })
 	}
-	a.cookie(w, "", -1)
+	if cookieErr == nil {
+		// Do not erase a different account's legacy cookie when the caller
+		// explicitly asked to log out another scope.
+		if cookie.Name != "classding_refresh" || requestScope(r) == "" || uid != "" {
+			a.cookie(w, r, cookie.Name, "", -1)
+		}
+	} else if scope := requestScope(r); scope != "" {
+		a.cookie(w, r, refreshCookieName(scope), "", -1)
+	}
 	return ok(), nil
 }
 func (a *App) updateMe(w http.ResponseWriter, r *http.Request, u *User) (any, error) {
@@ -206,10 +320,6 @@ func (a *App) seed() {
 func (a *App) BootstrapAdmin(username, password, name string) error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	key, err := base32.StdEncoding.WithPadding(base32.NoPadding).DecodeString(strings.ToUpper(strings.TrimSpace(a.config.AdminTOTPSecret)))
-	if err != nil || len(key) < 16 {
-		return bad("生产管理员必须配置至少 128 位的有效 Base32 TOTP 密钥。")
-	}
 	username = strings.ToLower(strings.TrimSpace(username))
 	if !validPassword(password) || len(username) < 3 || len(username) > 32 {
 		return bad("管理员用户名需 3–32 位，密码至少 10 位且含字母和数字。")
@@ -241,4 +351,35 @@ func (a *App) BootstrapAdmin(username, password, name string) error {
 		return err
 	}
 	return nil
+}
+
+// Successful logins do not consume the failed-password allowance.
+func (a *App) loginWait(ip, username string) time.Duration {
+	var wait time.Duration
+	for key, threshold := range map[string]int{"login:" + ip + ":" + username: 8, "login-ip:" + ip: 30} {
+		b := a.limits[key]
+		if b.Count >= threshold && time.Until(b.Expires) > wait {
+			wait = time.Until(b.Expires)
+		}
+	}
+	return wait
+}
+
+func (a *App) loginLockedUntil(username string) string {
+	var until time.Time
+	for key := range a.limits {
+		if strings.HasPrefix(key, "login:") && strings.HasSuffix(key, ":"+username) {
+			ip := strings.TrimSuffix(strings.TrimPrefix(key, "login:"), ":"+username)
+			if wait := a.loginWait(ip, username); wait > 0 {
+				candidate := time.Now().Add(wait)
+				if candidate.After(until) {
+					until = candidate
+				}
+			}
+		}
+	}
+	if until.IsZero() {
+		return ""
+	}
+	return until.UTC().Format(time.RFC3339Nano)
 }

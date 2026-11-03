@@ -58,11 +58,22 @@ jobs:
         shell: pwsh
         working-directory: screen
         run: |
+          $source = [System.IO.File]::ReadAllBytes('build\windows\installer\project.nsi')
+          if ($source.Length -lt 3 -or $source[0] -ne 0xEF -or $source[1] -ne 0xBB -or $source[2] -ne 0xBF) {
+            throw 'NSIS project.nsi must be saved as UTF-8 with BOM.'
+          }
+          $scriptText = [System.Text.UTF8Encoding]::new($false, $true).GetString($source, 3, $source.Length - 3)
+          if ($scriptText -notmatch '(?m)^Unicode true\s*$' -or $scriptText -notmatch '(?m)^!include /CHARSET=UTF8 "wails_tools\.nsh"\s*$') {
+            throw 'NSIS must use Unicode and read the generated Wails tools as UTF-8.'
+          }
           $wails = Join-Path (go env GOPATH) 'bin\wails.exe'
           & $wails build -platform windows/amd64 -nsis -installscope user
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $installer = 'build\bin\ClassDingScreen-amd64-installer.exe'
           if (-not (Test-Path $installer)) { throw "Wails did not generate $installer" }
+          $expectedName = (Get-Content 'wails.json' -Raw -Encoding utf8 | ConvertFrom-Json).info.productName
+          $actualName = [System.Diagnostics.FileVersionInfo]::GetVersionInfo((Resolve-Path $installer).Path).ProductName
+          if ($actualName -cne $expectedName) { throw "Installer product name was not encoded correctly: $actualName" }
           $hash = (Get-FileHash $installer -Algorithm SHA256).Hash.ToLowerInvariant()
           "$hash  ClassDingScreen-amd64-installer.exe" | Set-Content 'build\bin\ClassDingScreen-amd64-installer.exe.sha256' -Encoding Ascii
 

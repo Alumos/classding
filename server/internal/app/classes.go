@@ -39,10 +39,11 @@ func (a *App) createClass(w http.ResponseWriter, r *http.Request, u *User) (any,
 		return nil, fail(400, "INVALID_ACTIVATION_CODE", "激活码不存在、已使用或已过期。")
 	}
 	if code.OrgID != "" && code.OrgID != u.OrgID && u.Role != "super_admin" {
-		return nil, forbidden()
+		return nil, fail(403, "LICENSE_ORG_MISMATCH", "该激活码属于其他学校，请联系管理员确认账号和激活码的所属学校。")
 	}
 	c := Class{ID: id("c"), Name: in.Name, Grade: in.Grade, OwnerID: u.ID, OrgID: u.OrgID, Volume: 75, MaxTeachers: code.MaxTeachers, MaxDevices: code.MaxDevices, CreatedAt: now(), ActivationCode: code.Code}
 	code.Status = "active"
+	code.OrgID = c.OrgID
 	code.ClassID = &c.ID
 	stamp := now()
 	code.RedeemedAt = &stamp
@@ -87,6 +88,11 @@ func (a *App) deleteClass(w http.ResponseWriter, r *http.Request, u *User) (any,
 	if err != nil {
 		return nil, err
 	}
+	a.removeClass(c, u)
+	return ok(), nil
+}
+
+func (a *App) removeClass(c Class, u *User) {
 	for key, m := range a.state.Members {
 		if m.ClassID == c.ID {
 			delete(a.state.Members, key)
@@ -116,7 +122,6 @@ func (a *App) deleteClass(w http.ResponseWriter, r *http.Request, u *User) (any,
 	a.state.Codes[code.Code] = code
 	delete(a.state.Classes, c.ID)
 	a.audit(u, "class.delete", c.ID)
-	return ok(), nil
 }
 func (a *App) members(w http.ResponseWriter, r *http.Request, u *User) (any, error) {
 	c, err := a.getClass(u, chi.URLParam(r, "id"), false)

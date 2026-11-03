@@ -1,0 +1,22 @@
+# 粘贴到 1Panel 的编排编辑器。首次部署请填写两项密码；升级保留原值和原编排名称。
+services:
+  classding:
+    image: ghcr.io/alumos/classding-server:0.1.2
+    platform: linux/amd64
+    restart: unless-stopped
+    ports:
+      - "18080:8080"
+    environment:
+      LISTEN_ADDR: ":8080"
+      DATA_DIR: "/data"
+      TZ: "Asia/Shanghai"
+      DEV_SEED: "0"
+      COOKIE_SECURE: "false"
+      JWT_SECRET: "请替换成至少32字符随机密钥_升级保留原值"
+      BOOTSTRAP_ADMIN_USERNAME: "alumos"
+      BOOTSTRAP_ADMIN_PASSWORD: "请替换成至少10位且含字母数字的密码"
+      BOOTSTRAP_ADMIN_NAME: "管理员"
+    volumes:
+      - classding_data:/data
+volumes:
+  classding_data:

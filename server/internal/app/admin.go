@@ -40,51 +40,323 @@ func (a *App) adminUsers(w http.ResponseWriter, r *http.Request, u *User) (any, 
 	}
 	out := []User{}
 	for _, user := range a.state.Users {
-		if u.Role == "super_admin" || user.OrgID == u.OrgID {
-			out = append(out, publicUser(user))
+		if user.Role == "user" && a.adminUserScope(u, user) {
+			view := publicUser(user)
+			view.LoginLockedUntil = a.loginLockedUntil(user.Username)
+			out = append(out, view)
 		}
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Username < out[j].Username })
 	return out, nil
 }
-func (a *App) adminUpdateUser(w http.ResponseWriter, r *http.Request, u *User) (any, error) {
+func (a *App) adminUserScope(admin *User, target User) bool {
+	return admin.Role == "super_admin" || admin.Role == "school_admin" && admin.OrgID != "" && admin.OrgID == target.OrgID
+}
+
+func (a *App) adminCreateUser(w http.ResponseWriter, r *http.Request, u *User) (any, error) {
 	if !a.isAdmin(u) {
 		return nil, forbidden()
 	}
-	target, exists := a.state.Users[chi.URLParam(r, "id")]
-	if !exists {
-		return nil, missing()
+	var in struct {
+		Username    string `json:"username"`
+		Password    string `json:"password"`
+		DisplayName string `json:"display_name"`
+		OrgID       string `json:"org_id"`
 	}
-	if u.Role != "super_admin" && (target.OrgID != u.OrgID || target.Role != "user") {
-		return nil, forbidden()
-	}
-	var body map[string]any
-	if err := decode(r, &body); err != nil {
+	if err := decode(r, &in); err != nil {
 		return nil, err
 	}
-	if value, ok := body["status"]; ok {
-		status, ok := value.(string)
-		if !ok || status != "active" && status != "disabled" {
-			return nil, bad("账号状态不正确。")
-		}
-		if target.ID == u.ID && status == "disabled" {
-			return nil, bad("不能停用当前管理员账号。")
-		}
-		target.Status = status
-		target.TokenVersion++
-		uid := target.ID
-		a.deferJob(func() { a.hub.RemoveTeacher(uid) })
+	in.Username = strings.ToLower(strings.TrimSpace(in.Username))
+	in.DisplayName = strings.TrimSpace(in.DisplayName)
+	in.OrgID = strings.TrimSpace(in.OrgID)
+	if !validUsername(in.Username) || !validPassword(in.Password) || utf8.RuneCountInString(in.DisplayName) < 1 || utf8.RuneCountInString(in.DisplayName) > 24 || len(in.OrgID) > 128 {
+		return nil, bad("用户名需 3–32 位，密码至少 10 位且包含字母和数字，落款 1–24 字。")
 	}
-	if value, ok := body["display_name"]; ok {
-		name, ok := value.(string)
-		if !ok || utf8.RuneCountInString(strings.TrimSpace(name)) < 1 || utf8.RuneCountInString(name) > 24 {
+	if in.OrgID == "" {
+		in.OrgID = u.OrgID
+	}
+	if u.Role == "school_admin" && (u.OrgID == "" || in.OrgID != u.OrgID) {
+		return nil, forbidden()
+	}
+	if in.OrgID == "" {
+		in.OrgID = id("org")
+	}
+	for _, user := range a.state.Users {
+		if user.Username == in.Username {
+			return nil, fail(409, "USERNAME_TAKEN", "此用户名已被使用。")
+		}
+	}
+	target := User{ID: id("u"), Username: in.Username, DisplayName: in.DisplayName, Role: "user", OrgID: in.OrgID, Status: "active", PasswordHash: passwordHash(in.Password)}
+	a.state.Users[target.ID] = target
+	a.audit(u, "admin.user.create", target.ID)
+	return publicUser(target), nil
+}
+
+func (a *App) managedUser(u *User, userID string) (User, error) {
+	if !a.isAdmin(u) {
+		return User{}, forbidden()
+	}
+	target, exists := a.state.Users[userID]
+	if !exists {
+		return User{}, missing()
+	}
+	if target.Role != "user" || !a.adminUserScope(u, target) {
+		return User{}, forbidden()
+	}
+	return target, nil
+}
+
+func (a *App) adminUpdateUser(w http.ResponseWriter, r *http.Request, u *User) (any, error) {
+	target, err := a.managedUser(u, chi.URLParam(r, "id"))
+	if err != nil {
+		return nil, err
+	}
+	var in struct {
+		Username    *string `json:"username"`
+		Password    *string `json:"password"`
+		DisplayName *string `json:"display_name"`
+		Status      *string `json:"status"`
+	}
+	if err := decode(r, &in); err != nil {
+		return nil, err
+	}
+	if in.Username != nil {
+		username := strings.ToLower(strings.TrimSpace(*in.Username))
+		if !validUsername(username) {
+			return nil, bad("用户名需为 3–32 位，仅支持英文字母、数字、点、下划线和短横线。")
+		}
+		for _, user := range a.state.Users {
+			if user.ID != target.ID && user.Username == username {
+				return nil, fail(409, "USERNAME_TAKEN", "此用户名已被使用。")
+			}
+		}
+		target.Username = username
+	}
+	if in.DisplayName != nil {
+		name := strings.TrimSpace(*in.DisplayName)
+		if utf8.RuneCountInString(name) < 1 || utf8.RuneCountInString(name) > 24 {
 			return nil, bad("落款需为 1–24 字。")
 		}
-		target.DisplayName = strings.TrimSpace(name)
+		target.DisplayName = name
+	}
+	revoke := false
+	if in.Status != nil {
+		if *in.Status != "active" && *in.Status != "disabled" {
+			return nil, bad("账号状态不正确。")
+		}
+		revoke = *in.Status != target.Status
+		target.Status = *in.Status
+	}
+	if in.Password != nil {
+		if !validPassword(*in.Password) {
+			return nil, bad("密码至少 10 位，且包含字母和数字。")
+		}
+		target.PasswordHash = passwordHash(*in.Password)
+		revoke = true
+	}
+	if revoke {
+		target.TokenVersion++
+		for key, session := range a.state.Sessions {
+			if session.UserID == target.ID {
+				delete(a.state.Sessions, key)
+			}
+		}
+		uid := target.ID
+		a.deferJob(func() { a.hub.RemoveTeacher(uid) })
 	}
 	a.state.Users[target.ID] = target
 	a.audit(u, "admin.user.update", target.ID)
 	return publicUser(target), nil
+}
+
+func (a *App) adminDeleteUser(w http.ResponseWriter, r *http.Request, u *User) (any, error) {
+	target, err := a.managedUser(u, chi.URLParam(r, "id"))
+	if err != nil {
+		return nil, err
+	}
+	for _, class := range a.state.Classes {
+		if class.OwnerID == target.ID {
+			return nil, fail(409, "USER_OWNS_CLASSES", "该教师拥有班级，请先转移或删除其班级。")
+		}
+	}
+	for key, member := range a.state.Members {
+		if member.UserID == target.ID {
+			delete(a.state.Members, key)
+		}
+	}
+	for key, session := range a.state.Sessions {
+		if session.UserID == target.ID {
+			delete(a.state.Sessions, key)
+		}
+	}
+	for key, phrase := range a.state.Phrases {
+		if phrase.UserID == target.ID {
+			delete(a.state.Phrases, key)
+		}
+	}
+	delete(a.state.Users, target.ID)
+	a.deferJob(func() { a.hub.RemoveTeacher(target.ID) })
+	a.audit(u, "admin.user.delete", target.ID)
+	return ok(), nil
+}
+
+func (a *App) managedClass(u *User, classID string) (Class, error) {
+	if !a.isAdmin(u) {
+		return Class{}, forbidden()
+	}
+	class, exists := a.state.Classes[classID]
+	if !exists {
+		return Class{}, missing()
+	}
+	if !a.adminScope(u, class) {
+		return Class{}, forbidden()
+	}
+	return class, nil
+}
+
+func (a *App) classOwner(u *User, ownerID, orgID string) (User, error) {
+	owner, exists := a.state.Users[ownerID]
+	if !exists || owner.Role != "user" || owner.Status != "active" {
+		return User{}, bad("请选择状态正常的教师作为班级负责人。")
+	}
+	if !a.adminUserScope(u, owner) || orgID != "" && owner.OrgID != orgID {
+		return User{}, forbidden()
+	}
+	if owner.OrgID == "" {
+		return User{}, bad("该教师没有所属组织，请联系管理员处理。")
+	}
+	return owner, nil
+}
+
+func (a *App) adminCreateClass(w http.ResponseWriter, r *http.Request, u *User) (any, error) {
+	if !a.isAdmin(u) {
+		return nil, forbidden()
+	}
+	var in struct {
+		Name        string `json:"name"`
+		Grade       string `json:"grade"`
+		OwnerID     string `json:"owner_id"`
+		MaxTeachers int    `json:"max_teachers"`
+		MaxDevices  int    `json:"max_devices"`
+	}
+	if err := decode(r, &in); err != nil {
+		return nil, err
+	}
+	in.Name, in.Grade = strings.TrimSpace(in.Name), strings.TrimSpace(in.Grade)
+	if utf8.RuneCountInString(in.Name) < 1 || utf8.RuneCountInString(in.Name) > 40 || utf8.RuneCountInString(in.Grade) > 40 {
+		return nil, bad("班级名称需为 1–40 字，年级最多 40 字。")
+	}
+	if in.MaxTeachers < 1 || in.MaxTeachers > 100 || in.MaxDevices < 1 || in.MaxDevices > 20 {
+		return nil, bad("教师名额需为 1–100，大屏名额需为 1–20。")
+	}
+	owner, err := a.classOwner(u, in.OwnerID, "")
+	if err != nil {
+		return nil, err
+	}
+	var code string
+	for {
+		code = activation()
+		if _, exists := a.state.Codes[code]; !exists {
+			break
+		}
+	}
+	class := Class{ID: id("c"), Name: in.Name, Grade: in.Grade, OwnerID: owner.ID, OrgID: owner.OrgID, Volume: 75, MaxTeachers: in.MaxTeachers, MaxDevices: in.MaxDevices, CreatedAt: now(), ActivationCode: code}
+	stamp := now()
+	a.state.Codes[code] = Code{Code: code, MaxTeachers: class.MaxTeachers, MaxDevices: class.MaxDevices, Status: "active", ClassID: &class.ID, OrgID: class.OrgID, BatchID: "admin", Note: "管理员直接创建", RedeemedAt: &stamp}
+	a.state.Classes[class.ID] = class
+	a.state.Members[class.ID+"|"+owner.ID] = Member{owner.ID, class.ID, owner.DisplayName, owner.Username, "owner", stamp}
+	a.audit(u, "admin.class.create", class.ID)
+	return a.classView(class, u), nil
+}
+
+func (a *App) adminUpdateClass(w http.ResponseWriter, r *http.Request, u *User) (any, error) {
+	class, err := a.managedClass(u, chi.URLParam(r, "id"))
+	if err != nil {
+		return nil, err
+	}
+	var in struct {
+		Name        *string `json:"name"`
+		Grade       *string `json:"grade"`
+		OwnerID     *string `json:"owner_id"`
+		MaxTeachers *int    `json:"max_teachers"`
+		MaxDevices  *int    `json:"max_devices"`
+	}
+	if err := decode(r, &in); err != nil {
+		return nil, err
+	}
+	if in.Name != nil {
+		name := strings.TrimSpace(*in.Name)
+		if utf8.RuneCountInString(name) < 1 || utf8.RuneCountInString(name) > 40 {
+			return nil, bad("班级名称需为 1–40 字。")
+		}
+		class.Name = name
+	}
+	if in.Grade != nil {
+		grade := strings.TrimSpace(*in.Grade)
+		if utf8.RuneCountInString(grade) > 40 {
+			return nil, bad("年级最多 40 字。")
+		}
+		class.Grade = grade
+	}
+	if in.MaxTeachers != nil {
+		if *in.MaxTeachers < 1 || *in.MaxTeachers > 100 {
+			return nil, bad("教师名额需为 1–100 整数。")
+		}
+		class.MaxTeachers = *in.MaxTeachers
+	}
+	if in.MaxDevices != nil {
+		if *in.MaxDevices < 1 || *in.MaxDevices > 20 {
+			return nil, bad("大屏名额需为 1–20 整数。")
+		}
+		class.MaxDevices = *in.MaxDevices
+	}
+	view := a.classView(class, u)
+	var newOwner User
+	if in.OwnerID != nil && *in.OwnerID != class.OwnerID {
+		newOwner, err = a.classOwner(u, *in.OwnerID, class.OrgID)
+		if err != nil {
+			return nil, err
+		}
+		if _, exists := a.state.Members[class.ID+"|"+newOwner.ID]; !exists {
+			view.TeachersCount++
+		}
+	}
+	if class.MaxTeachers < view.TeachersCount || class.MaxDevices < view.DevicesCount {
+		return nil, bad("新上限不能小于当前使用数量。")
+	}
+	code, exists := a.state.Codes[class.ActivationCode]
+	if !exists || code.ClassID == nil || *code.ClassID != class.ID {
+		return nil, fail(409, "LICENSE_NOT_FOUND", "班级授权记录不存在，请联系运营方。")
+	}
+	if newOwner.ID != "" {
+		previousKey := class.ID + "|" + class.OwnerID
+		if previous, exists := a.state.Members[previousKey]; exists {
+			previous.Role = "collaborator"
+			a.state.Members[previousKey] = previous
+		}
+		nextKey := class.ID + "|" + newOwner.ID
+		next, exists := a.state.Members[nextKey]
+		if !exists {
+			next = Member{UserID: newOwner.ID, ClassID: class.ID, DisplayName: newOwner.DisplayName, Username: newOwner.Username, JoinedAt: now()}
+		}
+		next.Role = "owner"
+		a.state.Members[nextKey] = next
+		class.OwnerID = newOwner.ID
+	}
+	code.MaxTeachers, code.MaxDevices = class.MaxTeachers, class.MaxDevices
+	a.state.Codes[code.Code] = code
+	a.state.Classes[class.ID] = class
+	a.audit(u, "admin.class.update", class.ID)
+	return a.classView(class, u), nil
+}
+
+func (a *App) adminDeleteClass(w http.ResponseWriter, r *http.Request, u *User) (any, error) {
+	class, err := a.managedClass(u, chi.URLParam(r, "id"))
+	if err != nil {
+		return nil, err
+	}
+	a.removeClass(class, u)
+	return ok(), nil
 }
 func (a *App) listCodes(w http.ResponseWriter, r *http.Request, u *User) (any, error) {
 	if !a.isAdmin(u) {
@@ -94,7 +366,7 @@ func (a *App) listCodes(w http.ResponseWriter, r *http.Request, u *User) (any, e
 	status := r.URL.Query().Get("status")
 	out := []Code{}
 	for _, code := range a.state.Codes {
-		if u.Role != "super_admin" && code.OrgID != u.OrgID {
+		if u.Role != "super_admin" && (u.OrgID == "" || code.OrgID != u.OrgID) {
 			continue
 		}
 		if status != "" && code.Status != status {
@@ -271,7 +543,7 @@ func (a *App) overview(w http.ResponseWriter, r *http.Request, u *User) (any, er
 		}
 	}
 	for _, user := range a.state.Users {
-		if u.Role == "super_admin" || u.OrgID == user.OrgID {
+		if a.adminUserScope(u, user) {
 			userCount++
 		}
 	}
@@ -325,5 +597,25 @@ func (a *App) overview(w http.ResponseWriter, r *http.Request, u *User) (any, er
 }
 
 func (a *App) adminScope(u *User, c Class) bool {
-	return u.Role == "super_admin" || u.Role == "school_admin" && u.OrgID == c.OrgID
+	return u.Role == "super_admin" || u.Role == "school_admin" && u.OrgID != "" && u.OrgID == c.OrgID
+}
+
+func (a *App) adminUnlockLogin(w http.ResponseWriter, r *http.Request, u *User) (any, error) {
+	target, err := a.managedUser(u, chi.URLParam(r, "id"))
+	if err != nil {
+		return nil, err
+	}
+	a.audit(u, "admin.user.unlock_login", target.ID)
+	a.deferJob(func() {
+		a.mu.Lock()
+		defer a.mu.Unlock()
+		for key := range a.limits {
+			if strings.HasPrefix(key, "login:") && strings.HasSuffix(key, ":"+target.Username) {
+				ip := strings.TrimSuffix(strings.TrimPrefix(key, "login:"), ":"+target.Username)
+				delete(a.limits, key)
+				delete(a.limits, "login-ip:"+ip)
+			}
+		}
+	})
+	return ok(), nil
 }

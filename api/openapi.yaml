@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "课堂叮咚 API",
-    "version": "0.1.1"
+    "version": "0.1.2"
   },
   "servers": [
     {
@@ -59,9 +59,6 @@
                   },
                   "display_name": {
                     "type": "string"
-                  },
-                  "totp_code": {
-                    "type": "string"
                   }
                 },
                 "required": [
@@ -113,12 +110,6 @@
                     "type": "string"
                   },
                   "password": {
-                    "type": "string"
-                  },
-                  "display_name": {
-                    "type": "string"
-                  },
-                  "totp_code": {
                     "type": "string"
                   }
                 },
@@ -2075,11 +2066,71 @@
             }
           }
         }
+      },
+      "post": {
+        "operationId": "post__admin_users_43",
+        "summary": "POST /admin/users",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "username": {
+                    "type": "string"
+                  },
+                  "password": {
+                    "type": "string"
+                  },
+                  "display_name": {
+                    "type": "string"
+                  },
+                  "org_id": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "username",
+                  "password",
+                  "display_name"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/User"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "业务错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/admin/users/{id}": {
       "patch": {
-        "operationId": "patch__admin_users__id__43",
+        "operationId": "patch__admin_users__id__44",
         "summary": "PATCH /admin/users/{id}",
         "security": [
           {
@@ -2103,10 +2154,16 @@
               "schema": {
                 "type": "object",
                 "properties": {
-                  "status": {
+                  "username": {
+                    "type": "string"
+                  },
+                  "password": {
                     "type": "string"
                   },
                   "display_name": {
+                    "type": "string"
+                  },
+                  "status": {
                     "type": "string"
                   }
                 },
@@ -2137,11 +2194,95 @@
             }
           }
         }
+      },
+      "delete": {
+        "operationId": "delete__admin_users__id__45",
+        "summary": "DELETE /admin/users/{id}",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OK"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "业务错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/users/{id}/unlock-login": {
+      "post": {
+        "operationId": "post__admin_users__id__unlock_login_46",
+        "summary": "POST /admin/users/{id}/unlock-login",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OK"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "业务错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/admin/classes": {
       "get": {
-        "operationId": "get__admin_classes_44",
+        "operationId": "get__admin_classes_47",
         "summary": "GET /admin/classes",
         "security": [
           {
@@ -2173,11 +2314,187 @@
             }
           }
         }
+      },
+      "post": {
+        "operationId": "post__admin_classes_48",
+        "summary": "POST /admin/classes",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "grade": {
+                    "type": "string"
+                  },
+                  "owner_id": {
+                    "type": "string"
+                  },
+                  "max_teachers": {
+                    "type": "integer"
+                  },
+                  "max_devices": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "name",
+                  "owner_id",
+                  "max_teachers",
+                  "max_devices"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Class"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "业务错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/classes/{id}": {
+      "patch": {
+        "operationId": "patch__admin_classes__id__49",
+        "summary": "PATCH /admin/classes/{id}",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "grade": {
+                    "type": "string"
+                  },
+                  "owner_id": {
+                    "type": "string"
+                  },
+                  "max_teachers": {
+                    "type": "integer"
+                  },
+                  "max_devices": {
+                    "type": "integer"
+                  }
+                },
+                "required": []
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Class"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "业务错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "delete__admin_classes__id__50",
+        "summary": "DELETE /admin/classes/{id}",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OK"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "业务错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/admin/devices": {
       "get": {
-        "operationId": "get__admin_devices_45",
+        "operationId": "get__admin_devices_51",
         "summary": "GET /admin/devices",
         "security": [
           {
@@ -2213,7 +2530,7 @@
     },
     "/admin/messages": {
       "get": {
-        "operationId": "get__admin_messages_46",
+        "operationId": "get__admin_messages_52",
         "summary": "GET /admin/messages",
         "security": [
           {
@@ -2280,7 +2597,7 @@
     },
     "/admin/audit-logs": {
       "get": {
-        "operationId": "get__admin_audit_logs_47",
+        "operationId": "get__admin_audit_logs_53",
         "summary": "GET /admin/audit-logs",
         "security": [
           {
@@ -2378,6 +2695,10 @@
               "active",
               "disabled"
             ]
+          },
+          "login_locked_until": {
+            "type": "string",
+            "format": "date-time"
           }
         },
         "required": [

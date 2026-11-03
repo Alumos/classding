@@ -23,7 +23,7 @@ func main() {
 	if dataDir == "" {
 		dataDir = "data"
 	}
-	service, err := app.New(app.Config{DataDir: dataDir, JWTSecret: secret, AdminTOTPSecret: os.Getenv("ADMIN_TOTP_SECRET"), TrustedProxies: strings.FieldsFunc(os.Getenv("TRUSTED_PROXY_CIDRS"), func(r rune) bool { return r == ',' || r == ' ' }), DevSeed: dev, SecureCookies: !dev, SendCooldown: 5 * time.Second})
+	service, err := app.New(app.Config{DataDir: dataDir, JWTSecret: secret, TrustedProxies: strings.FieldsFunc(os.Getenv("TRUSTED_PROXY_CIDRS"), func(r rune) bool { return r == ',' || r == ' ' }), DevSeed: dev, CookieSecure: strings.ToLower(strings.TrimSpace(os.Getenv("COOKIE_SECURE"))), SendCooldown: 5 * time.Second})
 	if err != nil {
 		slog.Error("startup failed", "error", err)
 		os.Exit(1)

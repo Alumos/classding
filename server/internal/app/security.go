@@ -3,10 +3,8 @@ package app
 import (
 	"crypto/hmac"
 	"crypto/rand"
-	"crypto/sha1"
 	"crypto/sha256"
 	"crypto/subtle"
-	"encoding/base32"
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/hex"
@@ -64,16 +62,27 @@ func validPassword(s string) bool {
 	return len(s) >= 10 && len(s) <= 128 && letter && digit
 }
 
+func validUsername(username string) bool {
+	if len(username) < 3 || len(username) > 32 {
+		return false
+	}
+	for _, ch := range username {
+		if !(ch >= 'a' && ch <= 'z' || ch >= '0' && ch <= '9' || ch == '_' || ch == '-' || ch == '.') {
+			return false
+		}
+	}
+	return true
+}
+
 type claims struct {
 	Subject string `json:"sub"`
 	Expires int64  `json:"exp"`
 	Version int    `json:"ver"`
-	Admin   bool   `json:"adm"`
 }
 
-func (a *App) access(u User, admin bool) string {
+func (a *App) access(u User) string {
 	header := base64.RawURLEncoding.EncodeToString([]byte(`{"alg":"HS256","typ":"JWT"}`))
-	body, _ := json.Marshal(claims{u.ID, time.Now().Add(15 * time.Minute).Unix(), u.TokenVersion, admin})
+	body, _ := json.Marshal(claims{u.ID, time.Now().Add(15 * time.Minute).Unix(), u.TokenVersion})
 	payload := header + "." + base64.RawURLEncoding.EncodeToString(body)
 	mac := hmac.New(sha256.New, []byte(a.config.JWTSecret))
 	mac.Write([]byte(payload))
@@ -102,28 +111,6 @@ func (a *App) verify(token string) (claims, error) {
 		return c, errors.New("expired token")
 	}
 	return c, nil
-}
-func validTOTP(secret, code string) bool {
-	if len(code) != 6 {
-		return false
-	}
-	key, err := base32.StdEncoding.WithPadding(base32.NoPadding).DecodeString(strings.ToUpper(strings.TrimSpace(secret)))
-	if err != nil {
-		return false
-	}
-	for offset := -1; offset <= 1; offset++ {
-		var b [8]byte
-		binary.BigEndian.PutUint64(b[:], uint64(time.Now().Unix()/30+int64(offset)))
-		mac := hmac.New(sha1.New, key)
-		mac.Write(b[:])
-		sum := mac.Sum(nil)
-		i := sum[len(sum)-1] & 15
-		value := (binary.BigEndian.Uint32(sum[i:i+4]) & 0x7fffffff) % 1000000
-		if hmac.Equal([]byte(fmt.Sprintf("%06d", value)), []byte(code)) {
-			return true
-		}
-	}
-	return false
 }
 func activation() string {
 	const alphabet = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"

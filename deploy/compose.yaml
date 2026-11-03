@@ -1,12 +1,12 @@
 services:
   server:
-    image: ${CLASSDING_IMAGE:-ghcr.io/alumos/classding-server:v0.1.1}
+    image: ${CLASSDING_IMAGE:-ghcr.io/alumos/classding-server:v0.1.2}
     restart: unless-stopped
     environment:
       DATA_DIR: /data
       LISTEN_ADDR: :8080
       JWT_SECRET: ${JWT_SECRET:?请设置至少32字符随机密钥}
-      ADMIN_TOTP_SECRET: ${ADMIN_TOTP_SECRET:?请设置管理员TOTP密钥}
+      COOKIE_SECURE: "true"
       BOOTSTRAP_ADMIN_USERNAME: ${BOOTSTRAP_ADMIN_USERNAME:-}
       BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD:-}
       BOOTSTRAP_ADMIN_NAME: ${BOOTSTRAP_ADMIN_NAME:-管理员}

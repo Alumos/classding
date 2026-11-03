@@ -12,7 +12,7 @@ pnpm dev:server
 
 该脚本设置 `DEV_SEED=1`，监听 `127.0.0.1:8080`，将数据写入 `server/data/`，并优先使用仓库本地的 Go 工具链。需要配合前端开发服务使用：教师端 `pnpm dev`，后台 `pnpm dev:admin`，大屏浏览器预览 `pnpm dev:screen`。
 
-空数据目录首次启动时，教师账号为 `teacher` / `ClassDing2026!`，运营管理员为 `admin` / `AdminDing2026!`，另有未使用的演示激活码 `TEST-2345`。已有同名用户不会被种子流程重置；演示密码、默认开发密钥及开发模式均不可用于生产。若设置了 `ADMIN_TOTP_SECRET`，管理员登录需提供对应验证码。
+空数据目录首次启动时，教师账号为 `teacher` / `ClassDing2026!`，运营管理员为 `admin` / `AdminDing2026!`，另有未使用的演示激活码 `TEST-2345`。已有同名用户不会被种子流程重置；演示密码、默认开发密钥及开发模式均不可用于生产。管理员使用账号密码登录，无需动态验证码。
 
 若要构建内嵌最新网页的服务，可在仓库根目录执行：
 
@@ -32,13 +32,13 @@ go build ./cmd/classding
 | `DATA_DIR` | 数据目录，默认服务启动目录下的 `data`，包含 `classding.db` 和 `audio/`。 |
 | `LISTEN_ADDR` | HTTP 监听地址，默认 `:8080`；开发脚本固定为本机 `127.0.0.1:8080`。 |
 | `JWT_SECRET` | 签名密钥，至少 32 字符；开发种子模式在未配置时使用公开的开发专用值。 |
-| `DEV_SEED` | 设为 `1` 才创建演示数据，并允许未配置 TOTP 的开发管理员登录；生产请勿启用。 |
-| `ADMIN_TOTP_SECRET` | 管理员登录使用的 Base32 TOTP 密钥；生产管理员需要配置。当前是整个部署共用的密钥。 |
+| `DEV_SEED` | 设为 `1` 才创建演示数据；生产请勿启用。 |
+| `COOKIE_SECURE` | 默认 `auto`，按请求 HTTPS 或可信代理的 `X-Forwarded-Proto` 自动决定；直接 HTTP 部署可设 `false`，仅 HTTPS 部署可设 `true`。 |
 | `BOOTSTRAP_ADMIN_USERNAME`、`BOOTSTRAP_ADMIN_PASSWORD`、`BOOTSTRAP_ADMIN_NAME` | 首次引导运营管理员；用户名不存在时创建，不会重置已有账号。首次创建成功后同时移除引导用户名和密码。 |
 | `TRUSTED_PROXY_CIDRS` | 可信反向代理的 IP 或 CIDR，以逗号或空格分隔。默认不信任转发头；只填写实际代理地址及必要的代理网段。 |
 | `SENSITIVE_WORDS` | 逗号分隔的通知敏感词。 |
 
-服务在开发模式以外设置 Secure Cookie，实际使用应通过 HTTPS。使用容器部署时，需确保上述所需环境变量确实传入容器；尤其在反向代理后按客户端限流时，必须正确配置可信代理。切勿将公网或不受控网段当作可信代理，否则客户端可能伪造来源地址。
+服务支持 HTTP 刷新会话；管理端和教师端使用独立 HttpOnly Cookie。HTTPS 部署可强制设置 `COOKIE_SECURE=true`。旧 `ADMIN_TOTP_SECRET` 环境变量将被忽略，可从部署配置移除。使用容器部署时，需确保上述所需环境变量确实传入容器；尤其在反向代理后按客户端限流时，必须正确配置可信代理。切勿将公网或不受控网段当作可信代理，否则客户端可能伪造来源地址。
 
 ## 数据与当前限制
 

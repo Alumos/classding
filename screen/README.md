@@ -28,7 +28,7 @@ cd screen
 wails build -platform windows/amd64 -nsis -installscope user
 ```
 
-生成的程序和安装包在 `screen/build/bin`。发布工作流会生成 `ClassDingScreen-amd64-installer.exe` 及对应 SHA-256 校验文件，并上传构建产物和版本 Release；当前构建未配置代码签名。安装脚本使用当前用户权限：优先检测可写的 D:、E: 盘，否则使用用户的 LocalAppData；仍可在安装时自行选择目录。WebView2 缺失时安装程序会运行 Wails 自带的引导程序。此配置尚未在 Windows 实机验证，系统策略或 WebView2 安装情况可能影响安装过程。
+生成的程序和安装包在 `screen/build/bin`。发布工作流会生成 `ClassDingScreen-amd64-installer.exe` 及对应 SHA-256 校验文件，并上传构建产物和版本 Release；当前构建未配置代码签名。安装脚本 `build/windows/installer/project.nsi` 须保存为带 BOM 的 UTF-8，Wails 生成的辅助脚本以 UTF-8 读取；请保留这两项设置，以确保安装界面及快捷方式的中文名称正确。工作流会检查源文件编码和安装包产品名称。安装脚本使用当前用户权限：优先检测可写的 D:、E: 盘，否则使用用户的 LocalAppData；仍可在安装时自行选择目录。WebView2 缺失时安装程序会运行 Wails 自带的引导程序。此配置尚未在 Windows 实机验证，系统策略或 WebView2 安装情况可能影响安装过程。
 
 首次启动，输入学校管理员提供的 `http(s)://服务器地址`、设备名称和教师端的 6 位绑定码。保持程序运行即可接收消息。设备解绑请在教师端操作；收到解绑事件后大屏会清除本机令牌并返回绑定页。关闭窗口后程序会留在系统托盘继续接收；单击托盘图标可重新打开，右键菜单可打开或退出程序。通知和课堂工具出现时会临时显示窗口，结束后回到后台。托盘初始化失败时窗口会显示错误，关闭窗口将直接退出。
 

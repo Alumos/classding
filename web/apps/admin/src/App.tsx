@@ -1,8 +1,8 @@
 import { createContext, lazy, Suspense, useContext, useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router';
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { api, ApiError, setAccessToken, type components } from '@classding/api';
-import { Badge, Brand, Button, Card, Dialog, Input } from '@classding/ui';
+import { api, ApiError, onSessionExpired, refreshSession, setAccessToken, type components } from '@classding/api';
+import { Badge, Brand, Button, Card, CopyButton, Dialog, Input } from '@classding/ui';
 import { toast } from 'sonner';
 import {
   Activity, ArrowDownToLine, ArrowRight, BellRing, BookOpen, Check, ChevronDown,
@@ -79,17 +79,16 @@ function useSession() {
 function Login({ onLogin, initialError }: { onLogin: (user: User) => void; initialError: string }) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [totp, setTotp] = useState('');
   const [error, setError] = useState(initialError);
   const login = useMutation({
-    mutationFn: () => api<AuthResponse>('/auth/login', json('POST', { username: username.trim(), password, ...(totp.trim() ? { totp_code: totp.trim() } : {}) })),
+    mutationFn: () => api<AuthResponse>('/auth/login', json('POST', { username: username.trim(), password })),
     onSuccess: (result) => {
       if (result.user.role !== 'super_admin' && result.user.role !== 'school_admin') {
         setAccessToken('');
         setError('此账号没有管理后台权限，请使用管理员账号登录。');
         return;
       }
-      setAccessToken(result.access_token);
+      setAccessToken(result.access_token, result.user.id);
       onLogin(result.user);
     },
     onError: (err) => setError(errorMessage(err)),
@@ -98,7 +97,6 @@ function Login({ onLogin, initialError }: { onLogin: (user: User) => void; initi
     event.preventDefault();
     setError('');
     if (!username.trim() || !password) { setError('请输入账号和密码。'); return; }
-    if (totp && !/^\d{6}$/.test(totp)) { setError('动态验证码应为 6 位数字。'); return; }
     login.mutate();
   }
   return <div className="login-page">
@@ -119,7 +117,6 @@ function Login({ onLogin, initialError }: { onLogin: (user: User) => void; initi
           <form onSubmit={submit} className="form-stack">
             <label>管理员账号<Input autoFocus autoComplete="username" placeholder="请输入账号" value={username} onChange={e => setUsername(e.target.value)} /></label>
             <label>密码<Input type="password" autoComplete="current-password" placeholder="请输入密码" value={password} onChange={e => setPassword(e.target.value)} /></label>
-            <label>动态验证码 <small>按管理员配置填写</small><Input autoComplete="one-time-code" inputMode="numeric" maxLength={6} placeholder="输入 6 位验证码" value={totp} onChange={e => setTotp(e.target.value.replace(/\D/g, ''))} /></label>
             {error && <p className="form-error" role="alert">{error}</p>}
             <Button type="submit" className="login-submit" disabled={login.isPending}>{login.isPending ? '正在登录…' : <>登录管理后台 <ArrowRight size={17}/></>}</Button>
           </form>
@@ -237,10 +234,6 @@ function downloadCodes(codes: ActivationCode[], filename = 'classding-activation
   const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
   const anchor = document.createElement('a'); anchor.href = url; anchor.download = filename; document.body.appendChild(anchor); anchor.click(); anchor.remove(); window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
-async function copyText(value: string) {
-  try { await navigator.clipboard.writeText(value); toast.success('已复制到剪贴板'); }
-  catch { toast.error('复制失败，请检查浏览器剪贴板权限'); }
-}
 const defaultCodeForm = { count: '10', max_teachers: '3', max_devices: '1', expires_at: '', org_id: '', note: '' };
 function CodesPage() {
   const queryClient = useQueryClient();
@@ -288,10 +281,10 @@ function CodesPage() {
   }
   return <>
     <PageHead eyebrow="ACTIVATION CODES" title="激活码管理" description="生成和管理授权，让每一间教室顺利开通。" action={<Button onClick={() => { setFormError(''); setCreateOpen(true); }}><span className="plus">＋</span> 生成激活码</Button>}/>
-    {created.length > 0 && <div className="created-banner"><div><span className="created-check"><Check size={17}/></span><div><strong>成功生成 {created.length} 个激活码</strong><p>请及时复制或导出本次生成的激活码。</p></div></div><div className="banner-actions"><Button variant="outline" size="sm" onClick={() => void copyText(created.map(c => c.code).join('\n'))}><Copy size={15}/> 复制全部</Button><Button variant="outline" size="sm" onClick={() => downloadCodes(created, 'classding-new-codes.csv')}><ArrowDownToLine size={15}/> 导出本批</Button><button className="icon-button" aria-label="关闭提示" onClick={() => setCreated([])}>×</button></div></div>}
+    {created.length > 0 && <div className="created-banner"><div><span className="created-check"><Check size={17}/></span><div><strong>成功生成 {created.length} 个激活码</strong><p>请及时复制或导出本次生成的激活码。</p></div></div><div className="banner-actions"><CopyButton text={created.map(c => c.code).join('\n')} onCopied={() => toast.success('已复制到剪贴板')} variant="outline" size="sm"><Copy size={15}/> 复制全部</CopyButton><Button variant="outline" size="sm" onClick={() => downloadCodes(created, 'classding-new-codes.csv')}><ArrowDownToLine size={15}/> 导出本批</Button><button className="icon-button" aria-label="关闭提示" onClick={() => setCreated([])}>×</button></div></div>}
     <Panel title="全部激活码" sub="查看授权状态，按需调整使用额度" action={<Button variant="outline" size="sm" disabled={!query.data?.length} onClick={() => downloadCodes(query.data ?? [])}><ArrowDownToLine size={15}/> 导出 CSV</Button>}>
       <div className="filter-row"><SearchBox value={search} onChange={setSearch} placeholder="搜索激活码、备注或批次"/><select aria-label="筛选激活码状态" value={status} onChange={e => setStatus(e.target.value)}><option value="">全部状态</option><option value="unused">未使用</option><option value="active">已激活</option><option value="released">已释放</option><option value="revoked">已吊销</option></select><span className="filter-count">{query.data ? `共 ${query.data.length} 条` : ''}</span></div>
-      <ResultState loading={query.isLoading} error={query.error} empty={!query.data?.length} emptyText="没有找到激活码"><div className="table-scroll"><table><thead><tr><th>激活码</th><th>状态</th><th>教师 / 设备上限</th><th>有效期</th><th>关联班级</th><th>备注</th><th>操作</th></tr></thead><tbody>{query.data?.map(code => <tr key={code.code}><td><div className="code-cell"><strong>{code.code}</strong><button className="inline-icon" onClick={() => void copyText(code.code)} aria-label={`复制激活码 ${code.code}`} title="复制"><Copy size={14}/></button></div><small>{code.batch_id || '—'}</small></td><td><StatusBadge status={code.status}/></td><td>{code.max_teachers} 位 / {code.max_devices} 台</td><td>{dateOnly(code.expires_at)}</td><td>{code.class_id || '—'}</td><td className="truncate-cell" title={code.note ?? ''}>{code.note || '—'}</td><td><div className="row-actions"><button onClick={() => startEdit(code)}>调整</button>{code.status !== 'revoked' && <button className="danger-link" onClick={() => { setFormError(''); setRevoking(code); }}>吊销</button>}</div></td></tr>)}</tbody></table></div></ResultState>
+      <ResultState loading={query.isLoading} error={query.error} empty={!query.data?.length} emptyText="没有找到激活码"><div className="table-scroll"><table><thead><tr><th>激活码</th><th>状态</th><th>教师 / 设备上限</th><th>有效期</th><th>关联班级</th><th>备注</th><th>操作</th></tr></thead><tbody>{query.data?.map(code => <tr key={code.code}><td><div className="code-cell"><strong>{code.code}</strong><CopyButton className="inline-icon" text={code.code} onCopied={() => toast.success('已复制到剪贴板')} variant="ghost" size="icon" aria-label={`复制激活码 ${code.code}`} title="复制"><Copy size={14}/></CopyButton></div><small>{code.batch_id || '—'}</small></td><td><StatusBadge status={code.status}/></td><td>{code.max_teachers} 位 / {code.max_devices} 台</td><td>{dateOnly(code.expires_at)}</td><td>{code.class_id || '—'}</td><td className="truncate-cell" title={code.note ?? ''}>{code.note || '—'}</td><td><div className="row-actions"><button onClick={() => startEdit(code)}>调整</button>{code.status !== 'revoked' && <button className="danger-link" onClick={() => { setFormError(''); setRevoking(code); }}>吊销</button>}</div></td></tr>)}</tbody></table></div></ResultState>
     </Panel>
     <Dialog open={createOpen} onClose={() => setCreateOpen(false)} title="生成激活码" description="设置授权额度，生成后可复制或导出。" footer={<><Button variant="outline" onClick={() => setCreateOpen(false)}>取消</Button><Button type="submit" form="create-codes" disabled={create.isPending}>{create.isPending ? '正在生成…' : '生成激活码'}</Button></>}>
       <form id="create-codes" onSubmit={submitCreate} className="dialog-form"><label>生成数量<Input type="number" min="1" max="1000" value={form.count} onChange={e => setForm({ ...form, count: e.target.value })}/><small>单次可生成 1–1000 个</small></label><div className="form-grid"><label>教师上限<Input type="number" min="1" value={form.max_teachers} onChange={e => setForm({ ...form, max_teachers: e.target.value })}/></label><label>设备上限<Input type="number" min="1" value={form.max_devices} onChange={e => setForm({ ...form, max_devices: e.target.value })}/></label></div><label>有效期 <small>留空为长期有效</small><Input type="date" value={form.expires_at} onChange={e => setForm({ ...form, expires_at: e.target.value })}/></label><label>所属学校 ID <small>选填</small><Input placeholder="输入学校 ID" value={form.org_id} onChange={e => setForm({ ...form, org_id: e.target.value })}/></label><label>备注 <small>选填</small><Input maxLength={200} placeholder="例如：2026 年秋季采购" value={form.note} onChange={e => setForm({ ...form, note: e.target.value })}/></label>{formError && <p className="form-error" role="alert">{formError}</p>}</form>
@@ -305,36 +298,166 @@ function CodesPage() {
   </>;
 }
 
+type TeacherForm = { username: string; display_name: string; password: string; org_id: string; status: 'active' | 'disabled' };
+const emptyTeacherForm: TeacherForm = { username: '', display_name: '', password: '', org_id: '', status: 'active' };
+
 function UsersPage() {
   const queryClient = useQueryClient();
-  const [search, setSearch] = useState('');
-  const [changing, setChanging] = useState<{ user: User; status: 'active' | 'disabled' } | null>(null);
   const { user: currentUser } = useSession();
-  const [mutationError, setMutationError] = useState('');
+  const [search, setSearch] = useState('');
+  const [form, setForm] = useState<TeacherForm>(emptyTeacherForm);
+  const [formOpen, setFormOpen] = useState(false);
+  const [editing, setEditing] = useState<User | null>(null);
+  const [deleting, setDeleting] = useState<User | null>(null);
+  const [formError, setFormError] = useState('');
   const query = useQuery({ queryKey: ['admin', 'users'], queryFn: () => api<User[]>('/admin/users') });
   const users = (query.data ?? []).filter(user => `${user.display_name} ${user.username} ${user.org_id ?? ''}`.toLowerCase().includes(search.trim().toLowerCase()));
-  const update = useMutation({
-    mutationFn: ({ user, status }: { user: User; status: 'active' | 'disabled' }) => api<User>(`/admin/users/${encodeURIComponent(user.id)}`, json('PATCH', { status })),
-    onSuccess: () => { setChanging(null); setMutationError(''); void queryClient.invalidateQueries({ queryKey: ['admin', 'users'] }); toast.success('教师账号状态已更新'); },
-    onError: error => setMutationError(errorMessage(error)),
+  const save = useMutation({
+    mutationFn: ({ user, body }: { user: User | null; body: unknown }) => user
+      ? api<User>(`/admin/users/${encodeURIComponent(user.id)}`, json('PATCH', body))
+      : api<User>('/admin/users', json('POST', body)),
+    onSuccess: () => {
+      setFormOpen(false); setEditing(null); setFormError('');
+      void queryClient.invalidateQueries({ queryKey: ['admin', 'users'] });
+      toast.success(editing ? '教师账号已更新' : '教师账号已创建');
+    },
+    onError: error => setFormError(errorMessage(error)),
   });
-  return <><PageHead eyebrow="TEACHERS" title="教师管理" description="查看教师账号和所属学校，管理账号使用状态。"/>
+  const remove = useMutation({
+    mutationFn: (user: User) => api<void>(`/admin/users/${encodeURIComponent(user.id)}`, json('DELETE')),
+    onSuccess: () => {
+      setDeleting(null); setFormError('');
+      void queryClient.invalidateQueries({ queryKey: ['admin', 'users'] });
+      toast.success('教师账号已删除');
+    },
+    onError: error => setFormError(error instanceof ApiError && error.status === 409 ? '该教师仍负责班级，请先转移或删除其班级。' : errorMessage(error)),
+  });
+  const unlockLogin = useMutation({
+    mutationFn: (user: User) => api(`/admin/users/${encodeURIComponent(user.id)}/unlock-login`, json('POST')),
+    onSuccess: () => { void queryClient.invalidateQueries({ queryKey: ['admin', 'users'] }); toast.success('已解除登录限制，教师可以重新登录'); },
+    onError: error => toast.error(errorMessage(error)),
+  });
+  function startCreate() {
+    setEditing(null); setForm(emptyTeacherForm); setFormError(''); setFormOpen(true);
+  }
+  function startEdit(user: User) {
+    setEditing(user); setForm({ username: user.username, display_name: user.display_name, password: '', org_id: user.org_id ?? '', status: user.status === 'disabled' ? 'disabled' : 'active' }); setFormError(''); setFormOpen(true);
+  }
+  function submit(event: FormEvent) {
+    event.preventDefault(); setFormError('');
+    const username = form.username.trim();
+    const displayName = form.display_name.trim();
+    if (!/^[a-zA-Z0-9._-]{3,32}$/.test(username)) { setFormError('用户名须为 3–32 位，支持英文字母、数字、点、下划线和短横线。'); return; }
+    if (!displayName || [...displayName].length > 24) { setFormError('教师姓名须为 1–24 字。'); return; }
+    if (!editing || form.password) {
+      const bytes = new TextEncoder().encode(form.password).length;
+      if (bytes < 10 || bytes > 128 || !/\p{L}/u.test(form.password) || !/\p{Nd}/u.test(form.password)) { setFormError('密码须为 10–128 字节，包含字母和数字。'); return; }
+    }
+    const body = editing ? {
+      ...(username !== editing.username ? { username } : {}),
+      ...(displayName !== editing.display_name ? { display_name: displayName } : {}),
+      ...(form.password ? { password: form.password } : {}),
+      ...(form.status !== editing.status ? { status: form.status } : {}),
+    } : {
+      username, display_name: displayName, password: form.password,
+      ...(currentUser.role === 'super_admin' && form.org_id.trim() ? { org_id: form.org_id.trim() } : {}),
+    };
+    save.mutate({ user: editing, body });
+  }
+  return <><PageHead eyebrow="TEACHERS" title="教师管理" description="创建和维护教师账号，管理账号使用状态。" action={<Button onClick={startCreate}><span className="plus">＋</span> 添加教师</Button>}/>
     <Panel title="教师账号" sub="管理当前权限范围内的教师" action={<span className="panel-count">{query.data ? `${query.data.length} 位账号` : '账号列表'}</span>}>
       <div className="filter-row"><SearchBox value={search} onChange={setSearch} placeholder="搜索姓名、账号或学校 ID"/><span className="filter-count">{query.data ? `共 ${users.length} 条` : ''}</span></div>
-      <ResultState loading={query.isLoading} error={query.error} empty={!users.length} emptyText="没有找到教师账号"><div className="table-scroll"><table><thead><tr><th>教师</th><th>账号</th><th>角色</th><th>所属学校 ID</th><th>状态</th><th>操作</th></tr></thead><tbody>{users.map(user => <tr key={user.id}><td><div className="person-cell"><span className="person-avatar">{(user.display_name || user.username || '师').slice(0, 1)}</span><div><strong>{user.display_name || '—'}</strong><small>{user.id}</small></div></div></td><td>{user.username}</td><td>{roleName[user.role] ?? user.role}</td><td>{user.org_id || '—'}</td><td><Badge variant={user.status === 'active' ? 'success' : user.status === 'disabled' ? 'destructive' : 'secondary'}><span className="badge-dot"/>{user.status === 'active' ? '正常' : user.status === 'disabled' ? '已禁用' : '未知'}</Badge></td><td><div className="row-actions">{user.id === currentUser.id ? <span className="subtle">当前账号</span> : <>{user.status !== 'active' && <button onClick={() => { setMutationError(''); setChanging({ user, status: 'active' }); }}>启用</button>}{user.status !== 'disabled' && <button className="danger-link" onClick={() => { setMutationError(''); setChanging({ user, status: 'disabled' }); }}>禁用</button>}</>}</div></td></tr>)}</tbody></table></div></ResultState>
+      <ResultState loading={query.isLoading} error={query.error} empty={!users.length} emptyText="没有找到教师账号"><div className="table-scroll"><table><thead><tr><th>教师</th><th>账号</th><th>角色</th><th>所属学校 ID</th><th>状态</th><th>操作</th></tr></thead><tbody>{users.map(user => <tr key={user.id}><td><div className="person-cell"><span className="person-avatar">{(user.display_name || user.username || '师').slice(0, 1)}</span><div><strong>{user.display_name || '—'}</strong><small>{user.id}</small></div></div></td><td>{user.username}</td><td>{roleName[user.role] ?? user.role}</td><td>{user.org_id || '—'}</td><td><Badge variant={user.status === 'active' ? 'success' : user.status === 'disabled' ? 'destructive' : 'secondary'}><span className="badge-dot"/>{user.status === 'active' ? '正常' : user.status === 'disabled' ? '已禁用' : '未知'}</Badge>{user.login_locked_until && <small className="form-error">登录限制至 {dateTime(user.login_locked_until)}</small>}</td><td><div className="row-actions">{user.role !== 'user' ? <span className="subtle">{user.id === currentUser.id ? '当前账号' : '管理员'}</span> : <><button onClick={() => startEdit(user)}>编辑</button><button disabled={unlockLogin.isPending} onClick={() => unlockLogin.mutate(user)}>解除登录限制</button><button className="danger-link" onClick={() => { setFormError(''); setDeleting(user); }}>删除</button></>}</div></td></tr>)}</tbody></table></div></ResultState>
     </Panel>
-    <Dialog open={!!changing} onClose={() => setChanging(null)} title={`${changing?.status === 'active' ? '启用' : '禁用'}教师账号？`} description={`${changing?.user.display_name || changing?.user.username || '该账号'}的使用状态将被更新。`} footer={<><Button variant="outline" onClick={() => setChanging(null)}>取消</Button><Button variant={changing?.status === 'active' ? 'default' : 'destructive'} disabled={update.isPending} onClick={() => changing && update.mutate(changing)}>{update.isPending ? '正在保存…' : '确认'}</Button></>}>{mutationError && <p className="form-error" role="alert">{mutationError}</p>}</Dialog>
+    <Dialog open={formOpen} onClose={() => setFormOpen(false)} title={editing ? '编辑教师账号' : '添加教师'} description={editing ? '修改账号资料，留空密码则保持原密码。' : '创建后，教师可使用账号和密码登录。'} footer={<><Button variant="outline" onClick={() => setFormOpen(false)}>取消</Button><Button type="submit" form="teacher-form" disabled={save.isPending}>{save.isPending ? '正在保存…' : editing ? '保存修改' : '创建账号'}</Button></>}>
+      <form id="teacher-form" className="dialog-form" onSubmit={submit}>
+        <label>教师姓名<Input required maxLength={48} placeholder="例如：林老师" value={form.display_name} onChange={e => setForm({ ...form, display_name: e.target.value })}/><small>1–24 字，作为通知落款</small></label>
+        <label>用户名<Input required minLength={3} maxLength={32} autoComplete="off" placeholder="3–32 位字母、数字或 . _ -" value={form.username} onChange={e => setForm({ ...form, username: e.target.value })}/></label>
+        <label>{editing ? '重设密码' : '登录密码'}{editing && <small>留空则不修改</small>}<Input type="password" required={!editing} autoComplete="new-password" placeholder="至少 10 位，包含字母和数字" value={form.password} onChange={e => setForm({ ...form, password: e.target.value })}/></label>
+        {!editing && currentUser.role === 'super_admin' && <label>所属学校 ID <small>选填</small><Input placeholder="输入学校 ID" value={form.org_id} onChange={e => setForm({ ...form, org_id: e.target.value })}/></label>}
+        {editing && <label>账号状态<select className="dialog-select" value={form.status} onChange={e => setForm({ ...form, status: e.target.value as TeacherForm['status'] })}><option value="active">正常</option><option value="disabled">已禁用</option></select></label>}
+        {formError && <p className="form-error" role="alert">{formError}</p>}
+      </form>
+    </Dialog>
+    <Dialog open={!!deleting} onClose={() => setDeleting(null)} title="删除教师账号？" description={`确认删除 ${deleting?.display_name || deleting?.username || '该教师'} 的账号。若教师仍负责班级，请先转移或删除班级。`} footer={<><Button variant="outline" onClick={() => setDeleting(null)}>取消</Button><Button variant="destructive" disabled={remove.isPending} onClick={() => deleting && remove.mutate(deleting)}>{remove.isPending ? '正在删除…' : '确认删除'}</Button></>}>
+      {formError && <p className="form-error" role="alert">{formError}</p>}
+    </Dialog>
   </>;
 }
+
+type ClassForm = { name: string; grade: string; owner_id: string; max_teachers: string; max_devices: string };
+const emptyClassForm: ClassForm = { name: '', grade: '', owner_id: '', max_teachers: '3', max_devices: '1' };
+
 function ClassesPage() {
+  const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
+  const [form, setForm] = useState<ClassForm>(emptyClassForm);
+  const [formOpen, setFormOpen] = useState(false);
+  const [editing, setEditing] = useState<Classroom | null>(null);
+  const [deleting, setDeleting] = useState<Classroom | null>(null);
+  const [formError, setFormError] = useState('');
   const query = useQuery({ queryKey: ['admin', 'classes'], queryFn: () => api<Classroom[]>('/admin/classes') });
-  const classes = (query.data ?? []).filter(item => `${item.name} ${item.grade ?? ''} ${item.org_id ?? ''}`.toLowerCase().includes(search.trim().toLowerCase()));
-  return <><PageHead eyebrow="CLASSROOMS" title="班级管理" description="查看班级及其教师、设备的连接情况。"/>
+  const users = useQuery({ queryKey: ['admin', 'users'], queryFn: () => api<User[]>('/admin/users') });
+  const teachers = (users.data ?? []).filter(user => user.role === 'user' && user.status === 'active' && !!user.org_id && (!editing || user.org_id === editing.org_id));
+  const ownerName = (id: string) => {
+    const user = users.data?.find(item => item.id === id);
+    return user ? `${user.display_name || user.username}（${user.username}）` : id || '—';
+  };
+  const classes = (query.data ?? []).filter(item => `${item.name} ${item.grade ?? ''} ${item.org_id ?? ''} ${ownerName(item.owner_id)}`.toLowerCase().includes(search.trim().toLowerCase()));
+  const save = useMutation({
+    mutationFn: ({ item, body }: { item: Classroom | null; body: unknown }) => item
+      ? api<Classroom>(`/admin/classes/${encodeURIComponent(item.id)}`, json('PATCH', body))
+      : api<Classroom>('/admin/classes', json('POST', body)),
+    onSuccess: () => {
+      setFormOpen(false); setEditing(null); setFormError('');
+      void queryClient.invalidateQueries({ queryKey: ['admin', 'classes'] });
+      toast.success(editing ? '班级已更新' : '班级已创建');
+    },
+    onError: error => setFormError(errorMessage(error)),
+  });
+  const remove = useMutation({
+    mutationFn: (item: Classroom) => api<void>(`/admin/classes/${encodeURIComponent(item.id)}`, json('DELETE')),
+    onSuccess: () => {
+      setDeleting(null); setFormError('');
+      void queryClient.invalidateQueries({ queryKey: ['admin', 'classes'] });
+      toast.success('班级已删除');
+    },
+    onError: error => setFormError(errorMessage(error)),
+  });
+  function startCreate() {
+    setEditing(null); setForm(emptyClassForm); setFormError(''); setFormOpen(true);
+  }
+  function startEdit(item: Classroom) {
+    setEditing(item); setForm({ name: item.name, grade: item.grade ?? '', owner_id: item.owner_id, max_teachers: String(item.max_teachers), max_devices: String(item.max_devices) }); setFormError(''); setFormOpen(true);
+  }
+  function submit(event: FormEvent) {
+    event.preventDefault(); setFormError('');
+    const name = form.name.trim(), grade = form.grade.trim();
+    const maxTeachers = Number(form.max_teachers), maxDevices = Number(form.max_devices);
+    if (!name || [...name].length > 40) { setFormError('班级名称须为 1–40 字。'); return; }
+    if ([...grade].length > 40) { setFormError('年级最多 40 字。'); return; }
+    if (!teachers.some(user => user.id === form.owner_id)) { setFormError('请选择状态正常的教师作为班级负责人。'); return; }
+    if (!Number.isInteger(maxTeachers) || maxTeachers < 1 || maxTeachers > 100 || !Number.isInteger(maxDevices) || maxDevices < 1 || maxDevices > 20) { setFormError('教师上限须为 1–100，设备上限须为 1–20，且均为整数。'); return; }
+    save.mutate({ item: editing, body: { name, grade, owner_id: form.owner_id, max_teachers: maxTeachers, max_devices: maxDevices } });
+  }
+  return <><PageHead eyebrow="CLASSROOMS" title="班级管理" description="创建班级，管理负责人和教室连接额度。" action={<Button onClick={startCreate}><span className="plus">＋</span> 添加班级</Button>}/>
     <Panel title="班级列表" sub="每一间教室都在这里" action={<span className="panel-count">{query.data ? `${query.data.length} 个班级` : '班级列表'}</span>}>
-      <div className="filter-row"><SearchBox value={search} onChange={setSearch} placeholder="搜索班级、年级或学校 ID"/><span className="filter-count">{query.data ? `共 ${classes.length} 条` : ''}</span></div>
-      <ResultState loading={query.isLoading} error={query.error} empty={!classes.length} emptyText="没有找到班级"><div className="table-scroll"><table><thead><tr><th>班级名称</th><th>年级</th><th>所属学校 ID</th><th>教师</th><th>设备</th><th>创建时间</th></tr></thead><tbody>{classes.map(item => <tr key={item.id}><td><div className="person-cell"><span className="class-avatar"><BookOpen size={17}/></span><div><strong>{item.name}</strong><small>{item.id}</small></div></div></td><td>{item.grade || '—'}</td><td>{item.org_id || '—'}</td><td>{number(item.teachers_count)} / {number(item.max_teachers)} 位</td><td><span className="online-dot"/> {number(item.online_devices)} 在线 <span className="subtle">/ {number(item.devices_count)} 台</span></td><td>{dateTime(item.created_at)}</td></tr>)}</tbody></table></div></ResultState>
-    </Panel></>;
+      <div className="filter-row"><SearchBox value={search} onChange={setSearch} placeholder="搜索班级、年级、负责人或学校 ID"/><span className="filter-count">{query.data ? `共 ${classes.length} 条` : ''}</span></div>
+      <ResultState loading={query.isLoading} error={query.error} empty={!classes.length} emptyText="没有找到班级"><div className="table-scroll"><table><thead><tr><th>班级名称</th><th>年级</th><th>负责人</th><th>所属学校 ID</th><th>教师</th><th>设备</th><th>创建时间</th><th>操作</th></tr></thead><tbody>{classes.map(item => <tr key={item.id}><td><div className="person-cell"><span className="class-avatar"><BookOpen size={17}/></span><div><strong>{item.name}</strong><small>{item.id}</small></div></div></td><td>{item.grade || '—'}</td><td>{ownerName(item.owner_id)}</td><td>{item.org_id || '—'}</td><td>{number(item.teachers_count)} / {number(item.max_teachers)} 位</td><td><span className="online-dot"/> {number(item.online_devices)} 在线 <span className="subtle">/ {number(item.devices_count)} / {number(item.max_devices)} 台</span></td><td>{dateTime(item.created_at)}</td><td><div className="row-actions"><button onClick={() => startEdit(item)}>编辑</button><button className="danger-link" onClick={() => { setFormError(''); setDeleting(item); }}>删除</button></div></td></tr>)}</tbody></table></div></ResultState>
+    </Panel>
+    <Dialog open={formOpen} onClose={() => setFormOpen(false)} title={editing ? '编辑班级' : '添加班级'} description={editing ? '调整班级信息和连接额度。' : '创建后即可使用，无需激活码。'} footer={<><Button variant="outline" onClick={() => setFormOpen(false)}>取消</Button><Button type="submit" form="class-form" disabled={save.isPending || users.isLoading || !!users.error || !teachers.length}>{save.isPending ? '正在保存…' : editing ? '保存修改' : '创建班级'}</Button></>}>
+      <form id="class-form" className="dialog-form" onSubmit={submit}>
+        <label>班级名称<Input required maxLength={80} placeholder="例如：三年级（2）班" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })}/></label>
+        <label>年级 <small>选填</small><Input maxLength={80} placeholder="例如：三年级" value={form.grade} onChange={e => setForm({ ...form, grade: e.target.value })}/></label>
+        <label>负责人<select className="dialog-select" required value={form.owner_id} onChange={e => setForm({ ...form, owner_id: e.target.value })}><option value="">{users.isLoading ? '正在加载教师…' : '请选择教师'}</option>{editing && !teachers.some(user => user.id === editing.owner_id) && <option value={editing.owner_id} disabled>{users.isLoading ? '正在加载当前负责人…' : '当前负责人不可用，请重新选择'}</option>}{teachers.map(user => <option key={user.id} value={user.id}>{user.display_name || user.username}（{user.username}）{user.org_id ? ` · ${user.org_id}` : ''}</option>)}</select><small>{users.error ? `教师列表加载失败：${errorMessage(users.error)}` : !users.isLoading && !teachers.length ? editing ? '当前学校没有可选教师，请先创建或启用教师账号。' : '请先创建或启用教师账号。' : editing ? '仅可选择本学校状态正常的教师' : '仅可选择状态正常的教师'}</small></label>
+        <div className="form-grid"><label>教师上限<Input required type="number" min="1" max="100" step="1" value={form.max_teachers} onChange={e => setForm({ ...form, max_teachers: e.target.value })}/><small>1–100 位</small></label><label>设备上限<Input required type="number" min="1" max="20" step="1" value={form.max_devices} onChange={e => setForm({ ...form, max_devices: e.target.value })}/><small>1–20 台</small></label></div>
+        {formError && <p className="form-error" role="alert">{formError}</p>}
+      </form>
+    </Dialog>
+    <Dialog open={!!deleting} onClose={() => setDeleting(null)} title="删除班级？" description={`确认删除班级「${deleting?.name ?? ''}」及其关联信息，此操作无法撤销。`} footer={<><Button variant="outline" onClick={() => setDeleting(null)}>取消</Button><Button variant="destructive" disabled={remove.isPending} onClick={() => deleting && remove.mutate(deleting)}>{remove.isPending ? '正在删除…' : '确认删除'}</Button></>}>
+      {formError && <p className="form-error" role="alert">{formError}</p>}
+    </Dialog>
+  </>;
 }
 function DevicesPage() {
   const [search, setSearch] = useState('');
@@ -390,26 +513,36 @@ export default function App() {
   const [restoring, setRestoring] = useState(true);
   const [startupError, setStartupError] = useState('');
   const queryClient = useQueryClient();
+  useEffect(() => onSessionExpired(() => {
+    setUser(null); queryClient.clear(); toast.error('登录已过期或账号已变更，请重新登录');
+  }), [queryClient]);
   useEffect(() => {
     let cancelled = false;
-    api<AuthResponse>('/auth/refresh', json('POST')).then(result => {
+    refreshSession<AuthResponse>().then(result => {
       if (cancelled) return;
-      if (result.user.role === 'super_admin' || result.user.role === 'school_admin') { setAccessToken(result.access_token); setUser(result.user); }
+      if (result.user.role === 'super_admin' || result.user.role === 'school_admin') setUser(result.user);
+      else setAccessToken('');
     }).catch(error => { if (!cancelled && error instanceof ApiError && (error.status === 0 || error.status >= 500)) setStartupError(error.message); }).finally(() => { if (!cancelled) setRestoring(false); });
     return () => { cancelled = true; };
   }, []);
   useEffect(() => {
     if (!user) return;
     let cancelled = false;
+    const expectedUserId = user.id;
     const timer = window.setInterval(() => {
-      api<AuthResponse>('/auth/refresh', json('POST')).then(result => {
+      refreshSession<AuthResponse>().then(result => {
         if (cancelled) return;
-        if (result.user.role !== 'super_admin' && result.user.role !== 'school_admin') throw new Error('权限已变更');
-        setAccessToken(result.access_token); setUser(result.user);
-      }).catch(() => { if (!cancelled) { setAccessToken(''); setUser(null); queryClient.clear(); toast.error('登录已过期，请重新登录'); } });
+        if (result.user.id !== expectedUserId || (result.user.role !== 'super_admin' && result.user.role !== 'school_admin')) {
+          setAccessToken(''); setUser(null); queryClient.clear(); toast.error('登录账号或权限已变更，请重新登录');
+          return;
+        }
+        setUser(result.user);
+      }).catch(error => {
+        if (!cancelled && error instanceof ApiError && error.status !== 401) toast.error('暂时无法更新登录状态，请检查网络');
+      });
     }, 13 * 60 * 1000);
     return () => { cancelled = true; window.clearInterval(timer); };
-  }, [!!user, queryClient]);
+  }, [user?.id, queryClient]);
   function logout() {
     void api('/auth/logout', json('POST')).catch(() => undefined);
     setAccessToken(''); setUser(null); queryClient.clear();

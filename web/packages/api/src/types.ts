@@ -600,7 +600,8 @@ export interface paths {
         /** GET /admin/users */
         get: operations["get__admin_users_42"];
         put?: never;
-        post?: never;
+        /** POST /admin/users */
+        post: operations["post__admin_users_43"];
         delete?: never;
         options?: never;
         head?: never;
@@ -617,11 +618,29 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        delete?: never;
+        /** DELETE /admin/users/{id} */
+        delete: operations["delete__admin_users__id__45"];
         options?: never;
         head?: never;
         /** PATCH /admin/users/{id} */
-        patch: operations["patch__admin_users__id__43"];
+        patch: operations["patch__admin_users__id__44"];
+        trace?: never;
+    };
+    "/admin/users/{id}/unlock-login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** POST /admin/users/{id}/unlock-login */
+        post: operations["post__admin_users__id__unlock_login_46"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/admin/classes": {
@@ -632,13 +651,32 @@ export interface paths {
             cookie?: never;
         };
         /** GET /admin/classes */
-        get: operations["get__admin_classes_44"];
+        get: operations["get__admin_classes_47"];
         put?: never;
-        post?: never;
+        /** POST /admin/classes */
+        post: operations["post__admin_classes_48"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/admin/classes/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** DELETE /admin/classes/{id} */
+        delete: operations["delete__admin_classes__id__50"];
+        options?: never;
+        head?: never;
+        /** PATCH /admin/classes/{id} */
+        patch: operations["patch__admin_classes__id__49"];
         trace?: never;
     };
     "/admin/devices": {
@@ -649,7 +687,7 @@ export interface paths {
             cookie?: never;
         };
         /** GET /admin/devices */
-        get: operations["get__admin_devices_45"];
+        get: operations["get__admin_devices_51"];
         put?: never;
         post?: never;
         delete?: never;
@@ -666,7 +704,7 @@ export interface paths {
             cookie?: never;
         };
         /** GET /admin/messages */
-        get: operations["get__admin_messages_46"];
+        get: operations["get__admin_messages_52"];
         put?: never;
         post?: never;
         delete?: never;
@@ -683,7 +721,7 @@ export interface paths {
             cookie?: never;
         };
         /** GET /admin/audit-logs */
-        get: operations["get__admin_audit_logs_47"];
+        get: operations["get__admin_audit_logs_53"];
         put?: never;
         post?: never;
         delete?: never;
@@ -712,6 +750,8 @@ export interface components {
             org_id: string;
             /** @enum {string} */
             status: "active" | "disabled";
+            /** Format: date-time */
+            login_locked_until?: string;
         };
         Class: {
             id: string;
@@ -935,7 +975,6 @@ export interface operations {
                     username: string;
                     password: string;
                     display_name: string;
-                    totp_code?: string;
                 };
             };
         };
@@ -972,8 +1011,6 @@ export interface operations {
                 "application/json": {
                     username: string;
                     password: string;
-                    display_name?: string;
-                    totp_code?: string;
                 };
             };
         };
@@ -2319,20 +2356,20 @@ export interface operations {
             };
         };
     };
-    patch__admin_users__id__43: {
+    post__admin_users_43: {
         parameters: {
             query?: never;
             header?: never;
-            path: {
-                id: string;
-            };
+            path?: never;
             cookie?: never;
         };
         requestBody: {
             content: {
                 "application/json": {
-                    status?: string;
-                    display_name?: string;
+                    username: string;
+                    password: string;
+                    display_name: string;
+                    org_id?: string;
                 };
             };
         };
@@ -2357,7 +2394,109 @@ export interface operations {
             };
         };
     };
-    get__admin_classes_44: {
+    delete__admin_users__id__45: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 成功 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OK"];
+                };
+            };
+            /** @description 业务错误 */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    patch__admin_users__id__44: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    username?: string;
+                    password?: string;
+                    display_name?: string;
+                    status?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description 成功 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["User"];
+                };
+            };
+            /** @description 业务错误 */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    post__admin_users__id__unlock_login_46: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 成功 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OK"];
+                };
+            };
+            /** @description 业务错误 */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    get__admin_classes_47: {
         parameters: {
             query?: never;
             header?: never;
@@ -2386,7 +2525,118 @@ export interface operations {
             };
         };
     };
-    get__admin_devices_45: {
+    post__admin_classes_48: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    name: string;
+                    grade?: string;
+                    owner_id: string;
+                    max_teachers: number;
+                    max_devices: number;
+                };
+            };
+        };
+        responses: {
+            /** @description 成功 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Class"];
+                };
+            };
+            /** @description 业务错误 */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    delete__admin_classes__id__50: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 成功 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OK"];
+                };
+            };
+            /** @description 业务错误 */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    patch__admin_classes__id__49: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    name?: string;
+                    grade?: string;
+                    owner_id?: string;
+                    max_teachers?: number;
+                    max_devices?: number;
+                };
+            };
+        };
+        responses: {
+            /** @description 成功 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Class"];
+                };
+            };
+            /** @description 业务错误 */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    get__admin_devices_51: {
         parameters: {
             query?: never;
             header?: never;
@@ -2415,7 +2665,7 @@ export interface operations {
             };
         };
     };
-    get__admin_messages_46: {
+    get__admin_messages_52: {
         parameters: {
             query?: {
                 class_id?: string;
@@ -2449,7 +2699,7 @@ export interface operations {
             };
         };
     };
-    get__admin_audit_logs_47: {
+    get__admin_audit_logs_53: {
         parameters: {
             query?: never;
             header?: never;

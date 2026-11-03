@@ -3,14 +3,15 @@ package app
 import "time"
 
 type User struct {
-	ID           string `json:"id"`
-	Username     string `json:"username"`
-	DisplayName  string `json:"display_name"`
-	Role         string `json:"role"`
-	OrgID        string `json:"org_id"`
-	Status       string `json:"status"`
-	PasswordHash string `json:"password_hash,omitempty"`
-	TokenVersion int    `json:"token_version,omitempty"`
+	ID               string `json:"id"`
+	Username         string `json:"username"`
+	DisplayName      string `json:"display_name"`
+	Role             string `json:"role"`
+	OrgID            string `json:"org_id"`
+	Status           string `json:"status"`
+	PasswordHash     string `json:"password_hash,omitempty"`
+	TokenVersion     int    `json:"token_version,omitempty"`
+	LoginLockedUntil string `json:"login_locked_until,omitempty"`
 }
 type Class struct {
 	ID             string `json:"id"`
@@ -98,7 +99,9 @@ type Session struct {
 	UserID        string `json:"user_id"`
 	ExpiresAt     string `json:"expires_at"`
 	Version       int    `json:"version"`
-	AdminVerified bool   `json:"admin_verified"`
+	AdminVerified bool   `json:"admin_verified,omitempty"` // Legacy field; no longer used for authentication.
+	RotationUntil string `json:"rotation_until,omitempty"`
+	Scope         string `json:"auth_scope,omitempty"`
 }
 type Phrase struct {
 	ID     string `json:"id"`

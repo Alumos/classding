@@ -1,3 +1,4 @@
+import {setAuthScope} from '@classding/api';
 import {StrictMode} from 'react';
 import {createRoot} from 'react-dom/client';
 import {BrowserRouter} from 'react-router';
@@ -7,6 +8,7 @@ import {AuthProvider} from './auth';
 import App from './App';
 import '@classding/ui/styles.css';
 import './styles.css';
+setAuthScope('teacher');
 const queryClient=new QueryClient({defaultOptions:{queries:{retry:1,refetchOnWindowFocus:true,staleTime:15000}}});
 createRoot(document.getElementById('root')!).render(<StrictMode><QueryClientProvider client={queryClient}><BrowserRouter><AuthProvider><App/></AuthProvider></BrowserRouter><Toaster position="top-center" richColors closeButton/></QueryClientProvider></StrictMode>);
 if(import.meta.env.PROD&&'serviceWorker'in navigator)window.addEventListener('load',()=>{void navigator.serviceWorker.register('/sw.js');});

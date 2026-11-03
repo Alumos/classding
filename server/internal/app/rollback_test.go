@@ -92,9 +92,8 @@ func TestRollbackRefreshCookie(t *testing.T) {
 	expectStatus(t, f.request(t, http.MethodPost, "/api/v1/auth/refresh", "", nil, cookies[0]), http.StatusOK)
 	invalid := f.request(t, http.MethodPost, "/api/v1/auth/refresh", "", nil, &http.Cookie{Name: "classding_refresh", Value: "invalid"})
 	expectStatus(t, invalid, http.StatusUnauthorized)
-	cleared := invalid.Result().Cookies()
-	if len(cleared) != 1 || cleared[0].MaxAge >= 0 {
-		t.Fatal("invalid refresh must still clear the browser cookie")
+	if len(invalid.Result().Cookies()) != 0 {
+		t.Fatal("invalid stale refresh must not erase a newer browser cookie")
 	}
 }
 

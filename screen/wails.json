@@ -8,5 +8,5 @@
   "frontend:dev:watcher": "pnpm run dev",
   "frontend:dev:serverUrl": "http://localhost:5175",
   "author": {"name": "ClassDing"},
-  "info": {"companyName": "ClassDing", "productName": "课堂叮咚大屏端", "productVersion": "0.1.1", "copyright": "ClassDing"}
+  "info": {"companyName": "ClassDing", "productName": "课堂叮咚大屏端", "productVersion": "0.1.2", "copyright": "ClassDing"}
 }

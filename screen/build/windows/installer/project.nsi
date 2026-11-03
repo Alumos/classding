@@ -1,4 +1,5 @@
-Unicode true
+﻿Unicode true
+# Keep this file UTF-8 with BOM; Wails generates its included tools in UTF-8.
 !ifndef REQUEST_EXECUTION_LEVEL
   !define REQUEST_EXECUTION_LEVEL "user"
 !endif
@@ -6,10 +7,10 @@ Unicode true
   !define WAILS_INSTALL_SCOPE "user"
 !endif
 !define PRODUCT_EXECUTABLE "ClassDingScreen.exe"
-!include "wails_tools.nsh"
+!include /CHARSET=UTF8 "wails_tools.nsh"
 !include "MUI2.nsh"
 
-Name "课堂叮咚大屏端"
+Name "${INFO_PRODUCTNAME}"
 OutFile "..\..\bin\ClassDingScreen-${ARCH}-installer.exe"
 InstallDir "$LOCALAPPDATA\Programs\ClassDing"
 ManifestDPIAware true
@@ -49,8 +50,8 @@ Section
   !insertmacro wails.webview2runtime
   SetOutPath "$INSTDIR"
   !insertmacro wails.files
-  CreateShortcut "$SMPROGRAMS\课堂叮咚大屏端.lnk" "$INSTDIR\${PRODUCT_EXECUTABLE}"
-  CreateShortcut "$DESKTOP\课堂叮咚大屏端.lnk" "$INSTDIR\${PRODUCT_EXECUTABLE}"
+  CreateShortcut "$SMPROGRAMS\${INFO_PRODUCTNAME}.lnk" "$INSTDIR\${PRODUCT_EXECUTABLE}"
+  CreateShortcut "$DESKTOP\${INFO_PRODUCTNAME}.lnk" "$INSTDIR\${PRODUCT_EXECUTABLE}"
   !insertmacro wails.writeUninstaller
 SectionEnd
 
@@ -58,8 +59,8 @@ Section "uninstall"
   !insertmacro wails.setShellContext
   DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "ClassDing"
   Delete "$SMSTARTUP\ClassDing.lnk"
-  Delete "$SMPROGRAMS\课堂叮咚大屏端.lnk"
-  Delete "$DESKTOP\课堂叮咚大屏端.lnk"
+  Delete "$SMPROGRAMS\${INFO_PRODUCTNAME}.lnk"
+  Delete "$DESKTOP\${INFO_PRODUCTNAME}.lnk"
   Delete "$INSTDIR\${PRODUCT_EXECUTABLE}"
   !insertmacro wails.deleteUninstaller
   # 保留 data，避免卸载时不可逆地删除绑定和待处理消息。

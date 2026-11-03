@@ -13,9 +13,9 @@
 - AuthResponse: {access_token,user}；refresh token 放 HttpOnly Cookie。
 
 ## REST
-GET config => {speech_enabled:false,registration_enabled:true,version:'0.1.1'}
+GET config => {speech_enabled:false,registration_enabled:true,version:'0.1.2'}
 POST auth/register {username,password,display_name} => AuthResponse
-POST auth/login {username,password,totp_code?} => AuthResponse
+POST auth/login {username,password} => AuthResponse
 POST auth/refresh => AuthResponse；POST auth/logout => {ok:true}
 GET me => User；PATCH me {display_name} => User；PUT me/password {current_password,new_password} => {ok:true}
 GET classes => Class[]；POST classes {name,grade?,activation_code} => Class
@@ -42,8 +42,11 @@ GET admin/overview => {online_devices,total_devices,today_messages,delivery_rate
 GET admin/activation-codes?search=&status= => ActivationCode[]
 POST admin/activation-codes {count,max_teachers,max_devices,expires_at?,org_id?,note?} => ActivationCode[]
 PATCH admin/activation-codes/:code {max_teachers?,max_devices?,expires_at?,status?} => ActivationCode
-GET admin/users => User[]；PATCH admin/users/:id {status?,display_name?} => User
-GET admin/classes => Class[]；GET admin/devices => Device[]；GET admin/messages => {items:Message[],next_cursor:null}；GET admin/audit-logs => [{id,actor,action,target,at}]
+GET admin/users => User[]；POST admin/users {username,password,display_name,org_id?} => User
+PATCH admin/users/:id {username?,password?,status?,display_name?} => User；DELETE admin/users/:id => {ok:true}（教师有负责班级时先转移或删除）
+GET admin/classes => Class[]；POST admin/classes {name,grade?,owner_id,max_teachers,max_devices} => Class
+PATCH admin/classes/:id {name?,grade?,owner_id?,max_teachers?,max_devices?} => Class；DELETE admin/classes/:id => {ok:true}
+GET admin/devices => Device[]；GET admin/messages => {items:Message[],next_cursor:null}；GET admin/audit-logs => [{id,actor,action,target,at}]
 
 ## WebSocket
 帧 {t,id?,seq?,ts?,d:{...}}。连接5秒内 hello {d:{token,last_seq?,client_version?,os?,pending_ids?}}。
@@ -63,3 +66,7 @@ welcome d:{class:{id,name},volume,server_time,recalled_ids?}; notify d:{message_
 本地开发：Go :8080；教师 :5173；管理 :5174 (/admin/)；大屏 :5175。所有前端包 scripts dev/build/typecheck。共享 React Query Provider 等由每个应用自行装配。后端允许开发用种子开关及仅在开启时创建 demo 账号（teacher / ClassDing2026!，admin / AdminDing2026!），不得生产自动启用。无真实服务时显示错误/引导，不能假装已发送成功。
 
 `pnpm api:generate` 从契约定义重新生成 OpenAPI、WS Schema 及两套 TypeScript 类型。WebSocket 业务类型从 `@classding/api/ws` 导入，接收原始 JSON 时仍要进行运行时检查。设备 `hello.pending_ids` 最多 4096 条；`welcome.recalled_ids` 用于确认离线队列中的撤回/过期消息。
+
+浏览器请求携带 `X-ClassDing-Auth-Scope: admin|teacher`，对应独立的刷新 Cookie。`refreshSession()` 合并同一页面并发刷新；服务端提供 30 秒旋转宽限。管理员仅使用账号密码登录，动态验证码已移除。
+
+POST admin/users/:id/unlock-login => {ok:true}，解除教师密码错误造成的短时限制；仅管理员有权操作同作用域教师，写入审计日志。User 可带 login_locked_until。

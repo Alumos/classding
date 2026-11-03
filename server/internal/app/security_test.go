@@ -2,10 +2,6 @@ package app
 
 import (
 	"bytes"
-	"crypto/hmac"
-	"crypto/sha1"
-	"encoding/base32"
-	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -76,7 +72,7 @@ func newSecurityFixture(t *testing.T) *securityFixture {
 
 func (f *securityFixture) token(who string) string {
 	u := f.users[who]
-	return f.app.access(u, u.Role != "user")
+	return f.app.access(u)
 }
 func (f *securityFixture) request(t *testing.T, method, path, token string, body any, cookie *http.Cookie) *httptest.ResponseRecorder {
 	t.Helper()
@@ -272,6 +268,14 @@ func TestSecurityRefreshRotationAndPasswordChange(t *testing.T) {
 	if len(newCookies) == 0 || newCookies[0].Value == oldCookie.Value {
 		t.Fatal("refresh token did not rotate")
 	}
+	duplicate := f.request(t, "POST", "/api/v1/auth/refresh", "", nil, oldCookie)
+	expectStatus(t, duplicate, 200)
+	if got := duplicate.Result().Cookies()[0].Value; got != newCookies[0].Value {
+		t.Fatal("concurrent refresh did not converge on the same successor")
+	}
+	oldSession := f.app.state.Sessions[hash(oldCookie.Value)]
+	oldSession.RotationUntil = time.Now().Add(-time.Second).Format(time.RFC3339Nano)
+	f.app.state.Sessions[hash(oldCookie.Value)] = oldSession
 	expectStatus(t, f.request(t, "POST", "/api/v1/auth/refresh", "", nil, oldCookie), 401)
 	expectStatus(t, f.request(t, "PUT", "/api/v1/me/password", auth.AccessToken, map[string]any{"current_password": "OldPassword1234", "new_password": "NewPassword1234"}, nil), 200)
 	expectStatus(t, f.request(t, "GET", "/api/v1/me", auth.AccessToken, nil, nil), 401)
@@ -280,28 +284,20 @@ func TestSecurityRefreshRotationAndPasswordChange(t *testing.T) {
 	expectStatus(t, f.request(t, "POST", "/api/v1/auth/login", "", map[string]any{"username": "owner_a", "password": "NewPassword1234"}, nil), 200)
 }
 
-func securityTOTP(secret string) string {
-	key, _ := base32.StdEncoding.WithPadding(base32.NoPadding).DecodeString(secret)
-	var b [8]byte
-	binary.BigEndian.PutUint64(b[:], uint64(time.Now().Unix()/30))
-	mac := hmac.New(sha1.New, key)
-	mac.Write(b[:])
-	sum := mac.Sum(nil)
-	i := sum[len(sum)-1] & 15
-	return fmt.Sprintf("%06d", (binary.BigEndian.Uint32(sum[i:i+4])&0x7fffffff)%1000000)
-}
-func TestSecurityAdminRequiresTOTP(t *testing.T) {
+func TestSecurityAdminLoginWithoutTOTP(t *testing.T) {
 	f := newSecurityFixture(t)
 	u := f.app.state.Users["school_a"]
 	u.PasswordHash = passwordHash("AdminPassword1234")
 	f.app.state.Users[u.ID] = u
-	f.app.config.AdminTOTPSecret = "JBSWY3DPEHPK3PXP"
-	wrong := "000000"
-	if validTOTP(f.app.config.AdminTOTPSecret, wrong) {
-		wrong = "111111"
+	login := f.request(t, "POST", "/api/v1/auth/login", "", map[string]any{"username": "school_a", "password": "AdminPassword1234"}, nil)
+	expectStatus(t, login, 200)
+	var result struct {
+		AccessToken string `json:"access_token"`
 	}
-	expectStatus(t, f.request(t, "POST", "/api/v1/auth/login", "", map[string]any{"username": "school_a", "password": "AdminPassword1234", "totp_code": wrong}, nil), 401)
-	expectStatus(t, f.request(t, "POST", "/api/v1/auth/login", "", map[string]any{"username": "school_a", "password": "AdminPassword1234", "totp_code": securityTOTP(f.app.config.AdminTOTPSecret)}, nil), 200)
+	if err := json.Unmarshal(login.Body.Bytes(), &result); err != nil {
+		t.Fatal(err)
+	}
+	expectStatus(t, f.request(t, "GET", "/api/v1/admin/classes", result.AccessToken, nil, nil), 200)
 }
 
 type securityGatedBody struct {

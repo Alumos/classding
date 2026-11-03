@@ -377,7 +377,7 @@ func (a *App) teacherWS(w http.ResponseWriter, r *http.Request) {
 	a.mu.Lock()
 	claims, err := a.verify(in.Token)
 	u, exists := a.state.Users[claims.Subject]
-	if err != nil || !exists || u.Status != "active" || claims.Version != u.TokenVersion || u.Role != "user" && !claims.Admin {
+	if err != nil || !exists || u.Status != "active" || claims.Version != u.TokenVersion {
 		a.mu.Unlock()
 		_ = p.conn.Close(websocket.StatusPolicyViolation, "invalid session")
 		return

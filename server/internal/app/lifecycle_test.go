@@ -43,19 +43,12 @@ func TestDeviceSequenceSurvivesHistoryCleanupAndRestart(t *testing.T) {
 	})
 }
 
-func TestBootstrapValidatesTOTPAndNormalizesUsername(t *testing.T) {
+func TestBootstrapWithoutTOTPAndNormalizesUsername(t *testing.T) {
 	service, err := New(Config{DataDir: t.TempDir(), JWTSecret: strings.Repeat("k", 40)})
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer service.Close()
-	for _, secret := range []string{strings.Repeat("!", 32), "JBSWY3DPEHPK3PXP"} {
-		service.config.AdminTOTPSecret = secret
-		if err := service.BootstrapAdmin("Operator", "AdminPassword2026!", "管理员"); err == nil {
-			t.Fatal("accepted malformed or short TOTP secret")
-		}
-	}
-	service.config.AdminTOTPSecret = "JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP"
 	if err := service.BootstrapAdmin(" Operator ", "AdminPassword2026!", "管理员"); err != nil {
 		t.Fatal(err)
 	}
