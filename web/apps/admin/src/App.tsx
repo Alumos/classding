@@ -12,6 +12,7 @@ import {
   LogOut,
   Monitor,
   RefreshCw,
+  School,
   Settings,
   ShieldCheck,
   Users,
@@ -67,6 +68,7 @@ import DevicesPage from './pages/Devices';
 import MessagesPage from './pages/Messages';
 import AuditPage from './pages/Audit';
 import SettingsPage from './pages/Settings';
+import SchoolsPage from './pages/Schools';
 
 function Login({ onLogin, initialError }: { onLogin: (user: User) => void; initialError: string }) {
   const [username, setUsername] = useState('');
@@ -174,6 +176,7 @@ function Login({ onLogin, initialError }: { onLogin: (user: User) => void; initi
 
 const navItems: { to: string; label: string; icon: LucideIcon; superOnly?: boolean }[] = [
   { to: '/', label: '工作概览', icon: LayoutDashboard },
+  { to: '/schools', label: '学校管理', icon: School, superOnly: true },
   { to: '/activation-codes', label: '激活码管理', icon: KeyRound, superOnly: true },
   { to: '/users', label: '教师管理', icon: Users },
   { to: '/classes', label: '班级管理', icon: BookOpen },
@@ -352,6 +355,14 @@ function Shell() {
               element={
                 <SuperOnly>
                   <CodesPage />
+                </SuperOnly>
+              }
+            />
+            <Route
+              path="/schools"
+              element={
+                <SuperOnly>
+                  <SchoolsPage />
                 </SuperOnly>
               }
             />

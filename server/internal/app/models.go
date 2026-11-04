@@ -3,7 +3,7 @@ package app
 import "time"
 
 // Version is the release reported by the server and offered to classroom clients.
-const Version = "0.3.1"
+const Version = "0.3.2"
 
 // Role decides which workspace an account may sign in to and what it governs.
 type Role string
@@ -278,6 +278,13 @@ type Audio struct {
 	CreatedAt string `json:"created_at"`
 }
 
+// School is an organization with a name; see schools.go.
+type School struct {
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	CreatedAt string `json:"created_at"`
+}
+
 type Audit struct {
 	ID     string `json:"id"`
 	Actor  string `json:"actor"`
@@ -302,6 +309,7 @@ type State struct {
 	Audio     map[string]Audio    `json:"audio"`
 	Audit     map[string]Audit    `json:"audit_logs"`
 	Settings  map[string]string   `json:"settings"`
+	Schools   map[string]School   `json:"schools"`
 }
 
 func newState() State {
@@ -319,6 +327,7 @@ func newState() State {
 		Audio:     map[string]Audio{},
 		Audit:     map[string]Audit{},
 		Settings:  map[string]string{},
+		Schools:   map[string]School{},
 	}
 }
 

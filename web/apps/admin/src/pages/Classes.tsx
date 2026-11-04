@@ -42,6 +42,7 @@ import {
   type Classroom,
   type User,
 } from '../lib';
+import { useSchools } from '../schools';
 
 type ClassForm = { name: string; grade: string; owner_id: string; max_teachers: string; max_devices: string };
 const emptyClassForm: ClassForm = { name: '', grade: '', owner_id: '', max_teachers: '3', max_devices: '1' };
@@ -66,12 +67,13 @@ export default function ClassesPage() {
       !!user.org_id &&
       (!editing || user.org_id === editing.org_id),
   );
+  const { schoolName } = useSchools();
   const ownerName = (id: string) => {
     const user = users.data?.find((item) => item.id === id);
     return user ? `${user.display_name || user.username}（${user.username}）` : id || '—';
   };
   const classes = (query.data ?? []).filter((item) =>
-    `${item.name} ${item.grade ?? ''} ${item.org_id ?? ''} ${ownerName(item.owner_id)}`
+    `${item.name} ${item.grade ?? ''} ${schoolName(item.org_id)} ${ownerName(item.owner_id)}`
       .toLowerCase()
       .includes(search.trim().toLowerCase()),
   );
@@ -87,7 +89,7 @@ export default function ClassesPage() {
       : []),
     ...teachers.map((user) => ({
       value: user.id,
-      label: `${user.display_name || user.username}（${user.username}）${user.org_id ? ` · ${user.org_id}` : ''}`,
+      label: `${user.display_name || user.username}（${user.username}） · ${schoolName(user.org_id)}`,
     })),
   ];
   const save = useMutation({
@@ -199,7 +201,7 @@ export default function ClassesPage() {
         }
       >
         <Toolbar count={query.data ? `共 ${classes.length} 条` : undefined}>
-          <SearchInput value={search} onChange={setSearch} placeholder="搜索班级、年级、负责人或学校 ID" />
+          <SearchInput value={search} onChange={setSearch} placeholder="搜索班级、年级、负责人或学校" />
         </Toolbar>
         <ResultState
           loading={query.isLoading}
@@ -213,7 +215,7 @@ export default function ClassesPage() {
                 <TableHead>班级名称</TableHead>
                 <TableHead>年级</TableHead>
                 <TableHead>负责人</TableHead>
-                <TableHead>所属学校 ID</TableHead>
+                <TableHead>所属学校</TableHead>
                 <TableHead>教师</TableHead>
                 <TableHead>设备</TableHead>
                 <TableHead>创建时间</TableHead>
@@ -236,7 +238,7 @@ export default function ClassesPage() {
                   </TableCell>
                   <TableCell>{item.grade || '—'}</TableCell>
                   <TableCell>{ownerName(item.owner_id)}</TableCell>
-                  <TableCell className="text-muted-foreground">{item.org_id || '—'}</TableCell>
+                  <TableCell className="text-muted-foreground">{schoolName(item.org_id)}</TableCell>
                   <TableCell>
                     {number(item.teachers_count)} / {number(item.max_teachers)} 位
                   </TableCell>

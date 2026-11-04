@@ -103,6 +103,21 @@ func New(c Config) (*App, error) {
 // upgradeState fills in data that databases written by older releases lack.
 func upgradeState(s *State) {
 	initializeSettings(s)
+	if s.Schools == nil {
+		s.Schools = map[string]School{}
+	}
+	// Before 0.3.2 a school was only an ID typed into forms. Give every ID that
+	// stood for a school a record, named after the ID until the operator renames it.
+	for _, u := range s.Users {
+		if u.Role == RoleSchoolAdmin {
+			s.ensureSchool(u.OrgID)
+		}
+	}
+	for _, code := range s.Codes {
+		if code.ClassID == nil && code.Status == LicenseUnused {
+			s.ensureSchool(code.OrgID)
+		}
+	}
 	// Licenses redeemed before they inherited their class organization.
 	for key, code := range s.Codes {
 		if code.OrgID == "" && code.ClassID != nil {

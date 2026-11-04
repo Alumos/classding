@@ -141,8 +141,8 @@ func (a *App) createClass(_ http.ResponseWriter, r *http.Request, u *User) (any,
 	if !exists || code.Status != LicenseUnused || code.Expired() {
 		return nil, fail(400, "INVALID_ACTIVATION_CODE", "激活码不存在、已使用或已过期。")
 	}
-	if code.OrgID != "" && code.OrgID != u.OrgID && !u.IsSuperAdmin() {
-		return nil, fail(403, "LICENSE_ORG_MISMATCH", "该激活码属于其他学校，请联系管理员确认账号和激活码的所属学校。")
+	if err := a.redeemFor(u, code); err != nil {
+		return nil, err
 	}
 	c := a.activateClass(code, Class{Name: name, Grade: in.Grade, OwnerID: u.ID, OrgID: u.OrgID}, *u)
 	a.audit(u, "class.create", c.ID)

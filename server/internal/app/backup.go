@@ -318,6 +318,11 @@ func validateBackupState(s State) error {
 			}
 		}
 	}
+	for key, school := range s.Schools {
+		if key == "" || school.ID != key || !runesBetween(school.Name, 1, maxSchoolName) {
+			return errors.New("invalid school")
+		}
+	}
 	for key, audit := range s.Audit {
 		if key == "" || audit.ID != key {
 			return errors.New("invalid audit entry")
@@ -516,6 +521,7 @@ func (a *App) restore(w http.ResponseWriter, r *http.Request) {
 		audio.Path = filepath.Join(next, filepath.Base(audio.Path))
 		state.Audio[key] = audio
 	}
+	upgradeState(&state)
 	state.Sessions = map[string]Session{}
 	state.Settings[authEpochKey] = random(32)
 

@@ -157,7 +157,7 @@ func TestActivationOrganizationAndStrictSchoolScope(t *testing.T) {
 	f.app.state.Codes["OTHER"] = Code{Code: "OTHER", Status: "unused", OrgID: "org_b", MaxTeachers: 1, MaxDevices: 1}
 	response = f.request(t, "POST", "/api/v1/classes", f.token("owner"), map[string]any{"name": "新班", "activation_code": "OTHER"}, nil)
 	expectStatus(t, response, 403)
-	if !strings.Contains(response.Body.String(), "其他学校") {
+	if !strings.Contains(response.Body.String(), "「外校」") || !strings.Contains(response.Body.String(), "「阳光小学」") {
 		t.Fatalf("unclear error: %s", response.Body.String())
 	}
 	// A legacy membership must not grant a school administrator access to another school.

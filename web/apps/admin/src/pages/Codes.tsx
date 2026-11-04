@@ -2,9 +2,10 @@ import { useState, type FormEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@classding/api';
 import { toast } from 'sonner';
-import { CircleCheck, Copy, Download, Plus, X } from 'lucide-react';
+import { CircleCheck, Copy, Download, Plus, Trash2, X } from 'lucide-react';
 import { Alert, AlertAction, AlertDescription, AlertTitle } from '@classding/ui/components/ui/alert';
 import { Button } from '@classding/ui/components/ui/button';
+import { Checkbox } from '@classding/ui/components/ui/checkbox';
 import {
   Dialog,
   DialogContent,
@@ -44,8 +45,13 @@ import {
   localDate,
   type ActivationCode,
 } from '../lib';
+import { NO_SCHOOL, useSchools } from '../schools';
 
-function downloadCodes(codes: ActivationCode[], filename = 'classding-activation-codes.csv') {
+function downloadCodes(
+  codes: ActivationCode[],
+  schoolName: (orgId?: string | null, none?: string) => string,
+  filename = 'classding-activation-codes.csv',
+) {
   const fields = [
     '激活码',
     '状态',
@@ -53,7 +59,7 @@ function downloadCodes(codes: ActivationCode[], filename = 'classding-activation
     '设备上限',
     '有效期',
     '班级 ID',
-    '学校 ID',
+    '所属学校',
     '批次 ID',
     '备注',
     '核销时间',
@@ -71,7 +77,7 @@ function downloadCodes(codes: ActivationCode[], filename = 'classding-activation
     code.max_devices,
     code.expires_at ?? '',
     code.class_id ?? '',
-    code.org_id ?? '',
+    schoolName(code.org_id, '不限'),
     code.batch_id ?? '',
     code.note ?? '',
     code.redeemed_at ?? '',
@@ -92,7 +98,7 @@ const defaultCodeForm = {
   max_teachers: '3',
   max_devices: '1',
   expires_at: '',
-  org_id: '',
+  org_id: NO_SCHOOL,
   note: '',
 };
 const statusOptions = [
@@ -115,6 +121,9 @@ export default function CodesPage() {
   const [editing, setEditing] = useState<ActivationCode | null>(null);
   const [revoking, setRevoking] = useState<ActivationCode | null>(null);
   const [editForm, setEditForm] = useState({ max_teachers: '', max_devices: '', expires_at: '' });
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const { schoolName, options: schoolOptions } = useSchools();
   const params = new URLSearchParams();
   if (search.trim()) params.set('search', search.trim());
   if (status !== 'all') params.set('status', status);
@@ -123,6 +132,37 @@ export default function CodesPage() {
     queryFn: () => api<ActivationCode[]>(`/admin/activation-codes${params.size ? `?${params}` : ''}`),
   });
   const pager = usePagination(query.data ?? [], 10, `${search}|${status}`);
+  // Only codes that no class uses can be deleted; a class must be deleted first.
+  const deletable = (code: ActivationCode) => !code.class_id;
+  const selectedCodes = (query.data ?? []).filter((code) => selected.has(code.code));
+  const pageDeletable = pager.pageItems.filter(deletable);
+  const pageSelected = pageDeletable.length > 0 && pageDeletable.every((code) => selected.has(code.code));
+  function toggle(code: string, checked: boolean) {
+    setSelected((current) => {
+      const next = new Set(current);
+      if (checked) next.add(code);
+      else next.delete(code);
+      return next;
+    });
+  }
+  function togglePage(checked: boolean) {
+    setSelected((current) => {
+      const next = new Set(current);
+      pageDeletable.forEach((code) => (checked ? next.add(code.code) : next.delete(code.code)));
+      return next;
+    });
+  }
+  const remove = useMutation({
+    mutationFn: (codes: string[]) =>
+      api<{ deleted: number }>('/admin/activation-codes/delete', json('POST', { codes })),
+    onSuccess: (result) => {
+      setSelected(new Set());
+      setConfirmDelete(false);
+      void queryClient.invalidateQueries({ queryKey: ['admin'] });
+      toast.success(`已删除 ${result.deleted} 个激活码`);
+    },
+    onError: (error) => toast.error(errorMessage(error)),
+  });
   const create = useMutation({
     mutationFn: (body: unknown) => api<ActivationCode[]>('/admin/activation-codes', json('POST', body)),
     onSuccess: (result) => {
@@ -170,7 +210,7 @@ export default function CodesPage() {
       max_teachers: teachers,
       max_devices: devices,
       ...(form.expires_at ? { expires_at: endOfDay(form.expires_at).toISOString() } : {}),
-      ...(form.org_id.trim() ? { org_id: form.org_id.trim() } : {}),
+      ...(form.org_id !== NO_SCHOOL ? { org_id: form.org_id } : {}),
       ...(form.note.trim() ? { note: form.note.trim() } : {}),
     });
   }
@@ -238,7 +278,7 @@ export default function CodesPage() {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => downloadCodes(created, 'classding-new-codes.csv')}
+                onClick={() => downloadCodes(created, schoolName, 'classding-new-codes.csv')}
               >
                 <Download />
                 导出本批
@@ -256,15 +296,26 @@ export default function CodesPage() {
         title="全部激活码"
         description="查看授权状态，按需调整使用额度"
         action={
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={!query.data?.length}
-            onClick={() => downloadCodes(query.data ?? [])}
-          >
-            <Download />
-            导出 CSV
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="destructive"
+              size="sm"
+              disabled={!selectedCodes.length}
+              onClick={() => setConfirmDelete(true)}
+            >
+              <Trash2 />
+              删除所选（{selectedCodes.length}）
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={!query.data?.length}
+              onClick={() => downloadCodes(query.data ?? [], schoolName)}
+            >
+              <Download />
+              导出 CSV
+            </Button>
+          </div>
         }
       >
         <Toolbar count={query.data ? `共 ${query.data.length} 条` : undefined}>
@@ -286,8 +337,17 @@ export default function CodesPage() {
           <DataTable>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-10">
+                  <Checkbox
+                    aria-label="选择本页可删除的激活码"
+                    checked={pageSelected}
+                    disabled={!pageDeletable.length}
+                    onCheckedChange={(checked) => togglePage(checked === true)}
+                  />
+                </TableHead>
                 <TableHead>激活码</TableHead>
                 <TableHead>状态</TableHead>
+                <TableHead>所属学校</TableHead>
                 <TableHead>教师 / 设备上限</TableHead>
                 <TableHead>有效期</TableHead>
                 <TableHead>关联班级</TableHead>
@@ -297,7 +357,16 @@ export default function CodesPage() {
             </TableHeader>
             <TableBody>
               {pager.pageItems.map((code) => (
-                <TableRow key={code.code}>
+                <TableRow key={code.code} data-state={selected.has(code.code) ? 'selected' : undefined}>
+                  <TableCell>
+                    <Checkbox
+                      aria-label={`选择激活码 ${code.code}`}
+                      checked={selected.has(code.code)}
+                      disabled={!deletable(code)}
+                      title={deletable(code) ? undefined : '正在被班级使用，删除班级后才能删除'}
+                      onCheckedChange={(checked) => toggle(code.code, checked === true)}
+                    />
+                  </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-1">
                       <span className="font-mono font-medium tracking-wide">{code.code}</span>
@@ -316,6 +385,9 @@ export default function CodesPage() {
                   </TableCell>
                   <TableCell>
                     <StatusBadge status={code.status} />
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {schoolName(code.org_id, '不限学校')}
                   </TableCell>
                   <TableCell>
                     {code.max_teachers} 位 / {code.max_devices} 台
@@ -410,13 +482,17 @@ export default function CodesPage() {
                 <FieldDescription>留空为长期有效</FieldDescription>
               </Field>
               <Field>
-                <FieldLabel htmlFor="code-org">所属学校 ID</FieldLabel>
-                <Input
+                <FieldLabel htmlFor="code-org">所属学校</FieldLabel>
+                <SimpleSelect
                   id="code-org"
-                  placeholder="选填"
+                  label="所属学校"
                   value={form.org_id}
-                  onChange={(e) => setForm({ ...form, org_id: e.target.value })}
+                  onValueChange={(value) => setForm({ ...form, org_id: value })}
+                  options={schoolOptions('不限学校')}
                 />
+                <FieldDescription>
+                  指定学校后，只有该校教师或尚未加入学校的教师可以兑换；后者兑换后自动加入该校
+                </FieldDescription>
               </Field>
               <Field>
                 <FieldLabel htmlFor="code-note">备注</FieldLabel>
@@ -499,6 +575,15 @@ export default function CodesPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <ConfirmDialog
+        open={confirmDelete}
+        onOpenChange={setConfirmDelete}
+        title={`确认删除 ${selectedCodes.length} 个激活码？`}
+        description="删除后无法恢复，这些激活码将不能再兑换。正在被班级使用的激活码不会出现在可选范围内。"
+        confirmLabel={remove.isPending ? '正在删除…' : '确认删除'}
+        pending={remove.isPending}
+        onConfirm={() => remove.mutate(selectedCodes.map((code) => code.code))}
+      />
       <ConfirmDialog
         open={!!revoking}
         onOpenChange={(open) => {

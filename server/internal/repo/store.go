@@ -11,7 +11,7 @@ import (
 	"path/filepath"
 )
 
-var tables = []string{"users", "classes", "class_members", "devices", "messages", "homeworks", "activation_codes", "collab_invites", "sessions", "phrases", "audio", "audit_logs", "settings"}
+var tables = []string{"users", "classes", "class_members", "devices", "messages", "homeworks", "activation_codes", "collab_invites", "sessions", "phrases", "audio", "audit_logs", "settings", "schools"}
 
 type Store struct {
 	db    *sql.DB

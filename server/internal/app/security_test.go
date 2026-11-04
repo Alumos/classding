@@ -42,6 +42,8 @@ func newSecurityFixture(t *testing.T) *securityFixture {
 	for _, u := range users {
 		a.state.Users[u.ID] = u
 	}
+	a.state.Schools["org_a"] = School{ID: "org_a", Name: "阳光小学", CreatedAt: now()}
+	a.state.Schools["org_b"] = School{ID: "org_b", Name: "外校", CreatedAt: now()}
 	for _, c := range []Class{
 		{ID: "class_a", Name: "甲班", OrgID: "org_a", OwnerID: "owner_a", MaxTeachers: 2, MaxDevices: 1, ActivationCode: "CODE-A", CreatedAt: now()},
 		{ID: "class_b", Name: "外校班级", OrgID: "org_b", OwnerID: "owner_b", MaxTeachers: 3, MaxDevices: 1, ActivationCode: "CODE-B", CreatedAt: now()},

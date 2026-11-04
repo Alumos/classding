@@ -50,14 +50,17 @@ func (a *App) adminCreateUser(_ http.ResponseWriter, r *http.Request, u *User) (
 	if !validUsername(username) || !validPassword(in.Password) || !validDisplayName(name) || len(orgID) > 128 {
 		return nil, bad("用户名需 3–32 位，密码至少 10 位且包含字母和数字，落款 1–24 字。")
 	}
-	if orgID == "" {
+	// A school administrator adds teachers to their own school; the operator
+	// picks a school or leaves the teacher without one.
+	switch {
+	case !u.IsSuperAdmin() && (orgID == "" || orgID == u.OrgID) && u.OrgID != "":
 		orgID = u.OrgID
-	}
-	if !u.IsSuperAdmin() && (u.OrgID == "" || orgID != u.OrgID) {
+	case !u.IsSuperAdmin():
 		return nil, forbidden()
-	}
-	if orgID == "" {
+	case orgID == "":
 		orgID = id("org")
+	case !a.isSchool(orgID):
+		return nil, bad("请选择已有的学校。")
 	}
 	if _, taken := a.userByUsername(username); taken {
 		return nil, usernameTaken()
@@ -90,9 +93,22 @@ func (a *App) adminUpdateUser(_ http.ResponseWriter, r *http.Request, u *User) (
 		Password    *string        `json:"password"`
 		DisplayName *string        `json:"display_name"`
 		Status      *AccountStatus `json:"status"`
+		OrgID       *string        `json:"org_id"`
 	}
 	if err := decode(r, &in); err != nil {
 		return nil, err
+	}
+	if in.OrgID != nil && *in.OrgID != teacher.OrgID {
+		if !u.IsSuperAdmin() {
+			return nil, forbidden()
+		}
+		orgID := *in.OrgID
+		if orgID == "" {
+			orgID = id("org")
+		} else if !a.isSchool(orgID) {
+			return nil, bad("请选择已有的学校。")
+		}
+		a.moveTeacher(&teacher, orgID)
 	}
 	if in.Username != nil {
 		username := normalizeUsername(*in.Username)
@@ -403,6 +419,9 @@ func (a *App) createCodes(_ http.ResponseWriter, r *http.Request, u *User) (any,
 	if in.ExpiresAt != nil && elapsed(*in.ExpiresAt) {
 		return nil, bad("有效期必须为未来时间。")
 	}
+	if in.OrgID != "" && !a.isSchool(in.OrgID) {
+		return nil, bad("请选择已有的学校。")
+	}
 	batch := id("batch")
 	out := make([]Code, in.Count)
 	for i := range out {
@@ -411,6 +430,35 @@ func (a *App) createCodes(_ http.ResponseWriter, r *http.Request, u *User) (any,
 	}
 	a.audit(u, "license.create", batch)
 	return out, nil
+}
+
+// deleteCodes removes licenses that no class uses. A license in use must be
+// freed by deleting its class first, so that no class loses its license.
+func (a *App) deleteCodes(_ http.ResponseWriter, r *http.Request, u *User) (any, error) {
+	var in struct {
+		Codes []string `json:"codes"`
+	}
+	if err := decodeStrict(r, &in); err != nil {
+		return nil, err
+	}
+	codes := unique(in.Codes)
+	if !inRange(len(codes), 1, 1000) {
+		return nil, bad("请选择 1–1000 个激活码。")
+	}
+	for _, key := range codes {
+		code, exists := a.state.Codes[key]
+		if !exists {
+			return nil, missing()
+		}
+		if code.ClassID != nil {
+			return nil, fail(409, "LICENSE_IN_USE", "激活码 "+key+" 正在被班级使用，请先删除该班级后再删除激活码。")
+		}
+	}
+	for _, key := range codes {
+		delete(a.state.Codes, key)
+		a.audit(u, "license.delete", key)
+	}
+	return map[string]int{"deleted": len(codes)}, nil
 }
 
 // updateCode adjusts a license. Its quota follows its class, and revoking or

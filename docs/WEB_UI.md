@@ -55,13 +55,15 @@ v0.2.0 起，教师工作台（`web/apps/teacher`）和管理后台（`web/apps/
 
 ## 管理后台
 
-基路径 `/admin/`。路由：`/`、`/activation-codes`、`/users`、`/classes`、`/devices`、`/messages`、`/audit-logs`、`/settings`。激活码、操作日志、系统配置三页仅运营管理员（`super_admin`）可见。
+基路径 `/admin/`。路由：`/`、`/schools`、`/activation-codes`、`/users`、`/classes`、`/devices`、`/messages`、`/audit-logs`、`/settings`。学校、激活码、操作日志、系统配置四页仅运营管理员（`super_admin`）可见。
 
 - **概览**：`GET /admin/overview`，包括统计卡片、近期趋势图（recharts）和最近通知。
+- **学校**：`GET/POST /admin/schools`、`PATCH/DELETE /admin/schools/{id}`。教师、班级、激活码以 `org_id` 归属学校，页面一律显示学校名称（`schools.ts` 的 `useSchools`）。仍有教师、班级或激活码的学校不能删除。
 - **激活码**：
   - 读取：`GET /admin/activation-codes?search=&status=`。
   - 生成：`POST /admin/activation-codes`，单次 1–1000 个。
   - 调整额度和有效期、吊销：`PATCH /admin/activation-codes/{code}`。
+  - 批量删除：`POST /admin/activation-codes/delete {codes}`，只能删除没有班级使用的激活码，表格中使用中的激活码不可勾选。
   - CSV 导出会防止公式注入，以 `'` 前缀转义。
 - **教师**：`/admin/users` 的增删改查，以及解除登录限制 `POST /admin/users/{id}/unlock-login`。用户名 3–32 位；密码 10–128 字节，须含字母和数字。
 - **班级**：`/admin/classes` 的增删改查。负责人只能选状态正常、且属于同一学校的教师。

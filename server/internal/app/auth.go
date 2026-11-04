@@ -404,6 +404,9 @@ func (a *App) seed() {
 		{"teacher", "林老师", "ClassDing2026!", RoleTeacher},
 		{"admin", "管理员", "AdminDing2026!", RoleSuperAdmin},
 	}
+	if !a.isSchool("org_demo") {
+		a.state.Schools["org_demo"] = School{ID: "org_demo", Name: "演示学校", CreatedAt: now()}
+	}
 	for _, entry := range accounts {
 		if _, exists := a.userByUsername(entry.username); exists {
 			continue

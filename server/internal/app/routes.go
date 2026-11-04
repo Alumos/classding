@@ -80,6 +80,11 @@ func (a *App) routes() {
 		r.Get("/admin/activation-codes", q(adminOnly, a.listCodes))
 		r.Post("/admin/activation-codes", c(superAdminOnly, a.createCodes))
 		r.Patch("/admin/activation-codes/{code}", c(superAdminOnly, a.updateCode))
+		r.Post("/admin/activation-codes/delete", c(superAdminOnly, a.deleteCodes))
+		r.Get("/admin/schools", q(adminOnly, a.listSchools))
+		r.Post("/admin/schools", c(superAdminOnly, a.createSchool))
+		r.Patch("/admin/schools/{id}", c(superAdminOnly, a.updateSchool))
+		r.Delete("/admin/schools/{id}", c(superAdminOnly, a.deleteSchool))
 		r.Get("/admin/users", q(adminOnly, a.adminUsers))
 		r.Post("/admin/users", c(adminOnly, a.adminCreateUser))
 		r.Patch("/admin/users/{id}", c(adminOnly, a.adminUpdateUser))
@@ -129,7 +134,7 @@ func clientRelease(_ http.ResponseWriter, _ *http.Request, _ *User) (any, error)
 		"version":       Version,
 		"url":           releaseBase + "/ClassDingScreen-amd64-installer.exe",
 		"sha256":        "",
-		"notes":         "内部代码整理，功能与 0.3.0 相同；SHA-256 校验文件见对应 GitHub Release。",
+		"notes":         "大屏端功能与 0.3.0 相同；SHA-256 校验文件见对应 GitHub Release。",
 		"min_supported": "0.1.0",
 	}, nil
 }

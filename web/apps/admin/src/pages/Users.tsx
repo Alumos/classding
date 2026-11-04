@@ -44,6 +44,7 @@ import {
   useSession,
   type User,
 } from '../lib';
+import { NO_SCHOOL, useSchools } from '../schools';
 
 type TeacherForm = {
   username: string;
@@ -56,7 +57,7 @@ const emptyTeacherForm: TeacherForm = {
   username: '',
   display_name: '',
   password: '',
-  org_id: '',
+  org_id: NO_SCHOOL,
   status: 'active',
 };
 
@@ -70,8 +71,10 @@ export default function UsersPage() {
   const [deleting, setDeleting] = useState<User | null>(null);
   const [formError, setFormError] = useState('');
   const query = useQuery({ queryKey: ['admin', 'users'], queryFn: () => api<User[]>('/admin/users') });
+  const { schoolName, isSchool, options: schoolOptions } = useSchools();
+  const superAdmin = currentUser.role === 'super_admin';
   const users = (query.data ?? []).filter((user) =>
-    `${user.display_name} ${user.username} ${user.org_id ?? ''}`
+    `${user.display_name} ${user.username} ${schoolName(user.org_id)}`
       .toLowerCase()
       .includes(search.trim().toLowerCase()),
   );
@@ -85,7 +88,8 @@ export default function UsersPage() {
       setFormOpen(false);
       setEditing(null);
       setFormError('');
-      void queryClient.invalidateQueries({ queryKey: ['admin', 'users'] });
+      // Moving a teacher also moves their classes, and changes school counts.
+      void queryClient.invalidateQueries({ queryKey: ['admin'] });
       toast.success(user ? '教师账号已更新' : '教师账号已创建');
     },
     onError: (error) => setFormError(errorMessage(error)),
@@ -125,7 +129,7 @@ export default function UsersPage() {
       username: user.username,
       display_name: user.display_name,
       password: '',
-      org_id: user.org_id ?? '',
+      org_id: isSchool(user.org_id) ? user.org_id : NO_SCHOOL,
       status: user.status === 'disabled' ? 'disabled' : 'active',
     });
     setFormError('');
@@ -157,12 +161,15 @@ export default function UsersPage() {
           ...(displayName !== editing.display_name ? { display_name: displayName } : {}),
           ...(form.password ? { password: form.password } : {}),
           ...(form.status !== editing.status ? { status: form.status } : {}),
+          ...(superAdmin && form.org_id !== (isSchool(editing.org_id) ? editing.org_id : NO_SCHOOL)
+            ? { org_id: form.org_id === NO_SCHOOL ? '' : form.org_id }
+            : {}),
         }
       : {
           username,
           display_name: displayName,
           password: form.password,
-          ...(currentUser.role === 'super_admin' && form.org_id.trim() ? { org_id: form.org_id.trim() } : {}),
+          ...(superAdmin && form.org_id !== NO_SCHOOL ? { org_id: form.org_id } : {}),
         };
     save.mutate({ user: editing, body });
   }
@@ -188,7 +195,7 @@ export default function UsersPage() {
         }
       >
         <Toolbar count={query.data ? `共 ${users.length} 条` : undefined}>
-          <SearchInput value={search} onChange={setSearch} placeholder="搜索姓名、账号或学校 ID" />
+          <SearchInput value={search} onChange={setSearch} placeholder="搜索姓名、账号或学校" />
         </Toolbar>
         <ResultState
           loading={query.isLoading}
@@ -202,7 +209,7 @@ export default function UsersPage() {
                 <TableHead>教师</TableHead>
                 <TableHead>账号</TableHead>
                 <TableHead>角色</TableHead>
-                <TableHead>所属学校 ID</TableHead>
+                <TableHead>所属学校</TableHead>
                 <TableHead>状态</TableHead>
                 <TableHead className="text-right">操作</TableHead>
               </TableRow>
@@ -223,7 +230,7 @@ export default function UsersPage() {
                   </TableCell>
                   <TableCell>{user.username}</TableCell>
                   <TableCell>{roleName[user.role] ?? user.role}</TableCell>
-                  <TableCell className="text-muted-foreground">{user.org_id || '—'}</TableCell>
+                  <TableCell className="text-muted-foreground">{schoolName(user.org_id)}</TableCell>
                   <TableCell>
                     <Badge
                       variant={
@@ -334,15 +341,19 @@ export default function UsersPage() {
                 />
                 {editing && <FieldDescription>留空则不修改</FieldDescription>}
               </Field>
-              {!editing && currentUser.role === 'super_admin' && (
+              {superAdmin && (
                 <Field>
-                  <FieldLabel htmlFor="teacher-org">所属学校 ID</FieldLabel>
-                  <Input
+                  <FieldLabel htmlFor="teacher-org">所属学校</FieldLabel>
+                  <SimpleSelect
                     id="teacher-org"
-                    placeholder="选填"
+                    label="所属学校"
                     value={form.org_id}
-                    onChange={(e) => setForm({ ...form, org_id: e.target.value })}
+                    onValueChange={(value) => setForm({ ...form, org_id: value })}
+                    options={schoolOptions('不属于任何学校')}
                   />
+                  {editing && (
+                    <FieldDescription>更换学校时，该教师负责的班级会一起转入新学校</FieldDescription>
+                  )}
                 </Field>
               )}
               {editing && (

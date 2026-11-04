@@ -133,6 +133,14 @@ const schemas = {
     redeemed_at: nullable,
   }),
   AuthResponse: obj({ access_token: str, user: ref('User') }),
+  School: obj({
+    id: str,
+    name: { type: 'string', minLength: 1, maxLength: 40 },
+    created_at: timestamp,
+    teachers_count: num,
+    classes_count: num,
+    codes_count: num,
+  }),
   BindCode: obj({ code: str, expires_at: timestamp }),
   ClientRelease: obj({ version: str, url: str, sha256: str, notes: str, min_supported: str }),
   Config: obj({
@@ -376,6 +384,16 @@ add(
   ref('ActivationCode'),
   obj({ max_teachers: num, max_devices: num, expires_at: nullable, status: str }, []),
 );
+add(
+  '/admin/activation-codes/delete',
+  'post',
+  obj({ deleted: num }),
+  obj({ codes: { type: 'array', items: str, minItems: 1, maxItems: 1000 } }),
+);
+add('/admin/schools', 'get', arr(ref('School')));
+add('/admin/schools', 'post', ref('School'), obj({ name: str }));
+add('/admin/schools/{id}', 'patch', ref('School'), obj({ name: str }));
+add('/admin/schools/{id}', 'delete', ref('OK'));
 add('/admin/users', 'get', arr(ref('User')));
 add(
   '/admin/users',
@@ -391,7 +409,7 @@ add(
   '/admin/users/{id}',
   'patch',
   ref('User'),
-  obj({ username: str, password: str, display_name: str, status: str }, []),
+  obj({ username: str, password: str, display_name: str, status: str, org_id: str }, []),
 );
 add('/admin/users/{id}', 'delete', ref('OK'));
 add('/admin/users/{id}/unlock-login', 'post', ref('OK'));

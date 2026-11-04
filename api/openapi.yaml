@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "课堂叮咚 API",
-    "version": "0.3.1"
+    "version": "0.3.2"
   },
   "servers": [
     {
@@ -2621,9 +2621,260 @@
         }
       }
     },
+    "/admin/activation-codes/delete": {
+      "post": {
+        "operationId": "post__admin_activation_codes_delete_54",
+        "summary": "POST /admin/activation-codes/delete",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "codes": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "minItems": 1,
+                    "maxItems": 1000
+                  }
+                },
+                "required": [
+                  "codes"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "deleted": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "deleted"
+                  ]
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "业务错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/schools": {
+      "get": {
+        "operationId": "get__admin_schools_55",
+        "summary": "GET /admin/schools",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/School"
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "业务错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "post__admin_schools_56",
+        "summary": "POST /admin/schools",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "name"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/School"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "业务错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/schools/{id}": {
+      "patch": {
+        "operationId": "patch__admin_schools__id__57",
+        "summary": "PATCH /admin/schools/{id}",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "name"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/School"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "业务错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "delete__admin_schools__id__58",
+        "summary": "DELETE /admin/schools/{id}",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OK"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "业务错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/admin/users": {
       "get": {
-        "operationId": "get__admin_users_54",
+        "operationId": "get__admin_users_59",
         "summary": "GET /admin/users",
         "security": [
           {
@@ -2657,7 +2908,7 @@
         }
       },
       "post": {
-        "operationId": "post__admin_users_55",
+        "operationId": "post__admin_users_60",
         "summary": "POST /admin/users",
         "security": [
           {
@@ -2719,7 +2970,7 @@
     },
     "/admin/users/{id}": {
       "patch": {
-        "operationId": "patch__admin_users__id__56",
+        "operationId": "patch__admin_users__id__61",
         "summary": "PATCH /admin/users/{id}",
         "security": [
           {
@@ -2754,6 +3005,9 @@
                   },
                   "status": {
                     "type": "string"
+                  },
+                  "org_id": {
+                    "type": "string"
                   }
                 },
                 "required": []
@@ -2785,7 +3039,7 @@
         }
       },
       "delete": {
-        "operationId": "delete__admin_users__id__57",
+        "operationId": "delete__admin_users__id__62",
         "summary": "DELETE /admin/users/{id}",
         "security": [
           {
@@ -2828,7 +3082,7 @@
     },
     "/admin/users/{id}/unlock-login": {
       "post": {
-        "operationId": "post__admin_users__id__unlock_login_58",
+        "operationId": "post__admin_users__id__unlock_login_63",
         "summary": "POST /admin/users/{id}/unlock-login",
         "security": [
           {
@@ -2871,7 +3125,7 @@
     },
     "/admin/classes": {
       "get": {
-        "operationId": "get__admin_classes_59",
+        "operationId": "get__admin_classes_64",
         "summary": "GET /admin/classes",
         "security": [
           {
@@ -2905,7 +3159,7 @@
         }
       },
       "post": {
-        "operationId": "post__admin_classes_60",
+        "operationId": "post__admin_classes_65",
         "summary": "POST /admin/classes",
         "security": [
           {
@@ -2971,7 +3225,7 @@
     },
     "/admin/classes/{id}": {
       "patch": {
-        "operationId": "patch__admin_classes__id__61",
+        "operationId": "patch__admin_classes__id__66",
         "summary": "PATCH /admin/classes/{id}",
         "security": [
           {
@@ -3040,7 +3294,7 @@
         }
       },
       "delete": {
-        "operationId": "delete__admin_classes__id__62",
+        "operationId": "delete__admin_classes__id__67",
         "summary": "DELETE /admin/classes/{id}",
         "security": [
           {
@@ -3083,7 +3337,7 @@
     },
     "/admin/devices": {
       "get": {
-        "operationId": "get__admin_devices_63",
+        "operationId": "get__admin_devices_68",
         "summary": "GET /admin/devices",
         "security": [
           {
@@ -3119,7 +3373,7 @@
     },
     "/admin/messages": {
       "get": {
-        "operationId": "get__admin_messages_64",
+        "operationId": "get__admin_messages_69",
         "summary": "GET /admin/messages",
         "security": [
           {
@@ -3186,7 +3440,7 @@
     },
     "/admin/messages/{id}": {
       "delete": {
-        "operationId": "delete__admin_messages__id__65",
+        "operationId": "delete__admin_messages__id__70",
         "summary": "DELETE /admin/messages/{id}",
         "security": [
           {
@@ -3229,7 +3483,7 @@
     },
     "/admin/audit-logs": {
       "get": {
-        "operationId": "get__admin_audit_logs_66",
+        "operationId": "get__admin_audit_logs_71",
         "summary": "GET /admin/audit-logs",
         "security": [
           {
@@ -3888,6 +4142,40 @@
         "required": [
           "access_token",
           "user"
+        ]
+      },
+      "School": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 40
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "teachers_count": {
+            "type": "integer"
+          },
+          "classes_count": {
+            "type": "integer"
+          },
+          "codes_count": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "created_at",
+          "teachers_count",
+          "classes_count",
+          "codes_count"
         ]
       },
       "BindCode": {

@@ -14,7 +14,7 @@
 - AuthResponse: {access_token,user}；refresh token 放 HttpOnly Cookie。
 
 ## REST
-GET config => {speech_enabled:false,registration_enabled:true,version:'0.3.1'}
+GET config => {speech_enabled:false,registration_enabled:true,version:'0.3.2'}
 POST auth/register {username,password,display_name} => AuthResponse
 POST auth/login {username,password} => AuthResponse
 POST auth/refresh => AuthResponse；POST auth/logout => {ok:true}
@@ -49,6 +49,7 @@ GET admin/users => User[]；POST admin/users {username,password,display_name,org
 PATCH admin/users/:id {username?,password?,status?,display_name?} => User；DELETE admin/users/:id => {ok:true}（教师有负责班级时先转移或删除）
 GET admin/classes => Class[]；POST admin/classes {name,grade?,owner_id,max_teachers,max_devices} => Class
 PATCH admin/classes/:id {name?,grade?,owner_id?,max_teachers?,max_devices?} => Class；DELETE admin/classes/:id => {ok:true}
+GET/POST admin/schools、PATCH/DELETE admin/schools/:id => School{id,name,created_at,teachers_count,classes_count,codes_count}；POST admin/activation-codes/delete {codes} => {deleted}
 GET admin/devices => Device[]；GET admin/messages => {items:Message[],next_cursor:null}；GET admin/audit-logs => [{id,actor,action,target,at}]
 
 ## WebSocket

@@ -19,6 +19,7 @@ export type Overview = Schemas['Overview'];
 export type AuditLog = Schemas['AuditLog'];
 export type MessagePage = Schemas['MessageList'];
 export type SiteSettings = Schemas['SiteSettings'];
+export type School = Schemas['School'];
 
 // api() adds the JSON content type to any non-form body.
 export const json = (method: string, body?: unknown): RequestInit => ({
