@@ -97,3 +97,18 @@ func TestDeviceHelloRecordsNetworkAndServer(t *testing.T) {
 		t.Fatalf("device network details were not recorded: %+v", got)
 	}
 }
+
+func TestTextNoticesMayBeSilentButRecordingsPlayAtLeastOnce(t *testing.T) {
+	f := newSecurityFixture(t)
+	silent := securityText("class_a")
+	silent["repeat"] = 0
+	expectStatus(t, f.request(t, "POST", "/api/v1/messages", f.token("owner"), silent, nil), 200)
+	for _, repeat := range []int{-1, 4} {
+		body := securityText("class_a")
+		body["repeat"] = repeat
+		expectStatus(t, f.request(t, "POST", "/api/v1/messages", f.token("owner"), body, nil), 400)
+	}
+	f.app.state.Audio["clip"] = Audio{ID: "clip", UserID: "owner_a", MIME: "audio/webm", CreatedAt: now()}
+	voice := map[string]any{"class_ids": []string{"class_a"}, "kind": "voice", "style": "notice", "display_sec": 60, "repeat": 0, "play_mode": "voice", "audio_id": "clip"}
+	expectStatus(t, f.request(t, "POST", "/api/v1/messages", f.token("owner"), voice, nil), 400)
+}

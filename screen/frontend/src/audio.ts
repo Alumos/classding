@@ -166,7 +166,8 @@ export async function playNotice(
       }
       if (notice.chime) await ding(signal, native() ? 100 : volume);
       const text = [notice.student_name, notice.text].filter(Boolean).join('，');
-      for (let i = 0; i < Math.max(1, Math.min(10, notice.repeat ?? 1)); i++) {
+      // Zero repeats shows the notice silently, apart from the optional chime.
+      for (let i = 0; i < Math.max(0, Math.min(10, notice.repeat ?? 1)); i++) {
         aborted(signal);
         if (notice.audio_url) {
           try {

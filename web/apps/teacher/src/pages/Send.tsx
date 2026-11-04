@@ -61,7 +61,12 @@ const durations = [
   { value: '300', label: '5 分钟' },
   { value: '600', label: '10 分钟' },
 ];
-const repeats = ['1', '2', '3'].map((value) => ({ value, label: `${value} 遍` }));
+// A text notice can be shown silently; a recording always plays at least once.
+const repeatOptions = (mode: 'text' | 'voice') =>
+  (mode === 'voice' ? ['1', '2', '3'] : ['0', '1', '2', '3']).map((value) => ({
+    value,
+    label: value === '0' ? '不朗读' : `${value} 遍`,
+  }));
 
 export default function SendPage() {
   const { user } = useAuth();
@@ -75,7 +80,7 @@ export default function SendPage() {
   const signature = user?.display_name || user?.username || '老师';
   const [style, setStyle] = useState('notice');
   const [duration, setDuration] = useState('60');
-  const [repeat, setRepeat] = useState('2');
+  const [repeat, setRepeat] = useState('0');
   const [chime, setChime] = useState(false);
   const [preview, setPreview] = useState(false);
   const [audio, setAudio] = useState<{ audio_id: string; url: string } | null>(null);
@@ -255,7 +260,10 @@ export default function SendPage() {
                     variant={mode === value ? 'outline' : 'ghost'}
                     aria-pressed={mode === value}
                     className={cn(mode === value ? 'bg-background shadow-sm' : 'text-muted-foreground')}
-                    onClick={() => setMode(value)}
+                    onClick={() => {
+                      setMode(value);
+                      setRepeat(value === 'voice' ? '1' : '0');
+                    }}
                   >
                     <Icon />
                     {label}
@@ -370,18 +378,18 @@ export default function SendPage() {
                 />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="speech-repeat">朗读次数</Label>
+                <Label htmlFor="speech-repeat">{mode === 'voice' ? '播放次数' : '朗读次数'}</Label>
                 <SimpleSelect
                   id="speech-repeat"
-                  label="朗读次数"
+                  label={mode === 'voice' ? '播放次数' : '朗读次数'}
                   value={repeat}
-                  options={repeats}
+                  options={repeatOptions(mode)}
                   onValueChange={setRepeat}
                 />
               </div>
             </div>
             <p className="text-xs text-muted-foreground">
-              学生可点击“已读通知，关闭消息”提前关闭。语音朗读与提示音分别设置。
+              学生可点击“已读通知，关闭消息”提前关闭。默认不朗读，只在大屏上显示；语音朗读与提示音分别设置。
             </p>
             {style === 'urgent' ? (
               <div className="flex items-center justify-between gap-4 rounded-lg border p-3">

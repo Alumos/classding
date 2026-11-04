@@ -203,8 +203,12 @@ export default function HistoryPage() {
                       {message.text || '老师的原声通知'}
                     </strong>
                     <span className="text-xs text-muted-foreground">
-                      {message.kind === 'voice' ? '原声播报' : `朗读 ${message.repeat} 遍`} · 显示{' '}
-                      {message.display_sec} 秒
+                      {message.kind === 'voice'
+                        ? '原声播报'
+                        : message.repeat
+                          ? `朗读 ${message.repeat} 遍`
+                          : '不朗读'}{' '}
+                      · 显示 {message.display_sec} 秒
                     </span>
                   </span>
                 </button>

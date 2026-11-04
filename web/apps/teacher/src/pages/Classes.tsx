@@ -42,6 +42,7 @@ import {
   DialogTitle,
 } from '@classding/ui/components/ui/dialog';
 import { Field, FieldDescription, FieldGroup, FieldLabel } from '@classding/ui/components/ui/field';
+import { InputGroup, InputGroupAddon, InputGroupInput } from '@classding/ui/components/ui/input-group';
 import { Input } from '@classding/ui/components/ui/input';
 import {
   Item,
@@ -61,6 +62,9 @@ import { useAuth } from '../auth';
 import { useClasses, useNow } from '../hooks';
 import { EmptyState, ErrorState, Loading, PageHeader, formatTime, initials } from '../components';
 import type { BindCode, Class, Device, Member } from '../models';
+
+// The server accepts countdowns from one second to two hours.
+const MAX_COUNTDOWN_SECONDS = 7200;
 
 export default function ClassesPage() {
   const query = useClasses();
@@ -359,7 +363,10 @@ function ClassDetails({
   const [name, setName] = useState(c.name);
   const [confirm, setConfirm] = useState<Confirm | null>(null);
   const [pending, setPending] = useState(false);
-  const [seconds, setSeconds] = useState('300');
+  const [minutes, setMinutes] = useState('5');
+  const [extraSeconds, setExtraSeconds] = useState('0');
+  const countdown = (Number(minutes) || 0) * 60 + (Number(extraSeconds) || 0);
+  const countdownValid = Number.isInteger(countdown) && countdown >= 1 && countdown <= MAX_COUNTDOWN_SECONDS;
   const [names, setNames] = useState('');
   const [toolPending, setToolPending] = useState(false);
   const [transfer, setTransfer] = useState('');
@@ -439,20 +446,21 @@ function ClassDetails({
             <DialogDescription>管理这间教室的连接、同事和课堂工具。</DialogDescription>
           </DialogHeader>
           <Tabs value={tab} onValueChange={(value) => setTab(String(value))} className="min-w-0">
-            <TabsList className="w-full">
-              <TabsTrigger value="devices">
+            {/* Two rows on phones, so no label is squeezed past its tab. */}
+            <TabsList className="grid h-auto w-full grid-cols-2 gap-1 group-data-horizontal/tabs:h-auto sm:grid-cols-4">
+              <TabsTrigger value="devices" className="h-8">
                 <Monitor />
                 教室大屏
               </TabsTrigger>
-              <TabsTrigger value="members">
+              <TabsTrigger value="members" className="h-8">
                 <Users />
                 协同老师
               </TabsTrigger>
-              <TabsTrigger value="tools">
+              <TabsTrigger value="tools" className="h-8">
                 <Timer />
                 课堂工具
               </TabsTrigger>
-              <TabsTrigger value="settings">
+              <TabsTrigger value="settings" className="h-8">
                 <Settings2 />
                 班级设置
               </TabsTrigger>
@@ -645,27 +653,63 @@ function ClassDetails({
                   className="grid content-start gap-3 rounded-lg border p-4"
                   onSubmit={(e) => {
                     e.preventDefault();
-                    void tool('countdown', { seconds: Number(seconds) });
+                    if (countdownValid) void tool('countdown', { seconds: countdown });
                   }}
                 >
                   <p className="flex items-center gap-2 font-medium">
                     <Timer className="size-4" />
                     课堂倒计时
                   </p>
-                  <Field>
-                    <FieldLabel htmlFor="tool-seconds">倒计时时长</FieldLabel>
-                    <SimpleSelect
-                      id="tool-seconds"
-                      label="倒计时时长"
-                      value={seconds}
-                      onValueChange={setSeconds}
-                      options={[60, 180, 300, 600, 900, 1800].map((sec) => ({
-                        value: String(sec),
-                        label: `${sec / 60} 分钟`,
-                      }))}
-                    />
+                  <Field data-invalid={!countdownValid || undefined}>
+                    <FieldLabel htmlFor="tool-minutes">倒计时时长</FieldLabel>
+                    <div className="grid grid-cols-2 gap-2">
+                      <InputGroup>
+                        <InputGroupInput
+                          id="tool-minutes"
+                          aria-label="分钟"
+                          type="number"
+                          inputMode="numeric"
+                          min="0"
+                          max="120"
+                          value={minutes}
+                          onChange={(e) => setMinutes(e.target.value)}
+                        />
+                        <InputGroupAddon align="inline-end">分</InputGroupAddon>
+                      </InputGroup>
+                      <InputGroup>
+                        <InputGroupInput
+                          aria-label="秒"
+                          type="number"
+                          inputMode="numeric"
+                          min="0"
+                          max="59"
+                          value={extraSeconds}
+                          onChange={(e) => setExtraSeconds(e.target.value)}
+                        />
+                        <InputGroupAddon align="inline-end">秒</InputGroupAddon>
+                      </InputGroup>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {[1, 3, 5, 10, 15, 30].map((preset) => (
+                        <Button
+                          key={preset}
+                          type="button"
+                          variant="outline"
+                          size="xs"
+                          onClick={() => {
+                            setMinutes(String(preset));
+                            setExtraSeconds('0');
+                          }}
+                        >
+                          {preset} 分钟
+                        </Button>
+                      ))}
+                    </div>
+                    <FieldDescription className={countdownValid ? undefined : 'text-destructive'}>
+                      可设 1 秒至 120 分钟
+                    </FieldDescription>
                   </Field>
-                  <Button variant="secondary" type="submit" disabled={toolPending}>
+                  <Button variant="secondary" type="submit" disabled={toolPending || !countdownValid}>
                     开始倒计时
                   </Button>
                 </form>

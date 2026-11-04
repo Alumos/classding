@@ -35,6 +35,7 @@ v0.2.0 起，教师工作台（`web/apps/teacher`）和管理后台（`web/apps/
 - **实时通道**：`/ws/teacher`，先发送 `hello` 并携带 access token。收到 `welcome` 后每 25 秒 ping，60 秒无帧就重连。`receipt` 刷新消息，`homework` 刷新作业，`presence` 刷新班级与设备。断线后按指数退避重连。
 - **发通知**：`POST /messages`，字段包括 `class_ids, kind, text, student_name, signature, style, display_sec, repeat, chime, play_mode, audio_id`。
   - 正文最多 200 字。落款固定为当前教师姓名，只读。
+  - 文字通知默认不朗读（`repeat: 0`），可选 0–3 遍；原声通知播放 1–3 遍。
   - 只有紧急样式可以开启提示音，切换样式时提示音复位。
   - 录音上传 `POST /audio`（multipart），最长 30 秒。
 - **班级**：
@@ -43,7 +44,7 @@ v0.2.0 起，教师工作台（`web/apps/teacher`）和管理后台（`web/apps/
   - 详情：设备 `GET /classes/{id}/devices`；绑定码 `POST /classes/{id}/bind-code`（6 位，10 分钟有效）。
   - 成员：`GET /classes/{id}/members`；协同码 `POST /classes/{id}/invites`。
   - 移除成员、解绑设备、转让、退出、删除班级。
-  - 课堂工具：`POST /classes/{id}/tools/{countdown|rollcall|stop}`。
+  - 课堂工具：`POST /classes/{id}/tools/{countdown|rollcall|stop}`；倒计时由分、秒两个输入框自由设定（1 秒至 120 分钟），另有常用时长快捷按钮。
   - 设置：`PATCH /classes/{id}`（名称、音量）。
 - **作业**：
   - 读取：`GET /homeworks?class_id=`，每 30 秒刷新。

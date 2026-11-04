@@ -41,8 +41,13 @@ func (in *messageInput) validate(a *App, u *User) error {
 	if in.Style != "notice" && in.Style != "praise" && in.Style != "urgent" {
 		return bad("通知样式不正确。")
 	}
-	if !inRange(in.DisplaySec, 15, 600) || !inRange(in.Repeat, 1, 3) {
-		return bad("显示时长需为 15–600 秒，朗读次数为 1–3 遍。")
+	// A text notice may be shown without being read aloud; a recording plays at least once.
+	minRepeat := 0
+	if in.Kind == "voice" {
+		minRepeat = 1
+	}
+	if !inRange(in.DisplaySec, 15, 600) || !inRange(in.Repeat, minRepeat, 3) {
+		return bad("显示时长需为 15–600 秒；文字通知朗读 0–3 遍，原声播放 1–3 遍。")
 	}
 	if in.Style != "urgent" {
 		in.Chime = false

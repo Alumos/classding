@@ -1219,6 +1219,7 @@ export interface components {
             /** @enum {string} */
             style: "notice" | "praise" | "urgent";
             display_sec: number;
+            /** @description 文字通知 0–3 遍（0 为不朗读），原声 1–3 遍 */
             repeat: number;
             chime: boolean;
             /** @enum {string} */

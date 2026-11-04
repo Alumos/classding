@@ -221,7 +221,12 @@ const schemas = {
       signature: str,
       style: { type: 'string', enum: ['notice', 'praise', 'urgent'] },
       display_sec: { type: 'integer', minimum: 15, maximum: 600 },
-      repeat: { type: 'integer', minimum: 1, maximum: 3 },
+      repeat: {
+        type: 'integer',
+        minimum: 0,
+        maximum: 3,
+        description: '文字通知 0–3 遍（0 为不朗读），原声 1–3 遍',
+      },
       chime: bool,
       play_mode: { type: 'string', enum: ['tts', 'voice'] },
       audio_id: str,

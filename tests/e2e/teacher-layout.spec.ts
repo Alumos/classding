@@ -73,3 +73,38 @@ test('教师调整的字号会被服务器记住，刷新后保持', async ({ pa
   await page.getByRole('menuitemradio', { name: /标准/ }).click();
   await expect(page.locator('html')).toHaveCSS('font-size', '16px');
 });
+
+test('手机上班级设置的标签完整显示，倒计时可自定义时长', async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 360, height: 760 });
+  await page.goto(`${teacherURL}/login`);
+  await page.getByLabel('用户名', { exact: true }).fill('teacher');
+  await page.getByLabel('密码', { exact: true }).fill('ClassDing2026!');
+  await page.getByRole('button', { name: '进入工作台' }).click();
+  await expect(page.getByRole('heading', { name: '选择接收班级' })).toBeVisible();
+  await page.goto(`${teacherURL}/classes`);
+  await page.locator('.class-management-card').first().getByRole('button', { name: '连接大屏' }).click();
+  const dialog = page.getByRole('dialog');
+  const tabs = dialog.getByRole('tab');
+  await expect(tabs).toHaveCount(4);
+  const overflow = await tabs.evaluateAll((items) =>
+    items.some((item) => {
+      const tab = item.getBoundingClientRect();
+      const list = item.parentElement!.getBoundingClientRect();
+      return (
+        item.scrollWidth > item.clientWidth + 1 || tab.left < list.left - 1 || tab.right > list.right + 1
+      );
+    }),
+  );
+  expect(overflow).toBe(false);
+  await dialog.screenshot({ path: testInfo.outputPath('class-tabs-mobile.png') });
+
+  await dialog.getByRole('tab', { name: '课堂工具' }).click();
+  await dialog.getByLabel('分钟').fill('2');
+  await dialog.getByLabel('秒', { exact: true }).fill('30');
+  await dialog.screenshot({ path: testInfo.outputPath('class-countdown-mobile.png') });
+  const sent = page.waitForRequest((request) => request.url().endsWith('/tools/countdown'));
+  await dialog.getByRole('button', { name: '开始倒计时' }).click();
+  expect((await sent).postDataJSON()).toEqual({ seconds: 150 });
+  await dialog.getByLabel('分钟').fill('121');
+  await expect(dialog.getByRole('button', { name: '开始倒计时' })).toBeDisabled();
+});
