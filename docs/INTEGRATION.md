@@ -14,7 +14,7 @@
 - AuthResponse: {access_token,user}；refresh token 放 HttpOnly Cookie。
 
 ## REST
-GET config => {speech_enabled:false,registration_enabled:true,version:'0.3.2'}
+GET config => {speech_enabled:false,registration_enabled:true,version:'0.3.3'}
 POST auth/register {username,password,display_name} => AuthResponse
 POST auth/login {username,password} => AuthResponse
 POST auth/refresh => AuthResponse；POST auth/logout => {ok:true}
@@ -56,7 +56,7 @@ GET admin/devices => Device[]；GET admin/messages => {items:Message[],next_curs
 帧 {t,id?,seq?,ts?,d:{...}}。连接5秒内 hello {d:{token,last_seq?,client_version?,os?,pending_ids?}}。
 设备 welcome d:{class:{id,name},volume,server_time,recalled_ids?,homeworks,homework_revision}; homework d:{items:Homework[],homework_revision}; notify d:{message_id,style,text,student_name,signature,class_name,audio_url?,chime,repeat,display_sec,volume,sent_at,expires_at}; recall d:{message_id}; config d:{volume}; unbind d:{}；tool d:{name,params}; ping/pong；ack d:{message_id,status:delivered|playing|played|dismissed|failed}; receipt d:{message_id,class_id,device_id,status,at}; presence d:{class_id,device_id,online}。
 
-作业列表和快照均包含隐藏作业，设备只展示 `visible=true` 的项目。每班最多 12 条，科目 1–24 字、内容 1–300 字；作者、班主任和有该班管理权限的管理员可以修改或删除，其他协同教师仅可查看他人的作业。班级成员均可发布自己的作业。更改在持久化成功后推送给该班设备及教师，教师可据此刷新列表。设备断线后由 welcome 补全快照，并可定期调用 device/homeworks 兜底；客户端应忽略修订号低于已采用快照的响应。
+作业列表和快照均包含隐藏作业，设备只展示 `visible=true` 的项目。每班最多 12 条，科目 1–24 字、内容 1–300 字；作者和班主任可以修改或删除，其他协同教师仅可查看他人的作业。班级成员均可发布自己的作业。更改在持久化成功后推送给该班设备及教师，教师可据此刷新列表。设备断线后由 welcome 补全快照，并可定期调用 device/homeworks 兜底；客户端应忽略修订号低于已采用快照的响应。
 
 ## 前端共享包
 - `@classding/ui`：shadcn/ui 组件（`components/ui/*`）、项目自有组件（`components/classding`）、站点设置、`lib/delivery`（投递状态的统一文案与配色）、`notice`（教室通知画面，大屏与教师端预览共用，样式为 `notice.css`）、`version`（读取根目录 `package.json` 的版本号）。

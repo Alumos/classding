@@ -76,3 +76,32 @@ func TestUpgradeGivesLegacySchoolIDsARecord(t *testing.T) {
 		t.Fatalf("schools = %v", s.Schools)
 	}
 }
+
+func TestTeacherWorkspaceListsOnlyJoinedClassesForAdministrators(t *testing.T) {
+	f := newSecurityFixture(t)
+	classes := func(who string) []string {
+		var views []ClassView
+		response := f.request(t, "GET", "/api/v1/classes", f.token(who), nil, nil)
+		if err := json.Unmarshal(response.Body.Bytes(), &views); err != nil {
+			t.Fatalf("%s: %s", who, response.Body.String())
+		}
+		ids := []string{}
+		for _, view := range views {
+			ids = append(ids, view.ID)
+		}
+		return ids
+	}
+	if got := classes("super"); len(got) != 0 {
+		t.Fatalf("operator sees %v in the teacher workspace", got)
+	}
+	if got := classes("school"); len(got) != 1 || got[0] != "class_b" {
+		t.Fatalf("school administrator sees %v, want only the joined class_b", got)
+	}
+	expectStatus(t, f.request(t, "POST", "/api/v1/messages", f.token("super"), securityText("class_a"), nil), 403)
+
+	var admin []ClassView
+	response := f.request(t, "GET", "/api/v1/admin/classes", f.token("super"), nil, nil)
+	if err := json.Unmarshal(response.Body.Bytes(), &admin); err != nil || len(admin) != 2 {
+		t.Fatalf("admin backend lost classes: %s", response.Body.String())
+	}
+}

@@ -11,29 +11,20 @@ import (
 
 const defaultVolume = 75
 
-// canClass reports whether the account may see and use the class: a member
-// teacher, or an administrator who governs its organization.
+// The teacher workspace opens a class to its members only, administrators
+// included; administrators reach every class they govern through /admin.
+
+// canClass reports whether the account is a member of the class.
 func (a *App) canClass(u *User, c Class) bool {
 	if u == nil {
 		return false
-	}
-	if u.IsAdmin() {
-		return u.Governs(c.OrgID)
 	}
 	_, member := a.state.Members[memberKey(c.ID, u.ID)]
 	return member
 }
 
-// owns reports whether the account may manage the class.
-func (a *App) owns(u *User, c Class) bool {
-	if u == nil {
-		return false
-	}
-	if u.IsAdmin() {
-		return u.Governs(c.OrgID)
-	}
-	return c.OwnerID == u.ID
-}
+// owns reports whether the account created, or took over, the class.
+func (a *App) owns(u *User, c Class) bool { return u != nil && c.OwnerID == u.ID }
 
 // getClass loads a class the account can use, or manage when owner is set.
 func (a *App) getClass(u *User, classID string, owner bool) (Class, error) {
@@ -117,7 +108,7 @@ func (a *App) addMember(c Class, u User, role MemberRole) {
 func validClassName(name string) bool { return runesBetween(name, 1, maxClassName) }
 
 func (a *App) listClasses(_ http.ResponseWriter, _ *http.Request, u *User) (any, error) {
-	return a.classViews(u, func(c Class) bool { return a.canClass(u, c) }), nil
+	return a.classViews(u, a.memberOf(u)), nil
 }
 
 // createClass redeems an activation code for a new class owned by the teacher.

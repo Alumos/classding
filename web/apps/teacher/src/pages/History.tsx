@@ -144,8 +144,7 @@ export default function HistoryPage() {
               message.sender_id === user?.id ||
               classes.data?.some(
                 (c) => c.role === 'owner' && message.targets?.some((t) => t.class_id === c.id),
-              ) ||
-              user?.role !== 'user';
+              );
             const targets = message.targets ?? [];
             const Icon =
               message.kind === 'voice'

@@ -45,7 +45,7 @@ import {
   localDate,
   type ActivationCode,
 } from '../lib';
-import { NO_SCHOOL, useSchools } from '../schools';
+import { ALL_SCHOOLS, NO_SCHOOL, SchoolFilter, useSchools } from '../schools';
 
 function downloadCodes(
   codes: ActivationCode[],
@@ -123,7 +123,8 @@ export default function CodesPage() {
   const [editForm, setEditForm] = useState({ max_teachers: '', max_devices: '', expires_at: '' });
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const { schoolName, options: schoolOptions } = useSchools();
+  const { schoolName, matches, options: schoolOptions } = useSchools();
+  const [school, setSchool] = useState(ALL_SCHOOLS);
   const params = new URLSearchParams();
   if (search.trim()) params.set('search', search.trim());
   if (status !== 'all') params.set('status', status);
@@ -131,10 +132,11 @@ export default function CodesPage() {
     queryKey: ['admin', 'codes', search.trim(), status],
     queryFn: () => api<ActivationCode[]>(`/admin/activation-codes${params.size ? `?${params}` : ''}`),
   });
-  const pager = usePagination(query.data ?? [], 10, `${search}|${status}`);
+  const codes = (query.data ?? []).filter((code) => matches(school, code.org_id));
+  const pager = usePagination(codes, 10, `${search}|${status}|${school}`);
   // Only codes that no class uses can be deleted; a class must be deleted first.
   const deletable = (code: ActivationCode) => !code.class_id;
-  const selectedCodes = (query.data ?? []).filter((code) => selected.has(code.code));
+  const selectedCodes = codes.filter((code) => selected.has(code.code));
   const pageDeletable = pager.pageItems.filter(deletable);
   const pageSelected = pageDeletable.length > 0 && pageDeletable.every((code) => selected.has(code.code));
   function toggle(code: string, checked: boolean) {
@@ -309,8 +311,8 @@ export default function CodesPage() {
             <Button
               variant="outline"
               size="sm"
-              disabled={!query.data?.length}
-              onClick={() => downloadCodes(query.data ?? [], schoolName)}
+              disabled={!codes.length}
+              onClick={() => downloadCodes(codes, schoolName)}
             >
               <Download />
               导出 CSV
@@ -318,7 +320,7 @@ export default function CodesPage() {
           </div>
         }
       >
-        <Toolbar count={query.data ? `共 ${query.data.length} 条` : undefined}>
+        <Toolbar count={query.data ? `共 ${codes.length} 条` : undefined}>
           <SearchInput value={search} onChange={setSearch} placeholder="搜索激活码、备注或批次" />
           <SimpleSelect
             label="筛选激活码状态"
@@ -327,11 +329,12 @@ export default function CodesPage() {
             options={statusOptions}
             className="w-full sm:w-36"
           />
+          <SchoolFilter value={school} onChange={setSchool} none="不限学校" />
         </Toolbar>
         <ResultState
           loading={query.isLoading}
           error={query.error}
-          empty={!query.data?.length}
+          empty={!codes.length}
           emptyText="没有找到激活码"
         >
           <DataTable>

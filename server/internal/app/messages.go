@@ -165,14 +165,24 @@ func (a *App) bindPending(d Device) {
 	}
 }
 
-// messageView keeps only the deliveries in classes the account can see.
-func (a *App) messageView(m Message, u *User) (Message, bool) {
+// messageView keeps only the deliveries in classes the viewer may see.
+func (a *App) messageView(m Message, visible func(Class) bool) (Message, bool) {
 	m.Targets = slices.DeleteFunc(slices.Clone(m.Targets), func(t Target) bool {
 		c, exists := a.state.Classes[t.ClassID]
-		return !exists || !a.canClass(u, c)
+		return !exists || !visible(c)
 	})
 	m.AudioID = ""
 	return m, len(m.Targets) > 0
+}
+
+// memberOf matches the classes the account belongs to.
+func (a *App) memberOf(u *User) func(Class) bool {
+	return func(c Class) bool { return a.canClass(u, c) }
+}
+
+// governedBy matches the classes an administrator manages.
+func governedBy(u *User) func(Class) bool {
+	return func(c Class) bool { return u.Governs(c.OrgID) }
 }
 
 type messagePage struct {
@@ -182,14 +192,14 @@ type messagePage struct {
 
 // messageList pages through visible messages, newest first. The cursor is the
 // creation time of the last message on the previous page.
-func (a *App) messageList(u *User, classID, cursor string) messagePage {
+func (a *App) messageList(visible func(Class) bool, classID, cursor string) messagePage {
 	out := []Message{}
 	for _, m := range a.state.Messages {
 		if cursor != "" && m.CreatedAt >= cursor {
 			continue
 		}
-		view, visible := a.messageView(m, u)
-		if !visible {
+		view, shown := a.messageView(m, visible)
+		if !shown {
 			continue
 		}
 		if classID != "" {
@@ -211,7 +221,7 @@ func (a *App) messageList(u *User, classID, cursor string) messagePage {
 }
 
 func (a *App) listMessages(_ http.ResponseWriter, r *http.Request, u *User) (any, error) {
-	return a.messageList(u, r.URL.Query().Get("class_id"), r.URL.Query().Get("cursor")), nil
+	return a.messageList(a.memberOf(u), r.URL.Query().Get("class_id"), r.URL.Query().Get("cursor")), nil
 }
 
 func (a *App) getMessage(_ http.ResponseWriter, r *http.Request, u *User) (any, error) {
@@ -219,7 +229,7 @@ func (a *App) getMessage(_ http.ResponseWriter, r *http.Request, u *User) (any, 
 	if !exists {
 		return nil, missing()
 	}
-	view, visible := a.messageView(m, u)
+	view, visible := a.messageView(m, a.memberOf(u))
 	if !visible {
 		return nil, forbidden()
 	}

@@ -3,7 +3,7 @@ package app
 import "time"
 
 // Version is the release reported by the server and offered to classroom clients.
-const Version = "0.3.2"
+const Version = "0.3.3"
 
 // Role decides which workspace an account may sign in to and what it governs.
 type Role string

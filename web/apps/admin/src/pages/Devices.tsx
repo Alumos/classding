@@ -37,6 +37,7 @@ import {
   type Classroom,
   type Device,
 } from '../lib';
+import { ALL_SCHOOLS, SchoolFilter, useSchools } from '../schools';
 
 const statusOptions = [
   { value: 'all', label: '全部状态' },
@@ -88,15 +89,19 @@ export default function DevicesPage() {
     queryKey: ['admin', 'classes'],
     queryFn: () => api<Classroom[]>('/admin/classes'),
   });
-  const className = (id: string) => classes.data?.find((item) => item.id === id)?.name ?? id;
+  const [school, setSchool] = useState(ALL_SCHOOLS);
+  const { matches } = useSchools();
+  const classOf = (id: string) => classes.data?.find((item) => item.id === id);
+  const className = (id: string) => classOf(id)?.name ?? id;
   const devices = (query.data ?? []).filter(
     (item) =>
+      matches(school, classOf(item.class_id)?.org_id) &&
       `${item.name} ${className(item.class_id)} ${item.os ?? ''} ${item.client_version ?? ''} ${(item.lan_ips ?? []).join(' ')} ${item.server_url ?? ''}`
         .toLowerCase()
         .includes(search.trim().toLowerCase()) &&
       (status === 'all' || (status === 'online' ? item.online : !item.online)),
   );
-  const pager = usePagination(devices, 10, `${search}|${status}`);
+  const pager = usePagination(devices, 10, `${search}|${status}|${school}`);
   const selectedDevices = (query.data ?? []).filter((item) => selectedIds.has(item.id));
   const allVisibleSelected = devices.length > 0 && devices.every((item) => selectedIds.has(item.id));
   const save = useMutation({
@@ -182,6 +187,7 @@ export default function DevicesPage() {
             options={statusOptions}
             className="w-full sm:w-32"
           />
+          <SchoolFilter value={school} onChange={setSchool} />
           {superAdmin && (
             <Button
               variant="outline"

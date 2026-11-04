@@ -58,6 +58,11 @@ test('运营管理员建立学校，教师兑换该校激活码后自动加入�
   await page.getByRole('link', { name: '教师管理' }).filter({ visible: true }).first().click();
   await page.getByPlaceholder('搜索姓名、账号或学校').fill(username);
   await expect(page.locator('tbody tr')).toContainText(school);
+
+  await page.getByRole('link', { name: '班级管理' }).filter({ visible: true }).first().click();
+  await choose(page, '按学校筛选', school);
+  await expect(page.locator('tbody tr')).toHaveCount(1);
+  await expect(page.locator('tbody tr')).toContainText('验收班级');
 });
 
 test('批量删除未使用的激活码，使用中的激活码不可选', async ({ page }, testInfo) => {

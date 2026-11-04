@@ -36,7 +36,9 @@ func TestHomeworkPermissionsValidationAndLimit(t *testing.T) {
 	expectStatus(t, f.request(t, "GET", path+"?class_id=class_a", "", nil, nil), 401)
 	expectStatus(t, f.request(t, "GET", path, f.token("owner"), nil, nil), 400)
 	expectStatus(t, f.request(t, "GET", path+"?class_id=class_a", f.token("outsider"), nil, nil), 403)
-	expectStatus(t, f.request(t, "GET", path+"?class_id=class_b", f.token("school"), nil, nil), 403)
+	// Administrators open only the classes they joined in the teacher workspace.
+	expectStatus(t, f.request(t, "GET", path+"?class_id=class_a", f.token("school"), nil, nil), 403)
+	expectStatus(t, f.request(t, "GET", path+"?class_id=class_a", f.token("super"), nil, nil), 403)
 	expectStatus(t, f.request(t, "POST", path, f.token("outsider"), valid, nil), 403)
 	expectStatus(t, f.request(t, "POST", path, f.token("other"), valid, nil), 403)
 	for _, body := range []map[string]any{
@@ -62,7 +64,7 @@ func TestHomeworkPermissionsValidationAndLimit(t *testing.T) {
 	expectStatus(t, f.request(t, "DELETE", ownerPath, f.token("collab"), nil, nil), 403)
 	expectStatus(t, f.request(t, "PATCH", collabPath, f.token("collab"), map[string]any{"text": "自己修改"}, nil), 200)
 	expectStatus(t, f.request(t, "PATCH", collabPath, f.token("owner"), map[string]any{"visible": false}, nil), 200)
-	expectStatus(t, f.request(t, "PATCH", collabPath, f.token("school"), map[string]any{"always_on_top": false}, nil), 200)
+	expectStatus(t, f.request(t, "PATCH", collabPath, f.token("school"), map[string]any{"always_on_top": false}, nil), 403)
 	expectStatus(t, f.request(t, "PATCH", collabPath, f.token("other"), map[string]any{"text": "越权"}, nil), 403)
 	expectStatus(t, f.request(t, "PATCH", collabPath, f.token("owner"), map[string]any{}, nil), 400)
 	expectStatus(t, f.request(t, "PATCH", collabPath, f.token("owner"), map[string]any{"subject": ""}, nil), 400)
@@ -89,7 +91,8 @@ func TestHomeworkPermissionsValidationAndLimit(t *testing.T) {
 		postHomework(t, f, "collab", homeworkBody("class_a", "英语", fmt.Sprint(i), true, false))
 	}
 	expectStatus(t, f.request(t, "POST", path, f.token("owner"), valid, nil), 409)
-	expectStatus(t, f.request(t, "DELETE", collabPath, f.token("school"), nil, nil), 200)
+	expectStatus(t, f.request(t, "DELETE", collabPath, f.token("school"), nil, nil), 403)
+	expectStatus(t, f.request(t, "DELETE", collabPath, f.token("owner"), nil, nil), 200)
 	expectStatus(t, f.request(t, "DELETE", ownerPath, f.token("owner"), nil, nil), 200)
 }
 
@@ -214,12 +217,12 @@ func TestHomeworkBroadcastOnlyReachesAuthorizedClass(t *testing.T) {
 	if len(deviceA.queue) != 1 || len(deviceB.queue) != 0 {
 		t.Fatal("device received a snapshot from the wrong class")
 	}
-	for _, user := range []string{"owner_a", "collab_a", "school_a", "super"} {
+	for _, user := range []string{"owner_a", "collab_a"} {
 		if len(teachers[user].queue) != 1 {
 			t.Errorf("authorized teacher %s did not receive snapshot", user)
 		}
 	}
-	for _, user := range []string{"owner_b", "outsider"} {
+	for _, user := range []string{"school_a", "super", "owner_b", "outsider"} {
 		if len(teachers[user].queue) != 0 {
 			t.Errorf("unauthorized teacher %s received snapshot", user)
 		}

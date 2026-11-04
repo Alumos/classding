@@ -28,6 +28,8 @@ v0.2.0 起，教师工作台（`web/apps/teacher`）和管理后台（`web/apps/
 
 ## 教师工作台
 
+管理员账号也可以登录教师工作台，但只能看到和操作自己加入的班级；管理所辖学校的全部班级请使用管理后台。
+
 路由：`/login`、`/register`、`/send`（默认）、`/classes`、`/homework`、`/history`、`/me`。
 
 - **实时通道**：`/ws/teacher`，先发送 `hello` 并携带 access token。收到 `welcome` 后每 25 秒 ping，60 秒无帧就重连。`receipt` 刷新消息，`homework` 刷新作业，`presence` 刷新班级与设备。断线后按指数退避重连。
@@ -47,7 +49,7 @@ v0.2.0 起，教师工作台（`web/apps/teacher`）和管理后台（`web/apps/
   - 读取：`GET /homeworks?class_id=`，每 30 秒刷新。
   - 增改删：`POST /homeworks`、`PATCH /homeworks/{id}`、`DELETE /homeworks/{id}`。
   - 限制：科目最多 24 字，内容最多 300 字。
-  - 权限：作者、班级创建者和管理员可以管理，其他人只能查看。
+  - 权限：作者和班级创建者可以管理，其他人只能查看。
 - **发送记录**：`GET /messages?class_id=&cursor=` 按游标加载，前端每页 10 条。重发 `POST /messages/{id}/resend`，撤回 `POST /messages/{id}/recall`，删除 `DELETE /messages/{id}`（发送者或班级创建者，未完成的投递会同时撤回）。
 - **个人中心**：
   - 修改落款：`PATCH /me`。修改密码：`PUT /me/password`，成功后退出登录。

@@ -351,7 +351,7 @@ function ClassDetails({
 }) {
   const cache = useQueryClient();
   const { user } = useAuth();
-  const owner = c.role === 'owner' || user?.role === 'school_admin' || user?.role === 'super_admin';
+  const owner = c.role === 'owner';
   const [tab, setTab] = useState(initialTab);
   const [bind, setBind] = useState<BindCode | null>(null);
   const [invite, setInvite] = useState<{ code: string; expires_at: string } | null>(null);

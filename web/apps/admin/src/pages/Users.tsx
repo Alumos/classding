@@ -44,7 +44,7 @@ import {
   useSession,
   type User,
 } from '../lib';
-import { NO_SCHOOL, useSchools } from '../schools';
+import { ALL_SCHOOLS, NO_SCHOOL, SchoolFilter, useSchools } from '../schools';
 
 type TeacherForm = {
   username: string;
@@ -71,14 +71,17 @@ export default function UsersPage() {
   const [deleting, setDeleting] = useState<User | null>(null);
   const [formError, setFormError] = useState('');
   const query = useQuery({ queryKey: ['admin', 'users'], queryFn: () => api<User[]>('/admin/users') });
-  const { schoolName, isSchool, options: schoolOptions } = useSchools();
+  const { schoolName, isSchool, matches, options: schoolOptions } = useSchools();
+  const [school, setSchool] = useState(ALL_SCHOOLS);
   const superAdmin = currentUser.role === 'super_admin';
-  const users = (query.data ?? []).filter((user) =>
-    `${user.display_name} ${user.username} ${schoolName(user.org_id)}`
-      .toLowerCase()
-      .includes(search.trim().toLowerCase()),
+  const users = (query.data ?? []).filter(
+    (user) =>
+      matches(school, user.org_id) &&
+      `${user.display_name} ${user.username} ${schoolName(user.org_id)}`
+        .toLowerCase()
+        .includes(search.trim().toLowerCase()),
   );
-  const pager = usePagination(users, 10, search);
+  const pager = usePagination(users, 10, `${search}|${school}`);
   const save = useMutation({
     mutationFn: ({ user, body }: { user: User | null; body: unknown }) =>
       user
@@ -196,6 +199,7 @@ export default function UsersPage() {
       >
         <Toolbar count={query.data ? `共 ${users.length} 条` : undefined}>
           <SearchInput value={search} onChange={setSearch} placeholder="搜索姓名、账号或学校" />
+          <SchoolFilter value={school} onChange={setSchool} />
         </Toolbar>
         <ResultState
           loading={query.isLoading}

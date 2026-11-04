@@ -160,6 +160,8 @@ func TestActivationOrganizationAndStrictSchoolScope(t *testing.T) {
 	if !strings.Contains(response.Body.String(), "「外校」") || !strings.Contains(response.Body.String(), "「阳光小学」") {
 		t.Fatalf("unclear error: %s", response.Body.String())
 	}
-	// A legacy membership must not grant a school administrator access to another school.
-	expectStatus(t, f.request(t, "GET", "/api/v1/classes/class_b/members", f.token("school"), nil, nil), 403)
+	// Joining another school's class lets a school administrator teach there,
+	// but never manage that class from the admin backend.
+	expectStatus(t, f.request(t, "GET", "/api/v1/classes/class_b/members", f.token("school"), nil, nil), 200)
+	expectStatus(t, f.request(t, "PATCH", "/api/v1/admin/classes/class_b", f.token("school"), map[string]string{"name": "改名"}, nil), 403)
 }

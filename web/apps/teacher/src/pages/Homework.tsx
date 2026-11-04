@@ -64,11 +64,7 @@ export default function HomeworkPage() {
   const query = useHomeworks(activeClass?.id ?? '');
   const items = query.data?.items ?? [];
   const pager = usePagination(items, 6, activeClass?.id);
-  const mayManage = (item: Homework) =>
-    item.teacher_id === user?.id ||
-    activeClass?.role === 'owner' ||
-    user?.role === 'school_admin' ||
-    user?.role === 'super_admin';
+  const mayManage = (item: Homework) => item.teacher_id === user?.id || activeClass?.role === 'owner';
   const refresh = () => cache.invalidateQueries({ queryKey: ['homeworks'] });
   const updateOption = useMutation({
     mutationFn: ({

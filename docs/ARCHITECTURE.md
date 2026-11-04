@@ -35,7 +35,7 @@
 
 几条约定：
 
-- **路由声明权限。** `a.query(level, fn)` 只读，`a.command(level, fn)` 写入。`level` 取 `public`、`signedIn`、`adminOnly`、`superAdminOnly` 之一，处理函数不再自行判断角色。学校管理员的组织范围统一由 `User.Governs(orgID)` 判断。
+- **路由声明权限。** `a.query(level, fn)` 只读，`a.command(level, fn)` 写入。`level` 取 `public`、`signedIn`、`adminOnly`、`superAdminOnly` 之一，处理函数不再自行判断角色。学校管理员的组织范围统一由 `User.Governs(orgID)` 判断。教师工作台的接口只认班级成员身份（`canClass`、`owns`），管理员也不例外；管理后台接口只认学校范围（`governedBy`）。
 - **命令是事务。** 处理函数返回错误，或保存失败时，内存状态、绑定码、发送冷却和本次响应设置的 Cookie 都会回滚。推送消息、断开连接这类副作用用 `deferJob` 登记，提交成功后才执行；`deferRollback` 用于失败时清理已写出的文件。
 - **存储与视图分开。** `Class`、`Device` 只含持久化字段；人数、在线状态等运行时信息只出现在 `ClassView`、`DeviceView` 中。
 - **状态用具名常量。** 不在代码里直接写 `"super_admin"`、`"queued"` 这样的字符串；`DeliveryStatus.Pending()` 判断一条投递是否还可能出现在大屏上。

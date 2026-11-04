@@ -42,7 +42,7 @@ import {
   type Classroom,
   type User,
 } from '../lib';
-import { useSchools } from '../schools';
+import { ALL_SCHOOLS, SchoolFilter, useSchools } from '../schools';
 
 type ClassForm = { name: string; grade: string; owner_id: string; max_teachers: string; max_devices: string };
 const emptyClassForm: ClassForm = { name: '', grade: '', owner_id: '', max_teachers: '3', max_devices: '1' };
@@ -67,17 +67,20 @@ export default function ClassesPage() {
       !!user.org_id &&
       (!editing || user.org_id === editing.org_id),
   );
-  const { schoolName } = useSchools();
+  const { schoolName, matches } = useSchools();
+  const [school, setSchool] = useState(ALL_SCHOOLS);
   const ownerName = (id: string) => {
     const user = users.data?.find((item) => item.id === id);
     return user ? `${user.display_name || user.username}（${user.username}）` : id || '—';
   };
-  const classes = (query.data ?? []).filter((item) =>
-    `${item.name} ${item.grade ?? ''} ${schoolName(item.org_id)} ${ownerName(item.owner_id)}`
-      .toLowerCase()
-      .includes(search.trim().toLowerCase()),
+  const classes = (query.data ?? []).filter(
+    (item) =>
+      matches(school, item.org_id) &&
+      `${item.name} ${item.grade ?? ''} ${schoolName(item.org_id)} ${ownerName(item.owner_id)}`
+        .toLowerCase()
+        .includes(search.trim().toLowerCase()),
   );
-  const pager = usePagination(classes, 10, search);
+  const pager = usePagination(classes, 10, `${search}|${school}`);
   const ownerOptions = [
     ...(editing && !teachers.some((user) => user.id === editing.owner_id)
       ? [
@@ -202,6 +205,7 @@ export default function ClassesPage() {
       >
         <Toolbar count={query.data ? `共 ${classes.length} 条` : undefined}>
           <SearchInput value={search} onChange={setSearch} placeholder="搜索班级、年级、负责人或学校" />
+          <SchoolFilter value={school} onChange={setSchool} />
         </Toolbar>
         <ResultState
           loading={query.isLoading}

@@ -13,7 +13,7 @@ import (
 // administrator only ever sees records of their own organization.
 
 func (a *App) adminClasses(_ http.ResponseWriter, _ *http.Request, u *User) (any, error) {
-	return a.classViews(u, func(c Class) bool { return u.Governs(c.OrgID) }), nil
+	return a.classViews(u, governedBy(u)), nil
 }
 
 func (a *App) adminDevices(_ http.ResponseWriter, _ *http.Request, u *User) (any, error) {
@@ -545,15 +545,7 @@ func (a *App) recallClass(classID string) {
 
 func (a *App) adminMessages(_ http.ResponseWriter, r *http.Request, u *User) (any, error) {
 	a.audit(u, "admin.message.read", r.URL.Query().Get("class_id"))
-	return a.messageList(asAdministrator(u), r.URL.Query().Get("class_id"), r.URL.Query().Get("cursor")), nil
-}
-
-// asAdministrator drops the account ID, so that class access comes from the
-// administrator's organization alone and never from a personal membership.
-func asAdministrator(u *User) *User {
-	scoped := *u
-	scoped.ID = ""
-	return &scoped
+	return a.messageList(governedBy(u), r.URL.Query().Get("class_id"), r.URL.Query().Get("cursor")), nil
 }
 
 func (a *App) auditLogs(_ http.ResponseWriter, _ *http.Request, _ *User) (any, error) {
@@ -609,7 +601,7 @@ func (a *App) overview(_ http.ResponseWriter, _ *http.Request, u *User) (any, er
 	targets, delivered, latencyCount := 0, 0, 0
 	o.RecentMessages = []Message{}
 	for _, m := range a.state.Messages {
-		view, visible := a.messageView(m, asAdministrator(u))
+		view, visible := a.messageView(m, governedBy(u))
 		if !visible {
 			continue
 		}
