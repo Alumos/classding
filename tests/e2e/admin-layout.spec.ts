@@ -10,12 +10,14 @@ const administrator = {
   status: 'active',
 };
 
-async function mockAdmin(page: Page, siteName = settings.site_name, icpNumber = settings.icp_number) {
+async function mockAdmin(page: Page, siteName = settings.site_name, icpNumber = settings.icp_number, uiScale = 100) {
   const siteSettings = { ...settings, site_name: siteName, icp_number: icpNumber };
   const responses: Record<string, unknown> = {
     '/api/v1/config': siteSettings,
-    '/api/v1/auth/refresh': { access_token: 'test-token', user: administrator },
+    '/api/v1/auth/refresh': { access_token: 'test-token', user: { ...administrator, ui_scale: uiScale } },
     '/api/v1/admin/settings': siteSettings,
+    '/api/v1/admin/schools': [],
+    '/api/v1/admin/classes': [],
     '/api/v1/admin/users': [
       {
         id: 'teacher-1',
@@ -48,6 +50,38 @@ async function mockAdmin(page: Page, siteName = settings.site_name, icpNumber = 
     );
   });
 }
+
+test('管理员成功提示显示时窄屏导航仍可点击', async ({ page }) => {
+  for (const width of [320, 390]) {
+    for (const scale of [100, 150]) {
+      await mockAdmin(page, settings.site_name, settings.icp_number, scale);
+      await page.route('**/api/v1/admin/schools', (route) =>
+        route.fulfill({
+          json: route.request().method() === 'POST' ? { id: 'school-toast', name: '提示验收学校' } : [],
+        }),
+      );
+      await page.setViewportSize({ width, height: 844 });
+      await page.goto(adminURL + 'schools');
+      await page.getByRole('button', { name: '新建学校' }).click();
+      const dialog = page.getByRole('dialog');
+      await dialog.getByLabel('学校名称').fill('提示验收学校');
+      await dialog.getByRole('button', { name: '创建学校' }).click();
+      await expect(dialog).toBeHidden();
+      const toast = page.locator('[data-sonner-toast]').filter({ hasText: '学校已创建' });
+      await expect(toast).toBeVisible();
+      // Hold the real toast open instead of waiting for it to expire or forcing the click.
+      await toast.hover();
+      const navigation = page.getByRole('navigation', { name: '管理后台导航' });
+      const toastBox = await toast.boundingBox();
+      const navigationBox = await navigation.boundingBox();
+      expect(toastBox!.y).toBeGreaterThan(navigationBox!.y + navigationBox!.height);
+      await navigation.getByRole('link', { name: '班级管理' }).click({ timeout: 2000 });
+      await expect(page.getByRole('heading', { name: '班级管理', exact: true })).toBeVisible();
+      await expect(toast).toBeVisible();
+      await noOverflow(page);
+    }
+  }
+});
 
 async function noOverflow(page: Page) {
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
