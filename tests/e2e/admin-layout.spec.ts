@@ -10,7 +10,12 @@ const administrator = {
   status: 'active',
 };
 
-async function mockAdmin(page: Page, siteName = settings.site_name, icpNumber = settings.icp_number, uiScale = 100) {
+async function mockAdmin(
+  page: Page,
+  siteName = settings.site_name,
+  icpNumber = settings.icp_number,
+  uiScale = 100,
+) {
   const siteSettings = { ...settings, site_name: siteName, icp_number: icpNumber };
   const responses: Record<string, unknown> = {
     '/api/v1/config': siteSettings,
