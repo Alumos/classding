@@ -14,7 +14,7 @@
 - AuthResponse: {access_token,user}；refresh token 放 HttpOnly Cookie。
 
 ## REST
-GET config => {speech_enabled:false,registration_enabled:true,version:'0.3.4'}
+GET config => {speech_enabled:false,registration_enabled:true,version:'0.3.5'}
 POST auth/register {username,password,display_name} => AuthResponse
 POST auth/login {username,password} => AuthResponse
 POST auth/refresh => AuthResponse；POST auth/logout => {ok:true}
@@ -57,6 +57,14 @@ GET admin/devices => Device[]；GET admin/messages => {items:Message[],next_curs
 设备 welcome d:{class:{id,name},volume,server_time,recalled_ids?,homeworks,homework_revision}; homework d:{items:Homework[],homework_revision}; notify d:{message_id,style,text,student_name,signature,class_name,audio_url?,chime,repeat,display_sec,volume,sent_at,expires_at}; recall d:{message_id}; config d:{volume}; unbind d:{}；tool d:{name,params}; ping/pong；ack d:{message_id,status:delivered|playing|played|dismissed|failed}; receipt d:{message_id,class_id,device_id,status,at}; presence d:{class_id,device_id,online}。
 
 作业列表和快照均包含隐藏作业，设备只展示 `visible=true` 的项目。每班最多 12 条，科目 1–24 字、内容 1–300 字；作者和班主任可以修改或删除，其他协同教师仅可查看他人的作业。班级成员均可发布自己的作业。更改在持久化成功后推送给该班设备及教师，教师可据此刷新列表。设备断线后由 welcome 补全快照，并可定期调用 device/homeworks 兜底；客户端应忽略修订号低于已采用快照的响应。
+
+## 学生呼叫
+
+- `POST /device/student-calls {request_id}` 使用设备 Bearer 认证，按设备当前绑定班级创建呼叫；不接受客户端指定班级、教师或学生身份。`request_id` 为 1–128 个 ASCII 字母、数字或 `_.:-`；同设备同班级重试同一 ID 返回原记录且不重复推送，冲突返回 409。同班新呼叫间隔 30 秒，限流返回 429 与 `Retry-After`。
+- `GET /student-calls?class_id=&limit=&cursor=` 只返回当前教师已加入班级的记录，管理员角色不绕过成员检查。`limit` 默认 100、范围 1–100；响应 `{items:StudentCall[],unread_count,next_cursor:string|null}`。按创建时间和 ID 倒序稳定翻页，未读数量不受分页影响；指定班级时数量仅统计该班。
+- `StudentCall` 包含 `id,class_id,class_name,device_id,device_name,created_at,read_at,read_by,read_by_name`；最后三个字段未读时为空字符串。班级与设备名称为记录快照，无学生账号或自由文本。
+- `POST /student-calls/:id/read` 明确标记共享已读；首位处理老师与时间保持不变。仅浏览或打开页面不会标记已读。记录及共享状态写入 SQLite 并包含在备份中，旧备份缺少该集合仍可恢复。
+- 教师 WS 帧 `student_call d:{id,class_id,kind:created|read}` 在持久化提交后发给当前班级成员；网页在线时提示并刷新红色数量，断线重连/定时查询补齐。不是 Web Push，不承诺锁屏或关闭浏览器后提醒。
 
 ## 前端共享包
 - `@classding/ui`：shadcn/ui 组件（`components/ui/*`）、项目自有组件（`components/classding`）、站点设置、`lib/delivery`（投递状态的统一文案与配色）、`notice`（教室通知画面，大屏与教师端预览共用，样式为 `notice.css`）、`version`（读取根目录 `package.json` 的版本号）。

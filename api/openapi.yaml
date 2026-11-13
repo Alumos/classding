@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "课堂叮咚 API",
-    "version": "0.3.4"
+    "version": "0.3.5"
   },
   "servers": [
     {
@@ -1757,7 +1757,7 @@
         }
       },
       "post": {
-        "operationId": "post__messages_37",
+        "operationId": "post__messages_40",
         "summary": "POST /messages",
         "security": [
           {
@@ -1798,9 +1798,167 @@
         }
       }
     },
+    "/device/student-calls": {
+      "post": {
+        "operationId": "post__device_student_calls_37",
+        "summary": "POST /device/student-calls",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "request_id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128,
+                    "pattern": "^[A-Za-z0-9_.:-]+$"
+                  }
+                },
+                "required": [
+                  "request_id"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StudentCall"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "业务错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/student-calls": {
+      "get": {
+        "operationId": "get__student_calls_38",
+        "summary": "GET /student-calls",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StudentCallList"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "业务错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "class_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          }
+        ]
+      }
+    },
+    "/student-calls/{id}/read": {
+      "post": {
+        "operationId": "post__student_calls__id__read_39",
+        "summary": "POST /student-calls/{id}/read",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StudentCall"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "业务错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/messages/{id}": {
       "get": {
-        "operationId": "get__messages__id__38",
+        "operationId": "get__messages__id__41",
         "summary": "GET /messages/{id}",
         "security": [
           {
@@ -1841,7 +1999,7 @@
         }
       },
       "delete": {
-        "operationId": "delete__messages__id__39",
+        "operationId": "delete__messages__id__42",
         "summary": "DELETE /messages/{id}",
         "security": [
           {
@@ -1884,7 +2042,7 @@
     },
     "/messages/{id}/recall": {
       "post": {
-        "operationId": "post__messages__id__recall_40",
+        "operationId": "post__messages__id__recall_43",
         "summary": "POST /messages/{id}/recall",
         "security": [
           {
@@ -1927,7 +2085,7 @@
     },
     "/messages/{id}/resend": {
       "post": {
-        "operationId": "post__messages__id__resend_41",
+        "operationId": "post__messages__id__resend_44",
         "summary": "POST /messages/{id}/resend",
         "security": [
           {
@@ -1970,7 +2128,7 @@
     },
     "/phrases": {
       "get": {
-        "operationId": "get__phrases_42",
+        "operationId": "get__phrases_45",
         "summary": "GET /phrases",
         "security": [
           {
@@ -2004,7 +2162,7 @@
         }
       },
       "post": {
-        "operationId": "post__phrases_43",
+        "operationId": "post__phrases_46",
         "summary": "POST /phrases",
         "security": [
           {
@@ -2055,7 +2213,7 @@
     },
     "/phrases/{id}": {
       "patch": {
-        "operationId": "patch__phrases__id__44",
+        "operationId": "patch__phrases__id__47",
         "summary": "PATCH /phrases/{id}",
         "security": [
           {
@@ -2114,7 +2272,7 @@
         }
       },
       "delete": {
-        "operationId": "delete__phrases__id__45",
+        "operationId": "delete__phrases__id__48",
         "summary": "DELETE /phrases/{id}",
         "security": [
           {
@@ -2157,7 +2315,7 @@
     },
     "/classes/{id}/tools/countdown": {
       "post": {
-        "operationId": "post__classes__id__tools_countdown_46",
+        "operationId": "post__classes__id__tools_countdown_49",
         "summary": "POST /classes/{id}/tools/countdown",
         "security": [
           {
@@ -2218,7 +2376,7 @@
     },
     "/classes/{id}/tools/rollcall": {
       "post": {
-        "operationId": "post__classes__id__tools_rollcall_47",
+        "operationId": "post__classes__id__tools_rollcall_50",
         "summary": "POST /classes/{id}/tools/rollcall",
         "security": [
           {
@@ -2282,7 +2440,7 @@
     },
     "/classes/{id}/tools/stop": {
       "post": {
-        "operationId": "post__classes__id__tools_stop_48",
+        "operationId": "post__classes__id__tools_stop_51",
         "summary": "POST /classes/{id}/tools/stop",
         "security": [
           {
@@ -2325,7 +2483,7 @@
     },
     "/audio": {
       "post": {
-        "operationId": "post__audio_49",
+        "operationId": "post__audio_52",
         "summary": "POST /audio",
         "security": [
           {
@@ -2377,7 +2535,7 @@
     },
     "/admin/overview": {
       "get": {
-        "operationId": "get__admin_overview_50",
+        "operationId": "get__admin_overview_53",
         "summary": "GET /admin/overview",
         "security": [
           {
@@ -2410,7 +2568,7 @@
     },
     "/admin/activation-codes": {
       "get": {
-        "operationId": "get__admin_activation_codes_51",
+        "operationId": "get__admin_activation_codes_54",
         "summary": "GET /admin/activation-codes",
         "security": [
           {
@@ -2478,7 +2636,7 @@
         }
       },
       "post": {
-        "operationId": "post__admin_activation_codes_52",
+        "operationId": "post__admin_activation_codes_55",
         "summary": "POST /admin/activation-codes",
         "security": [
           {
@@ -2552,7 +2710,7 @@
     },
     "/admin/activation-codes/{code}": {
       "patch": {
-        "operationId": "patch__admin_activation_codes__code__53",
+        "operationId": "patch__admin_activation_codes__code__56",
         "summary": "PATCH /admin/activation-codes/{code}",
         "security": [
           {
@@ -2623,7 +2781,7 @@
     },
     "/admin/activation-codes/delete": {
       "post": {
-        "operationId": "post__admin_activation_codes_delete_54",
+        "operationId": "post__admin_activation_codes_delete_57",
         "summary": "POST /admin/activation-codes/delete",
         "security": [
           {
@@ -2687,7 +2845,7 @@
     },
     "/admin/schools": {
       "get": {
-        "operationId": "get__admin_schools_55",
+        "operationId": "get__admin_schools_58",
         "summary": "GET /admin/schools",
         "security": [
           {
@@ -2721,7 +2879,7 @@
         }
       },
       "post": {
-        "operationId": "post__admin_schools_56",
+        "operationId": "post__admin_schools_59",
         "summary": "POST /admin/schools",
         "security": [
           {
@@ -2772,7 +2930,7 @@
     },
     "/admin/schools/{id}": {
       "patch": {
-        "operationId": "patch__admin_schools__id__57",
+        "operationId": "patch__admin_schools__id__60",
         "summary": "PATCH /admin/schools/{id}",
         "security": [
           {
@@ -2831,7 +2989,7 @@
         }
       },
       "delete": {
-        "operationId": "delete__admin_schools__id__58",
+        "operationId": "delete__admin_schools__id__61",
         "summary": "DELETE /admin/schools/{id}",
         "security": [
           {
@@ -2874,7 +3032,7 @@
     },
     "/admin/users": {
       "get": {
-        "operationId": "get__admin_users_59",
+        "operationId": "get__admin_users_62",
         "summary": "GET /admin/users",
         "security": [
           {
@@ -2908,7 +3066,7 @@
         }
       },
       "post": {
-        "operationId": "post__admin_users_60",
+        "operationId": "post__admin_users_63",
         "summary": "POST /admin/users",
         "security": [
           {
@@ -2970,7 +3128,7 @@
     },
     "/admin/users/{id}": {
       "patch": {
-        "operationId": "patch__admin_users__id__61",
+        "operationId": "patch__admin_users__id__64",
         "summary": "PATCH /admin/users/{id}",
         "security": [
           {
@@ -3039,7 +3197,7 @@
         }
       },
       "delete": {
-        "operationId": "delete__admin_users__id__62",
+        "operationId": "delete__admin_users__id__65",
         "summary": "DELETE /admin/users/{id}",
         "security": [
           {
@@ -3082,7 +3240,7 @@
     },
     "/admin/users/{id}/unlock-login": {
       "post": {
-        "operationId": "post__admin_users__id__unlock_login_63",
+        "operationId": "post__admin_users__id__unlock_login_66",
         "summary": "POST /admin/users/{id}/unlock-login",
         "security": [
           {
@@ -3125,7 +3283,7 @@
     },
     "/admin/classes": {
       "get": {
-        "operationId": "get__admin_classes_64",
+        "operationId": "get__admin_classes_67",
         "summary": "GET /admin/classes",
         "security": [
           {
@@ -3159,7 +3317,7 @@
         }
       },
       "post": {
-        "operationId": "post__admin_classes_65",
+        "operationId": "post__admin_classes_68",
         "summary": "POST /admin/classes",
         "security": [
           {
@@ -3225,7 +3383,7 @@
     },
     "/admin/classes/{id}": {
       "patch": {
-        "operationId": "patch__admin_classes__id__66",
+        "operationId": "patch__admin_classes__id__69",
         "summary": "PATCH /admin/classes/{id}",
         "security": [
           {
@@ -3294,7 +3452,7 @@
         }
       },
       "delete": {
-        "operationId": "delete__admin_classes__id__67",
+        "operationId": "delete__admin_classes__id__70",
         "summary": "DELETE /admin/classes/{id}",
         "security": [
           {
@@ -3337,7 +3495,7 @@
     },
     "/admin/devices": {
       "get": {
-        "operationId": "get__admin_devices_68",
+        "operationId": "get__admin_devices_71",
         "summary": "GET /admin/devices",
         "security": [
           {
@@ -3373,7 +3531,7 @@
     },
     "/admin/messages": {
       "get": {
-        "operationId": "get__admin_messages_69",
+        "operationId": "get__admin_messages_72",
         "summary": "GET /admin/messages",
         "security": [
           {
@@ -3440,7 +3598,7 @@
     },
     "/admin/messages/{id}": {
       "delete": {
-        "operationId": "delete__admin_messages__id__70",
+        "operationId": "delete__admin_messages__id__73",
         "summary": "DELETE /admin/messages/{id}",
         "security": [
           {
@@ -3483,7 +3641,7 @@
     },
     "/admin/audit-logs": {
       "get": {
-        "operationId": "get__admin_audit_logs_71",
+        "operationId": "get__admin_audit_logs_74",
         "summary": "GET /admin/audit-logs",
         "security": [
           {
@@ -3814,6 +3972,75 @@
           "id",
           "text",
           "sort"
+        ]
+      },
+      "StudentCall": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "class_id": {
+            "type": "string"
+          },
+          "class_name": {
+            "type": "string"
+          },
+          "device_id": {
+            "type": "string"
+          },
+          "device_name": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "read_at": {
+            "type": "string"
+          },
+          "read_by": {
+            "type": "string"
+          },
+          "read_by_name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "class_id",
+          "class_name",
+          "device_id",
+          "device_name",
+          "created_at",
+          "read_at",
+          "read_by",
+          "read_by_name"
+        ]
+      },
+      "StudentCallList": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StudentCall"
+            }
+          },
+          "unread_count": {
+            "type": "integer"
+          },
+          "next_cursor": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "items",
+          "unread_count",
+          "next_cursor"
         ]
       },
       "Homework": {

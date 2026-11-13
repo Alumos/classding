@@ -11,3 +11,6 @@ export type Phrase = Schemas['Phrase'];
 export type Homework = Schemas['Homework'];
 export type AuthResponse = Schemas['AuthResponse'];
 export type BindCode = Schemas['BindCode'];
+
+export type StudentCall = Schemas['StudentCall'];
+export type StudentCallPage = Schemas['StudentCallList'];

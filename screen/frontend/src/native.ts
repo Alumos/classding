@@ -13,6 +13,8 @@ export interface HomeworkSettings {
   preferences: Record<string, HomeworkPreference>;
 }
 export interface NativeApp {
+  UpdateStudentCallStatus(bound: boolean, online: boolean, className: string, binding: number): Promise<void>;
+  CompleteStudentCall(id: string, success: boolean, message: string): Promise<void>;
   UpdateHomeworks(value: string): Promise<void>;
   GetHomeworkSettings(): Promise<HomeworkSettings>;
   SetHomeworkPreference(id: string, action: string): Promise<void>;
@@ -42,7 +44,8 @@ declare global {
     };
   }
 }
-export const native = (): NativeApp | undefined => window.go?.main?.App;
+export const native = (): NativeApp | undefined =>
+  typeof window === 'undefined' ? undefined : window.go?.main?.App;
 const KEY = 'classding.screen.state.v1';
 export async function loadState(): Promise<string> {
   return native() ? await native()!.LoadState() : localStorage.getItem(KEY) || '';

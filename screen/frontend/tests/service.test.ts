@@ -97,6 +97,138 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+describe('学生呼叫', () => {
+  const result = { id: 'call1', class_id: 'c1', device_id: 'd1', created_at: '2026-11-13T03:00:00Z' };
+  async function online() {
+    mocks.disk = JSON.stringify({
+      version: 1,
+      token: 'student-call-test-token',
+      deviceId: 'd1',
+      classId: 'c1',
+      deviceName: '教室',
+      className: '三年二班',
+      volume: 70,
+      lastSeq: 0,
+      queue: [],
+      ledger: {},
+    });
+    const service = makeService();
+    await service.init();
+    socket().frame(welcome);
+    await vi.waitFor(() => expect(service.getSnapshot().connection).toBe('online'));
+    return service;
+  }
+  function response(data: unknown, status = 200, retry?: string) {
+    return {
+      ok: status < 400,
+      status,
+      json: async () => data,
+      headers: new Headers(retry ? { 'Retry-After': retry } : {}),
+    } as Response;
+  }
+  it('未绑定和离线不发送请求', async () => {
+    const request = vi.fn();
+    vi.stubGlobal('fetch', request);
+    const service = makeService();
+    await service.init();
+    await expect(service.sendStudentCall()).rejects.toThrow('未绑定');
+    const bound = await online();
+    socket().close();
+    await expect(bound.sendStudentCall()).rejects.toThrow('连接中断');
+    expect(request.mock.calls.filter(([path]) => String(path).includes('student-calls'))).toHaveLength(0);
+  });
+  it('复用设备认证并阻止发送中重复，成功必须收到有效记录', async () => {
+    const service = await online();
+    let resolve!: (value: Response) => void;
+    const request = vi.fn(
+      (_path: string, _init?: RequestInit) =>
+        new Promise<Response>((done) => {
+          resolve = done;
+        }),
+    );
+    vi.stubGlobal('fetch', request);
+    const sending = service.sendStudentCall('native-id');
+    await expect(service.sendStudentCall()).rejects.toThrow('正在发送');
+    expect(request).toHaveBeenCalledWith(
+      '/api/v1/device/student-calls',
+      expect.objectContaining({
+        method: 'POST',
+        headers: { Authorization: 'Bearer student-call-test-token', 'Content-Type': 'application/json' },
+        body: JSON.stringify({ request_id: 'native-id' }),
+      }),
+    );
+    resolve(response(result));
+    await sending;
+    expect(service.getSnapshot()).toMatchObject({
+      studentCallSending: false,
+      studentCallMessage: expect.stringContaining('已发送'),
+    });
+  });
+  it('不确定失败保留幂等编号，跨备用入口重试不创建新请求', async () => {
+    const service = await online();
+    const request = vi
+      .fn()
+      .mockRejectedValueOnce(new TypeError('offline'))
+      .mockResolvedValue(response(result));
+    vi.stubGlobal('fetch', request);
+    await expect(service.sendStudentCall('original-id')).rejects.toThrow('未确认');
+    await service.sendStudentCall('another-native-id');
+    expect(request.mock.calls.map(([, init]) => JSON.parse(init.body).request_id)).toEqual([
+      'original-id',
+      'original-id',
+    ]);
+  });
+  it('限流显示等待秒数，不假成功；无效成功响应可重试', async () => {
+    const service = await online();
+    const request = vi
+      .fn()
+      .mockResolvedValueOnce(response({}, 429, '27'))
+      .mockResolvedValueOnce(response({}))
+      .mockResolvedValue(response(result));
+    vi.stubGlobal('fetch', request);
+    await expect(service.sendStudentCall('rate-id')).rejects.toThrow('27 秒');
+    await expect(service.sendStudentCall('new-id')).rejects.toThrow('未确认有效呼叫');
+    await service.sendStudentCall('ignore-id');
+    expect(request.mock.calls.map(([, init]) => JSON.parse(init.body).request_id)).toEqual([
+      'rate-id',
+      'new-id',
+      'new-id',
+    ]);
+  });
+  it('解绑中止请求并拒绝旧成功写回', async () => {
+    const service = await online();
+    let resolve!: (value: Response) => void;
+    let signal: AbortSignal | undefined;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((_path: string, init: RequestInit) => {
+        signal = init.signal!;
+        return new Promise<Response>((done) => {
+          resolve = done;
+        });
+      }),
+    );
+    const pending = service.sendStudentCall('old-binding');
+    await service.unbind();
+    expect(signal?.aborted).toBe(true);
+    resolve(response(result));
+    await expect(pending).rejects.toThrow('绑定已变化');
+    expect(service.getSnapshot()).toMatchObject({
+      bound: false,
+      studentCallSending: false,
+      studentCallMessage: '',
+    });
+  });
+  it('401 清除失效绑定，403 明确显示授权不可用', async () => {
+    const service = await online();
+    const request = vi.fn().mockResolvedValueOnce(response({}, 403)).mockResolvedValue(response({}, 401));
+    vi.stubGlobal('fetch', request);
+    await expect(service.sendStudentCall('license-id')).rejects.toThrow('授权不可用');
+    await expect(service.sendStudentCall()).rejects.toThrow('已失效');
+    expect(service.getSnapshot().bound).toBe(false);
+  });
+});
+
 describe('大屏消息可靠性', () => {
   it('忽略格式无效的消息封装，并继续接收合法通知', async () => {
     mocks.disk = JSON.stringify({

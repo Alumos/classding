@@ -1,6 +1,14 @@
 import React, { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { createRoot } from 'react-dom/client';
 import { NoticeScreen } from '@classding/ui/notice';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@classding/ui/components/ui/dialog';
 import { Badge, Brand, Button, Card, Input, Switch } from './ui';
 import {
   ArrowRight,
@@ -34,6 +42,7 @@ void service.init();
 function App() {
   const state = useSyncExternalStore(service.subscribe, service.getSnapshot);
   const [code, setCode] = useState('');
+  const [callOpen, setCallOpen] = useState(false);
   const [deviceName, setDeviceName] = useState('');
   const [server, setServer] = useState('');
   const [advanced, setAdvanced] = useState(false);
@@ -363,6 +372,45 @@ function App() {
                 </div>
               </Card>
               <div className="dashboard-side">
+                <Card className="student-call-card">
+                  <h3>需要老师来教室？</h3>
+                  <p>向本班所有关联老师发送呼叫。Windows 关闭主窗口后仍可使用桌面悬浮入口。</p>
+                  <Button
+                    variant="secondary"
+                    onClick={() => setCallOpen(true)}
+                    disabled={state.studentCallSending}
+                  >
+                    <BellRing size={16} /> 呼叫老师
+                  </Button>
+                  {state.studentCallMessage && <p role="status">{state.studentCallMessage}</p>}
+                </Card>
+                <Dialog open={callOpen && state.bound} onOpenChange={setCallOpen}>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>确认呼叫老师？</DialogTitle>
+                      <DialogDescription>
+                        {state.className}：将通知本班所有关联老师。取消不会发送。
+                      </DialogDescription>
+                    </DialogHeader>
+                    {state.connection !== 'online' && (
+                      <p role="alert">连接中断，呼叫未发送，请恢复网络后重试。</p>
+                    )}
+                    {state.studentCallMessage && <p role="status">{state.studentCallMessage}</p>}
+                    <DialogFooter>
+                      <Button variant="secondary" onClick={() => setCallOpen(false)}>
+                        取消
+                      </Button>
+                      <Button
+                        disabled={state.studentCallSending || state.connection !== 'online'}
+                        onClick={() => {
+                          void service.sendStudentCall().catch(() => {});
+                        }}
+                      >
+                        {state.studentCallSending ? '正在发送…' : '确认呼叫'}
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
                 <Card className="ready-card">
                   <div className="ready-visual">
                     <span className="sound-orbit orbit-one" />

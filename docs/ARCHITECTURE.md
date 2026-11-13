@@ -27,7 +27,7 @@
 | `routes.go` | 全部路由，一行一个接口，标明访问级别与读写 |
 | `app.go` | 启动、旧数据升级、限流、审计、会话撤销 |
 | `auth.go`、`security.go`、`validate.go` | 登录与刷新会话、令牌与密码哈希、输入校验 |
-| `classes.go`、`devices.go`、`messages.go`、`homework.go`、`audio.go`、`tools.go` | 各业务领域 |
+| `classes.go`、`devices.go`、`messages.go`、`homework.go`、`student_calls.go`、`audio.go`、`tools.go` | 各业务领域 |
 | `admin.go`、`settings.go`、`backup.go` | 管理后台、站点设置、备份与恢复 |
 | `realtime.go`、`hub.go` | WebSocket 协议与连接池 |
 | `maintenance.go` | 定时清理过期会话、消息和录音 |

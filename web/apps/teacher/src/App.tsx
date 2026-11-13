@@ -1,6 +1,16 @@
 import { useState } from 'react';
 import { Navigate, NavLink, Outlet, Route, Routes, useLocation } from 'react-router';
-import { BookOpenCheck, CircleHelp, History, LayoutGrid, LogOut, Radio, Send, UserRound } from 'lucide-react';
+import {
+  BellRing,
+  BookOpenCheck,
+  CircleHelp,
+  History,
+  LayoutGrid,
+  LogOut,
+  Radio,
+  Send,
+  UserRound,
+} from 'lucide-react';
 import { Avatar, AvatarFallback } from '@classding/ui/components/ui/avatar';
 import { Badge } from '@classding/ui/components/ui/badge';
 import {
@@ -58,10 +68,13 @@ import HistoryPage from './pages/History';
 import MePage from './pages/Me';
 import LoginPage from './pages/Login';
 import HomeworkPage from './pages/Homework';
+import StudentCallsPage from './pages/StudentCalls';
+import { useStudentCalls } from './studentCalls';
 import { APP_VERSION } from '@classding/ui/version';
 
 const links = [
   { to: '/send', icon: Send, label: '发通知', short: '发通知' },
+  { to: '/student-calls', icon: BellRing, label: '学生呼叫', short: '学生呼叫' },
   { to: '/classes', icon: LayoutGrid, label: '我的班级', short: '班级' },
   { to: '/homework', icon: BookOpenCheck, label: '布置作业', short: '作业' },
   { to: '/history', icon: History, label: '发送记录', short: '记录' },
@@ -106,6 +119,17 @@ function HelpDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open
 function Layout() {
   const { user, logout, updateUser } = useAuth();
   const online = useTeacherSocket();
+  const calls = useStudentCalls(user?.id ?? '');
+  const unread = calls.data?.pages[0]?.unread_count ?? 0;
+  const callLabel = unread ? `学生呼叫，${unread} 条未读` : '学生呼叫';
+  const callBadge = unread > 0 && (
+    <span
+      className="student-call-unread inline-flex min-w-5 shrink-0 items-center justify-center rounded-full bg-destructive px-1 text-xs font-semibold text-white"
+      aria-label={`${unread} 条未读`}
+    >
+      {unread > 99 ? '99+' : unread}
+    </span>
+  );
   function changeScale(scale: number) {
     if (!user) return;
     const previous = user;
@@ -142,10 +166,13 @@ function Layout() {
                     <SidebarMenuButton
                       isActive={location.pathname.startsWith(to)}
                       tooltip={label}
-                      render={<NavLink to={to} />}
+                      render={<NavLink to={to} aria-label={to === '/student-calls' ? callLabel : label} />}
                     >
                       <Icon />
                       <span>{label}</span>
+                      {to === '/student-calls' && (
+                        <span className="ml-auto group-data-[collapsible=icon]:hidden">{callBadge}</span>
+                      )}
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                 ))}
@@ -186,32 +213,36 @@ function Layout() {
         </SidebarFooter>
         <SidebarRail />
       </Sidebar>
-      <SidebarInset className="workspace min-w-0 pb-[calc(4rem+env(safe-area-inset-bottom))] md:pb-0">
+      <SidebarInset className="workspace min-w-0 pb-[calc(7rem+env(safe-area-inset-bottom))] md:pb-0">
         <header className="sticky top-0 z-10 flex h-14 shrink-0 items-center gap-2 border-b bg-background/95 px-4 backdrop-blur md:rounded-t-xl">
           <SidebarTrigger className="-ml-1 hidden md:inline-flex" />
           <Separator
             orientation="vertical"
             className="mr-2 hidden data-vertical:h-4 data-vertical:self-auto md:block"
           />
-          <Brand className="w-auto md:hidden [&>span:last-child]:hidden" />
+          <Brand className="hidden w-auto sm:flex md:hidden [&>span:last-child]:hidden" />
           <Breadcrumb className="min-w-0">
             <BreadcrumbList className="flex-nowrap">
               <BreadcrumbItem className="hidden sm:inline-flex">工作台</BreadcrumbItem>
               <BreadcrumbSeparator className="hidden sm:inline-flex" />
-              <BreadcrumbItem>
+              <BreadcrumbItem className="shrink-0">
                 <BreadcrumbPage>{active.label}</BreadcrumbPage>
               </BreadcrumbItem>
             </BreadcrumbList>
           </Breadcrumb>
-          <div className="ml-auto flex items-center gap-2">
-            <Badge variant="outline" className="gap-1.5 whitespace-nowrap">
+          <div className="ml-auto flex min-w-0 flex-1 items-center justify-end gap-2">
+            <Badge
+              variant="outline"
+              className="min-w-0 gap-1.5 whitespace-nowrap"
+              title={online ? '实时连接已开启' : '正在连接实时通道'}
+            >
               <span
                 className={cn(
-                  'size-1.5 rounded-full',
+                  'size-1.5 shrink-0 rounded-full',
                   online ? 'bg-emerald-500' : 'animate-pulse bg-amber-500',
                 )}
               />
-              {online ? '实时连接已开启' : '正在连接实时通道'}
+              <span className="truncate">{online ? '实时连接已开启' : '正在连接实时通道'}</span>
             </Badge>
             <UiScaleMenu value={user?.ui_scale} onChange={changeScale} />
             <span className="hidden text-sm text-muted-foreground lg:inline">
@@ -227,21 +258,25 @@ function Layout() {
         <SiteFooter className="workspace-footer" />
       </SidebarInset>
       <nav
-        className="bottom-nav fixed inset-x-0 bottom-0 z-20 grid grid-cols-5 border-t bg-background/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden"
+        className="bottom-nav fixed inset-x-0 bottom-0 z-20 grid grid-cols-3 border-t bg-background/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden"
         aria-label="教师工作台导航"
       >
         {links.map(({ to, icon: Icon, short }) => (
           <NavLink
             key={to}
             to={to}
+            aria-label={to === '/student-calls' ? callLabel : short}
             className={({ isActive }) =>
               cn(
-                'flex h-16 flex-col items-center justify-center gap-1 text-xs text-muted-foreground',
+                'flex h-14 min-w-0 flex-col items-center justify-center gap-1 text-xs text-muted-foreground',
                 isActive && 'font-medium text-primary',
               )
             }
           >
-            <Icon className="size-5" />
+            <span className="relative">
+              <Icon className="size-5" />
+              {to === '/student-calls' && <span className="absolute -top-1 left-4">{callBadge}</span>}
+            </span>
             <span>{short}</span>
           </NavLink>
         ))}
@@ -263,7 +298,7 @@ function Protected() {
         </span>
       </div>
     );
-  return user ? <Layout /> : <Navigate to="/login" replace />;
+  return user ? <Layout key={user.id} /> : <Navigate to="/login" replace />;
 }
 
 export default function App() {
@@ -274,6 +309,7 @@ export default function App() {
       <Route element={<Protected />}>
         <Route index element={<Navigate to="/send" replace />} />
         <Route path="/send" element={<SendPage />} />
+        <Route path="/student-calls" element={<StudentCallsPage />} />
         <Route path="/classes" element={<ClassesPage />} />
         <Route path="/homework" element={<HomeworkPage />} />
         <Route path="/history" element={<HistoryPage />} />

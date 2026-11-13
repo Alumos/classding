@@ -7,6 +7,7 @@ web/packages/api/src/ws-types.ts
 **/dist/
 server/static/
 node_modules/
+.agent/
 .pnpm-store/
 tools/
 .claude/

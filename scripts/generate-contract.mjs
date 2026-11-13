@@ -86,6 +86,18 @@ const schemas = {
     joined_at: timestamp,
   }),
   Phrase: obj({ id: str, text: str, sort: num }),
+  StudentCall: obj({
+    id: str,
+    class_id: str,
+    class_name: str,
+    device_id: str,
+    device_name: str,
+    created_at: timestamp,
+    read_at: str,
+    read_by: str,
+    read_by_name: str,
+  }),
+  StudentCallList: obj({ items: arr(ref('StudentCall')), unread_count: num, next_cursor: nullable }),
   Homework: homework,
   HomeworkList: obj({ items: arr(ref('Homework')) }),
   DeviceHomeworkList: obj({ items: arr(ref('Homework')), homework_revision: homeworkRevision }),
@@ -352,6 +364,18 @@ add(
 );
 add('/homeworks/{id}', 'delete', ref('OK'));
 add('/messages', 'get', ref('MessageList'));
+add(
+  '/device/student-calls',
+  'post',
+  ref('StudentCall'),
+  obj({ request_id: { type: 'string', minLength: 1, maxLength: 128, pattern: '^[A-Za-z0-9_.:-]+$' } }),
+);
+add('/student-calls', 'get', ref('StudentCallList'));
+paths['/student-calls'].get.parameters = [
+  ...['class_id', 'cursor'].map((name) => ({ name, in: 'query', required: false, schema: str })),
+  { name: 'limit', in: 'query', required: false, schema: { type: 'integer', minimum: 1, maximum: 100 } },
+];
+add('/student-calls/{id}/read', 'post', ref('StudentCall'));
 add('/messages', 'post', ref('Message'), ref('MessageInput'));
 add('/messages/{id}', 'get', ref('Message'));
 add('/messages/{id}', 'delete', ref('OK'));
@@ -521,6 +545,7 @@ const frames = {
   pong: obj({ server_time: num }),
   receipt: obj({ message_id: str, class_id: str, device_id: str, status: str, at: timestamp }),
   presence: obj({ class_id: str, device_id: str, online: bool }),
+  student_call: obj({ id: str, class_id: str, kind: { type: 'string', enum: ['created', 'read'] } }),
 };
 writeFileSync(
   'api/ws/frame.schema.json',

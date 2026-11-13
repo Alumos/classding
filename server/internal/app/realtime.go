@@ -366,6 +366,7 @@ func (a *App) connectTeacher(p *Peer, token string) (claims, bool) {
 		return c, false
 	}
 	p.UserID = u.ID
+	p.teacherSession = c
 	a.hub.addTeacher(p)
 	p.send(Frame{T: "welcome", D: map[string]any{"server_time": time.Now().Unix()}})
 	return c, true

@@ -1,7 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, getAccessToken } from '@classding/api';
-import type { Class, Homework, MessagePage, Phrase } from './models';
+import type { Class, Homework, MessagePage, Phrase, StudentCallPage } from './models';
+import type { InfiniteData } from '@tanstack/react-query';
+import { toast } from 'sonner';
+import { useAuth } from './auth';
+import { readStudentCallEvent, studentCallsKey, studentCallsUnavailable } from './studentCalls';
 export const useClasses = () => useQuery({ queryKey: ['classes'], queryFn: () => api<Class[]>('/classes') });
 export const useHomeworks = (classId: string) =>
   useQuery({
@@ -19,9 +23,14 @@ export const useMessages = (classId = '') =>
   });
 export function useTeacherSocket() {
   const cache = useQueryClient();
+  const { user } = useAuth();
+  const userId = user?.id ?? '';
   const [online, setOnline] = useState(false);
   useEffect(() => {
+    if (!userId) return;
+    setOnline(false);
     let stopped = false;
+    const announced = new Set<string>();
     let socket: WebSocket | undefined;
     let timeout: ReturnType<typeof setTimeout>;
     let ping: ReturnType<typeof setInterval>;
@@ -29,14 +38,17 @@ export function useTeacherSocket() {
     let lastFrame = Date.now();
     function connect() {
       if (stopped) return;
-      socket = new WebSocket(
+      const current = new WebSocket(
         `${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}/ws/teacher`,
       );
-      socket.onopen = () => {
+      socket = current;
+      current.onopen = () => {
+        if (stopped || socket !== current) return;
         lastFrame = Date.now();
-        socket?.send(JSON.stringify({ t: 'hello', d: { token: getAccessToken() } }));
+        current.send(JSON.stringify({ t: 'hello', d: { token: getAccessToken() } }));
       };
-      socket.onmessage = (event) => {
+      current.onmessage = (event) => {
+        if (stopped || socket !== current) return;
         lastFrame = Date.now();
         let frame;
         try {
@@ -48,6 +60,8 @@ export function useTeacherSocket() {
           attempts = 0;
           setOnline(true);
           void cache.invalidateQueries({ queryKey: ['homeworks'] });
+          if (!studentCallsUnavailable(cache.getQueryState(studentCallsKey(userId))?.error))
+            void cache.invalidateQueries({ queryKey: studentCallsKey(userId) });
           clearInterval(ping);
           ping = setInterval(() => {
             if (Date.now() - lastFrame > 60000) {
@@ -57,6 +71,21 @@ export function useTeacherSocket() {
             if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ t: 'ping', d: {} }));
           }, 25000);
         }
+        if (frame.t === 'student_call') {
+          const call = readStudentCallEvent(frame.d);
+          if (!call) return;
+          void cache.invalidateQueries({ queryKey: studentCallsKey(userId) }).then(() => {
+            if (stopped || socket !== current || call.kind !== 'created' || announced.has(call.id)) return;
+            announced.add(call.id);
+            if (announced.size > 512) announced.delete(announced.values().next().value!);
+            const data = cache.getQueryData<InfiniteData<StudentCallPage>>(studentCallsKey(userId));
+            const item = data?.pages.flatMap((page) => page.items).find((item) => item.id === call.id);
+            toast.info(item ? `${item.class_name}的学生正在呼叫老师` : '收到新的学生呼叫', {
+              id: `student-call-${userId}-${call.id}`,
+              description: '请在“学生呼叫”中查看，处理后标记已读。',
+            });
+          });
+        }
         if (frame.t === 'receipt') void cache.invalidateQueries({ queryKey: ['messages'] });
         if (frame.t === 'homework') void cache.invalidateQueries({ queryKey: ['homeworks'] });
         if (frame.t === 'presence') {
@@ -64,7 +93,8 @@ export function useTeacherSocket() {
           void cache.invalidateQueries({ queryKey: ['devices'] });
         }
       };
-      socket.onclose = () => {
+      current.onclose = () => {
+        if (stopped || socket !== current) return;
         setOnline(false);
         clearInterval(ping);
         if (!stopped) {
@@ -79,7 +109,7 @@ export function useTeacherSocket() {
             });
         }
       };
-      socket.onerror = () => socket?.close();
+      current.onerror = () => current.close();
     }
     connect();
     return () => {
@@ -88,7 +118,7 @@ export function useTeacherSocket() {
       clearInterval(ping);
       socket?.close();
     };
-  }, [cache]);
+  }, [cache, userId]);
   return online;
 }
 export function useNow(interval = 1000) {
