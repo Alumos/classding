@@ -152,7 +152,24 @@ func (a *App) Close() error {
 }
 
 // Save writes the state through to the database. Callers hold a.mu.
-func (a *App) Save() error { return a.store.Save(context.Background(), a.state) }
+func (a *App) Save() error {
+	rows, err := a.state.rows()
+	if err != nil {
+		return err
+	}
+	return a.store.Save(context.Background(), rows)
+}
+
+// rollback returns the in-memory state to the last committed one. Callers hold a.mu.
+func (a *App) rollback() error {
+	var restored State
+	if err := a.store.Restore(&restored); err != nil {
+		return err
+	}
+	upgradeState(&restored)
+	a.state = restored
+	return nil
+}
 
 func (a *App) deferJob(fn func())      { a.jobs = append(a.jobs, fn) }
 func (a *App) deferRollback(fn func()) { a.rollbackJobs = append(a.rollbackJobs, fn) }

@@ -223,15 +223,18 @@ func (a *App) connectDevice(p *Peer, hello deviceHello, publicIP string) (Device
 	if !exists {
 		return d, nil, false
 	}
-	p.ID, p.ClassID = d.ID, d.ClassID
-	a.hub.addDevice(p)
+	previous := d
 	d.LastSeenAt = now()
 	hello.record(&d, publicIP)
 	a.state.Devices[d.ID] = d
 	if err = a.Save(); err != nil {
-		a.hub.RemoveDevice(d.ID)
+		// The older socket, if any, keeps serving the screen.
+		a.state.Devices[d.ID] = previous
+		slog.Error("save device connection", "error", err)
 		return d, nil, false
 	}
+	p.ID, p.ClassID = d.ID, d.ClassID
+	a.hub.addDevice(p)
 
 	recalled := []string{}
 	for _, messageID := range hello.PendingIDs {
@@ -346,9 +349,22 @@ func (a *App) teacherWS(w http.ResponseWriter, r *http.Request) {
 	defer a.hub.removeTeacherPeer(p)
 	readFrames(p, func(frame wire) bool {
 		a.mu.Lock()
+		defer a.mu.Unlock()
+		// A ping may carry a newer access token for the same account, which keeps
+		// the socket open across token refreshes instead of dropping it every 15 minutes.
+		if frame.T == "ping" {
+			var in struct {
+				Token string `json:"token"`
+			}
+			if json.Unmarshal(frame.D, &in) == nil && in.Token != "" {
+				if c, err := a.verify(in.Token); err == nil && c.Subject == session.Subject && c.Expires > session.Expires {
+					session = c
+					a.hub.renewTeacher(p, c)
+				}
+			}
+		}
 		u, exists := a.state.Users[session.Subject]
-		valid := exists && u.Active() && u.TokenVersion == session.Version && time.Now().Unix() < session.Expires
-		a.mu.Unlock()
+		valid := exists && u.Active() && u.TokenVersion == session.Version && session.Epoch == a.authEpoch() && time.Now().Unix() < session.Expires
 		if valid && frame.T == "ping" {
 			p.send(pong())
 		}

@@ -14,7 +14,7 @@
 - AuthResponse: {access_token,user}；refresh token 放 HttpOnly Cookie。
 
 ## REST
-GET config => {speech_enabled:false,registration_enabled:true,version:'0.3.5'}
+GET config => {speech_enabled:false,registration_enabled:true,version:'0.4.0'}
 POST auth/register {username,password,display_name} => AuthResponse
 POST auth/login {username,password} => AuthResponse
 POST auth/refresh => AuthResponse；POST auth/logout => {ok:true}
@@ -33,7 +33,7 @@ GET device/me => {device,class:{id,name},volume,sequence,homeworks,homework_revi
 GET device/homeworks => {items:Homework[],homework_revision}，设备 Bearer 令牌认证。
 GET homeworks?class_id= => {items:Homework[]}；POST homeworks {class_id,subject,text,visible,always_on_top} => Homework；PATCH homeworks/:id {subject?,text?,visible?,always_on_top?} => Homework；DELETE homeworks/:id => {ok:true}。
 POST messages {class_ids,kind,text,student_name,signature,style,display_sec,repeat,chime,play_mode,audio_id?} => Message；repeat 为朗读或播放遍数：文字 0–3（0 只显示不朗读），原声 1–3
-GET messages?class_id=&cursor= => {items:Message[],next_cursor:string|null}
+GET messages?class_id=&cursor= => {items:Message[],next_cursor:string|null}（cursor 原样传回上一页的 next_cursor，按创建时间 + ID 倒序，同一时刻不漏不重）
 GET messages/:id => Message；POST messages/:id/recall => Message；POST messages/:id/resend => Message
 GET phrases => Phrase[]；POST phrases {text} => Phrase；PATCH phrases/:id {text} => Phrase；DELETE => {ok:true}
 POST audio multipart file => {audio_id,url,transcript?}

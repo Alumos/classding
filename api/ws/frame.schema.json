@@ -611,7 +611,11 @@
         },
         "d": {
           "type": "object",
-          "properties": {},
+          "properties": {
+            "token": {
+              "type": "string"
+            }
+          },
           "required": []
         }
       },

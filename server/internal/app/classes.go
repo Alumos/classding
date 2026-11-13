@@ -124,9 +124,9 @@ func (a *App) createClass(_ http.ResponseWriter, r *http.Request, u *User) (any,
 	if err := decode(r, &in); err != nil {
 		return nil, err
 	}
-	name := strings.TrimSpace(in.Name)
-	if !validClassName(name) {
-		return nil, bad("班级名称需为 1–40 字。")
+	name, grade := strings.TrimSpace(in.Name), strings.TrimSpace(in.Grade)
+	if !validClassName(name) || !runesBetween(grade, 0, maxClassName) {
+		return nil, bad("班级名称需为 1–40 字，年级最多 40 字。")
 	}
 	code, exists := a.state.Codes[strings.ToUpper(strings.TrimSpace(in.Code))]
 	if !exists || code.Status != LicenseUnused || code.Expired() {
@@ -135,7 +135,7 @@ func (a *App) createClass(_ http.ResponseWriter, r *http.Request, u *User) (any,
 	if err := a.redeemFor(u, code); err != nil {
 		return nil, err
 	}
-	c := a.activateClass(code, Class{Name: name, Grade: in.Grade, OwnerID: u.ID, OrgID: u.OrgID}, *u)
+	c := a.activateClass(code, Class{Name: name, Grade: grade, OwnerID: u.ID, OrgID: u.OrgID}, *u)
 	a.audit(u, "class.create", c.ID)
 	return a.classView(c, u), nil
 }

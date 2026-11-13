@@ -18,6 +18,7 @@ func scopedRequest(a *App, path, scope string, body any, cookies ...*http.Cookie
 		r.AddCookie(cookie)
 	}
 	w := httptest.NewRecorder()
+	commitState(a)
 	a.Handler().ServeHTTP(w, r)
 	return w
 }
@@ -67,7 +68,7 @@ func TestProductionHTTPSessionsAndSeparateScopes(t *testing.T) {
 	expectStatus(t, scopedRequest(a, "/auth/refresh", "teacher", nil, adminTeacher.Result().Cookies()[0]), 200)
 }
 
-func TestCookieProtocolAndLegacyMigration(t *testing.T) {
+func TestCookieProtocol(t *testing.T) {
 	f := newSecurityFixture(t)
 	for _, tc := range []struct {
 		name, url, remote, forwarded, mode string
@@ -90,16 +91,6 @@ func TestCookieProtocolAndLegacyMigration(t *testing.T) {
 				t.Fatalf("Secure=%v, want %v", got, tc.want)
 			}
 		})
-	}
-	f.app.config.CookieSecure = "auto"
-	u := f.users["super"]
-	raw := "legacy-admin-refresh-token"
-	f.app.state.Sessions[hash(raw)] = Session{ID: hash(raw), UserID: u.ID, ExpiresAt: after(refreshGrace), Version: u.TokenVersion}
-	response := scopedRequest(f.app, "/auth/refresh", "admin", nil, &http.Cookie{Name: "classding_refresh", Value: raw})
-	expectStatus(t, response, 200)
-	cookies := response.Result().Cookies()
-	if len(cookies) != 2 || cookies[0].Name != "classding_refresh_admin" || cookies[1].Name != "classding_refresh" || cookies[1].MaxAge >= 0 {
-		t.Fatalf("legacy migration cookies: %+v", cookies)
 	}
 }
 

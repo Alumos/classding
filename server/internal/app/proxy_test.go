@@ -92,6 +92,7 @@ func TestProxyClientIPRateLimits(t *testing.T) {
 					r.RemoteAddr = "10.0.0.1:1234"
 					r.Header.Set("X-Forwarded-For", forwarded)
 					w := httptest.NewRecorder()
+					commitState(a)
 					a.Handler().ServeHTTP(w, r)
 					return w.Code
 				}

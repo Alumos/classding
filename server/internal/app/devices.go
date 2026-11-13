@@ -196,12 +196,15 @@ func (a *App) removeDevice(_ http.ResponseWriter, r *http.Request, u *User) (any
 	a.unbind(d)
 	delete(a.state.Devices, d.ID)
 	for key, m := range a.state.Messages {
+		changed := false
 		for i, t := range m.Targets {
-			if t.DeviceID == d.ID && t.Status == DeliveryQueued {
-				m.Targets[i].Status = DeliveryFailed
+			if t.DeviceID == d.ID && t.Status.Pending() {
+				m.Targets[i].Status, changed = DeliveryFailed, true
 			}
 		}
-		a.state.Messages[key] = m
+		if changed {
+			a.state.Messages[key] = m
+		}
 	}
 	a.audit(u, "device.unbind", d.ID)
 	return ok(), nil

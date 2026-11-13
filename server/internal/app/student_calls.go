@@ -1,15 +1,10 @@
 package app
 
 import (
-	"bytes"
-	"encoding/base64"
-	"encoding/json"
-	"io"
 	"net/http"
 	"regexp"
 	"slices"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -62,27 +57,13 @@ func (a *App) createStudentCall(w http.ResponseWriter, r *http.Request, _ *User)
 	return item.StudentCall, nil
 }
 
-type studentCallCursor struct {
-	CreatedAt string `json:"created_at"`
-	ID        string `json:"id"`
-}
-
 type studentCallList struct {
 	Items       []StudentCall `json:"items"`
 	UnreadCount int           `json:"unread_count"`
 	NextCursor  *string       `json:"next_cursor"`
 }
 
-// Compare parsed times rather than RFC3339Nano strings: a whole second and a
-// fractional second do not sort lexically at the boundary.
-func compareStudentCalls(x, y StudentCall) int {
-	left, _ := parseTime(x.CreatedAt)
-	right, _ := parseTime(y.CreatedAt)
-	if order := right.Compare(left); order != 0 {
-		return order
-	}
-	return strings.Compare(y.ID, x.ID)
-}
+func (c StudentCall) key() pageKey { return pageKey{c.CreatedAt, c.ID} }
 
 func (a *App) listStudentCalls(_ http.ResponseWriter, r *http.Request, u *User) (any, error) {
 	query := r.URL.Query()
@@ -103,29 +84,9 @@ func (a *App) listStudentCalls(_ http.ResponseWriter, r *http.Request, u *User) 
 			return nil, bad("limit 需为 1–100。")
 		}
 	}
-	var cursor *StudentCall
-	if raw := query.Get("cursor"); raw != "" {
-		if len(raw) > 1024 {
-			return nil, bad("分页标识无效。")
-		}
-		data, err := base64.RawURLEncoding.DecodeString(raw)
-		if err != nil {
-			return nil, bad("分页标识无效。")
-		}
-		var key studentCallCursor
-		decoder := json.NewDecoder(bytes.NewReader(data))
-		decoder.DisallowUnknownFields()
-		if decoder.Decode(&key) != nil || key.ID == "" || len(key.ID) > 128 {
-			return nil, bad("分页标识无效。")
-		}
-		var extra any
-		if decoder.Decode(&extra) != io.EOF {
-			return nil, bad("分页标识无效。")
-		}
-		if _, valid := parseTime(key.CreatedAt); !valid {
-			return nil, bad("分页标识无效。")
-		}
-		cursor = &StudentCall{ID: key.ID, CreatedAt: key.CreatedAt}
+	cursor, valid := decodeCursor(query.Get("cursor"))
+	if !valid {
+		return nil, bad("分页标识无效。")
 	}
 	result := studentCallList{Items: []StudentCall{}}
 	for _, item := range a.state.StudentCalls {
@@ -136,17 +97,14 @@ func (a *App) listStudentCalls(_ http.ResponseWriter, r *http.Request, u *User) 
 		if item.ReadAt == "" {
 			result.UnreadCount++
 		}
-		if cursor == nil || compareStudentCalls(item.StudentCall, *cursor) > 0 {
+		if item.key().after(cursor) {
 			result.Items = append(result.Items, item.StudentCall)
 		}
 	}
-	slices.SortFunc(result.Items, compareStudentCalls)
+	slices.SortFunc(result.Items, func(x, y StudentCall) int { return newestFirst(x.key(), y.key()) })
 	if len(result.Items) > limit {
 		result.Items = result.Items[:limit]
-		last := result.Items[len(result.Items)-1]
-		key, _ := json.Marshal(studentCallCursor{CreatedAt: last.CreatedAt, ID: last.ID})
-		encoded := base64.RawURLEncoding.EncodeToString(key)
-		result.NextCursor = &encoded
+		result.NextCursor = result.Items[len(result.Items)-1].key().encode()
 	}
 	return result, nil
 }

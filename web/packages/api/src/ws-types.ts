@@ -164,7 +164,9 @@ export interface components {
             id?: string;
             seq?: number;
             ts?: number;
-            d: Record<string, never>;
+            d: {
+                token?: string;
+            };
         } | {
             /** @constant */
             t: "pong";

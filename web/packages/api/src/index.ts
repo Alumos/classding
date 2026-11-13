@@ -13,14 +13,22 @@ const expiredListeners = new Set<() => void>();
 
 // The token subject is used only to keep an existing UI session from silently
 // switching accounts when another tab replaces the refresh cookie.
-function tokenSubject(token: string): string {
+function tokenClaims(token: string): { sub?: unknown; exp?: unknown } {
   try {
     const payload = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
-    const value = JSON.parse(atob(payload.padEnd(Math.ceil(payload.length / 4) * 4, '=')));
-    return typeof value.sub === 'string' ? value.sub : '';
+    return JSON.parse(atob(payload.padEnd(Math.ceil(payload.length / 4) * 4, '=')));
   } catch {
-    return '';
+    return {};
   }
+}
+function tokenSubject(token: string): string {
+  const { sub } = tokenClaims(token);
+  return typeof sub === 'string' ? sub : '';
+}
+// tokenExpiresSoon reports whether an access token is missing or expires within margin.
+export function tokenExpiresSoon(token: string, margin = 2 * 60 * 1000): boolean {
+  const { exp } = tokenClaims(token);
+  return typeof exp !== 'number' || exp * 1000 - Date.now() < margin;
 }
 
 export function setAccessToken(token: string | null, userId?: string) {

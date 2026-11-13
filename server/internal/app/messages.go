@@ -1,6 +1,8 @@
 package app
 
 import (
+	"fmt"
+	"math"
 	"net/http"
 	"os"
 	"slices"
@@ -107,7 +109,7 @@ func (a *App) createMessage(u *User, in messageInput) (Message, error) {
 			return Message{}, err
 		}
 		if last, sent := a.lastSent[classID]; sent && time.Since(last) < a.config.SendCooldown {
-			return Message{}, fail(429, "SEND_TOO_FAST", "同一班级请间隔 5 秒再发送。")
+			return Message{}, fail(429, "SEND_TOO_FAST", fmt.Sprintf("同一班级请间隔 %d 秒再发送。", int(math.Ceil(a.config.SendCooldown.Seconds()))))
 		}
 		classes = append(classes, c)
 	}
@@ -195,12 +197,17 @@ type messagePage struct {
 	NextCursor *string   `json:"next_cursor"`
 }
 
-// messageList pages through visible messages, newest first. The cursor is the
-// creation time of the last message on the previous page.
-func (a *App) messageList(visible func(Class) bool, classID, cursor string) messagePage {
+func (m Message) key() pageKey { return pageKey{m.CreatedAt, m.ID} }
+
+// messageList pages through visible messages, newest first.
+func (a *App) messageList(visible func(Class) bool, classID, rawCursor string) (messagePage, error) {
+	cursor, valid := decodeCursor(rawCursor)
+	if !valid {
+		return messagePage{}, bad("分页标识无效。")
+	}
 	out := []Message{}
 	for _, m := range a.state.Messages {
-		if cursor != "" && m.CreatedAt >= cursor {
+		if !m.key().after(cursor) {
 			continue
 		}
 		view, shown := a.messageView(m, visible)
@@ -215,18 +222,17 @@ func (a *App) messageList(visible func(Class) bool, classID, cursor string) mess
 		}
 		out = append(out, view)
 	}
-	slices.SortFunc(out, func(x, y Message) int { return strings.Compare(y.CreatedAt, x.CreatedAt) })
+	slices.SortFunc(out, func(x, y Message) int { return newestFirst(x.key(), y.key()) })
 	page := messagePage{Items: out}
 	if len(out) > messagePageSize {
 		page.Items = out[:messagePageSize]
-		next := page.Items[messagePageSize-1].CreatedAt
-		page.NextCursor = &next
+		page.NextCursor = page.Items[messagePageSize-1].key().encode()
 	}
-	return page
+	return page, nil
 }
 
 func (a *App) listMessages(_ http.ResponseWriter, r *http.Request, u *User) (any, error) {
-	return a.messageList(a.memberOf(u), r.URL.Query().Get("class_id"), r.URL.Query().Get("cursor")), nil
+	return a.messageList(a.memberOf(u), r.URL.Query().Get("class_id"), r.URL.Query().Get("cursor"))
 }
 
 func (a *App) getMessage(_ http.ResponseWriter, r *http.Request, u *User) (any, error) {
@@ -268,7 +274,7 @@ func (a *App) recallMessage(_ http.ResponseWriter, r *http.Request, u *User) (an
 	recalled := now()
 	m.RecalledAt = &recalled
 	for i := range m.Targets {
-		if m.Targets[i].Status != DeliveryPlayed {
+		if m.Targets[i].Status.Pending() {
 			m.Targets[i].Status = DeliveryDismissed
 		}
 	}

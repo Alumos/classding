@@ -541,7 +541,8 @@ const frames = {
     [],
   ),
   unbind: obj({}),
-  ping: obj({}),
+  // Teachers may hand over a refreshed access token to keep their socket open.
+  ping: obj({ token: str }, []),
   pong: obj({ server_time: num }),
   receipt: obj({ message_id: str, class_id: str, device_id: str, status: str, at: timestamp }),
   presence: obj({ class_id: str, device_id: str, online: bool }),

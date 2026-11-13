@@ -56,6 +56,7 @@ func connectCallTeacher(t *testing.T, base, token string) *websocket.Conn {
 
 func TestStudentCallsRealWebsocketAndReconnect(t *testing.T) {
 	f := newSecurityFixture(t)
+	commitState(f.app)
 	server := httptest.NewServer(f.app.Handler())
 	t.Cleanup(server.Close)
 	owner := connectCallTeacher(t, server.URL, f.token("owner"))
