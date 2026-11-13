@@ -181,6 +181,7 @@ func restoreBackup(t *testing.T, f *securityFixture, token string, data []byte) 
 	r.Header.Set("Content-Type", "application/zip")
 	r.Header.Set("X-ClassDing-Restore", "replace")
 	w := httptest.NewRecorder()
+	commitState(f.app)
 	f.app.Handler().ServeHTTP(w, r)
 	return w
 }
@@ -225,7 +226,7 @@ func TestBackupRestoreToDifferentDirectory(t *testing.T) {
 	}
 	expectStatus(t, dst.request(t, "GET", "/api/v1/me", oldAccess, nil, nil), 401)
 	expectStatus(t, dst.request(t, "GET", "/api/v1/admin/settings", oldAdmin, nil, nil), 401)
-	expectStatus(t, dst.request(t, "POST", "/api/v1/auth/refresh", "", nil, &http.Cookie{Name: "classding_refresh", Value: "old-refresh"}), 401)
+	expectStatus(t, dst.request(t, "POST", "/api/v1/auth/refresh", "", nil, &http.Cookie{Name: "classding_refresh_teacher", Value: "old-refresh"}), 401)
 	me := dst.request(t, "GET", "/api/v1/device/me", "token-a", nil, nil)
 	expectStatus(t, me, 200)
 	if !strings.Contains(me.Body.String(), "revision-1") {
@@ -278,6 +279,7 @@ func TestRestoreAuthenticatesBeforeBodyAndChecksOrigin(t *testing.T) {
 		r.Header.Set("Content-Type", "application/zip")
 		r.Header.Set("X-ClassDing-Restore", "replace")
 		w := httptest.NewRecorder()
+		commitState(f.app)
 		f.app.Handler().ServeHTTP(w, r)
 		expectStatus(t, w, tc.status)
 		if body.read {

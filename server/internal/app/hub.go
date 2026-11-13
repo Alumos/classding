@@ -19,7 +19,7 @@ type Peer struct {
 	ID      string // Device ID, for screens.
 	ClassID string // For screens.
 	UserID  string // For teachers.
-	// Immutable once registered; student-call broadcasts recheck the live session.
+	// Guarded by Hub.mu; student-call broadcasts recheck the live session.
 	teacherSession claims
 }
 
@@ -124,6 +124,13 @@ func (h *Hub) addTeacher(p *Peer) {
 		h.teachers[p.UserID] = map[*Peer]bool{}
 	}
 	h.teachers[p.UserID][p] = true
+}
+
+// renewTeacher records the newer access token a teacher socket presented.
+func (h *Hub) renewTeacher(p *Peer, session claims) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	p.teacherSession = session
 }
 
 func (h *Hub) removeTeacherPeer(p *Peer) {

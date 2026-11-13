@@ -18,7 +18,7 @@
 
 ## 主服务（`server/internal/app`）
 
-整个数据库以 `State` 的形式常驻内存，由 `App.mu` 保护；每次成功的写操作后，`repo.Store` 只把变化的行写回 SQLite。
+整个数据库以 `State` 的形式常驻内存，由 `App.mu` 保护；每次成功的写操作后，`State.rows()` 逐行编码，`repo.Store` 只把变化的行写回 SQLite。命令失败或保存失败时，内存状态由 `repo.Store.Restore` 从最近一次提交还原，成功路径不再整份拍快照。
 
 | 文件 | 职责 |
 | --- | --- |
@@ -27,10 +27,12 @@
 | `routes.go` | 全部路由，一行一个接口，标明访问级别与读写 |
 | `app.go` | 启动、旧数据升级、限流、审计、会话撤销 |
 | `auth.go`、`security.go`、`validate.go` | 登录与刷新会话、令牌与密码哈希、输入校验 |
+| `passwords.go` | Argon2id 在取得 `App.mu` 之前计算（并发上限受控），登录、注册、改密不阻塞其他请求；不存在的账号也做同样耗时的校验 |
+| `state.go`、`cursor.go` | 按表逐行编码状态；分页游标（创建时间 + ID，同一时刻的记录不漏不重） |
 | `classes.go`、`devices.go`、`messages.go`、`homework.go`、`student_calls.go`、`audio.go`、`tools.go` | 各业务领域 |
 | `admin.go`、`settings.go`、`backup.go` | 管理后台、站点设置、备份与恢复 |
 | `realtime.go`、`hub.go` | WebSocket 协议与连接池 |
-| `maintenance.go` | 定时清理过期会话、消息和录音 |
+| `maintenance.go` | 定时清理：过期会话；消息与学生呼叫保留 90 天、审计 180 天、录音 7 天；已用或过期的协作邀请 |
 | `migration.go` | 0.3.0 之前的大屏迁移核对接口 |
 
 几条约定：
@@ -49,9 +51,12 @@
 | `storage.go` | 以 Windows DPAPI 加密保存前端状态 |
 | `displays.go`、`volume.go`、`network.go` | 显示器选择、播报时的系统音量、内网 IPv4 |
 | `homework*.go` | 桌面作业卡片（Win32 GDI 绘制） |
+| `student_call*.go` | 桌面「呼叫老师」悬浮球：普通窗口层级（不置顶，PPT 放映或最大化窗口会盖住它），点击后才提到前台展开二次确认 |
 | `frontend/src/service.ts` | 连接、离线队列、播报、服务器切换与回退的状态机 |
 
-`service.ts` 中所有状态修改都经 `mutate()` 串行执行并立即持久化，失败时整体回滚。每次重连使 `generation` 加一，旧连接上迟到的消息会被丢弃。
+`service.ts` 中所有状态修改都经 `mutate()` 串行执行并立即持久化，失败时整体回滚。每次重连使 `generation` 加一，旧连接上迟到的消息会被丢弃。连接 10 秒内未收到欢迎帧即放弃重试；系统报告网络恢复（`online` 事件）时立即重连，不等退避。
+
+教师网页的实时连接每 25 秒心跳时附带当前访问令牌，令牌临近过期先刷新，服务端据此续期，连接不再每 15 分钟断开一次；重连后同时刷新作业、消息、班级、设备和学生呼叫。
 
 ## 网页端
 

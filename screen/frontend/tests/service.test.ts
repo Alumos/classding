@@ -556,6 +556,63 @@ describe('大屏消息可靠性', () => {
   });
 });
 
+describe('网络恢复', () => {
+  const bound = () =>
+    JSON.stringify({
+      version: 1,
+      token: 'device-token',
+      deviceId: 'd1',
+      classId: 'c1',
+      deviceName: '教室',
+      className: '三年二班',
+      volume: 70,
+      lastSeq: 0,
+      queue: [],
+      ledger: {},
+    });
+  it('连接迟迟无响应时放弃并重试，不会一直卡在“正在连接”', async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({ ok: false, status: 503 }) as Response),
+    );
+    mocks.disk = bound();
+    const service = makeService();
+    await service.init();
+    const stalled = socket();
+    await vi.advanceTimersByTimeAsync(9999);
+    expect(stalled.readyState).toBe(1);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(stalled.readyState).toBe(3);
+    expect(service.getSnapshot().connection).toBe('offline');
+  });
+  it('系统报告网络恢复后立即重连，不等待退避', async () => {
+    const listeners: Record<string, () => void> = {};
+    vi.stubGlobal('window', {
+      location: { origin: 'http://localhost:5175', href: 'http://localhost:5175/' },
+      addEventListener: (type: string, listener: () => void) => (listeners[type] = listener),
+      removeEventListener: (type: string) => delete listeners[type],
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({ ok: false, status: 503 }) as Response),
+    );
+    mocks.disk = bound();
+    const service = makeService();
+    await service.init();
+    socket().close();
+    const before = Socket.instances.length;
+    listeners.online();
+    expect(Socket.instances.length).toBe(before + 1);
+    socket().frame(welcome);
+    await vi.waitFor(() => expect(service.getSnapshot().connection).toBe('online'));
+    listeners.online();
+    expect(Socket.instances.length).toBe(before + 1);
+    service.dispose();
+    expect(listeners.online).toBeUndefined();
+  });
+});
+
 describe('切换服务器', () => {
   const plan = { server_url: 'https://new.example', revision: 'r1' };
   const saved = () => ({

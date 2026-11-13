@@ -1,7 +1,6 @@
 package app
 
 import (
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"os"
@@ -10,8 +9,10 @@ import (
 )
 
 const (
-	messageRetention = 90 * 24 * time.Hour
-	audioRetention   = 7 * 24 * time.Hour
+	messageRetention     = 90 * 24 * time.Hour
+	studentCallRetention = 90 * 24 * time.Hour
+	auditRetention       = 180 * 24 * time.Hour
+	audioRetention       = 7 * 24 * time.Hour
 )
 
 func (a *App) maintenance() {
@@ -37,10 +38,13 @@ type expiry struct {
 	messages []string // Past retention; deleted.
 	stale    []string // Expired, with deliveries still pending.
 	audio    []string
+	calls    []string
+	audit    []string
+	invites  []string // Used or expired.
 }
 
 func (e expiry) empty() bool {
-	return len(e.sessions) == 0 && len(e.messages) == 0 && len(e.stale) == 0 && len(e.audio) == 0
+	return len(e.sessions)+len(e.messages)+len(e.stale)+len(e.audio)+len(e.calls)+len(e.audit)+len(e.invites) == 0
 }
 
 func (a *App) expiredAt(at time.Time) expiry {
@@ -75,6 +79,21 @@ func (a *App) expiredAt(at time.Time) expiry {
 			e.audio = append(e.audio, key)
 		}
 	}
+	for key, call := range a.state.StudentCalls {
+		if older(call.CreatedAt, studentCallRetention) {
+			e.calls = append(e.calls, key)
+		}
+	}
+	for key, entry := range a.state.Audit {
+		if older(entry.At, auditRetention) {
+			e.audit = append(e.audit, key)
+		}
+	}
+	for key, invite := range a.state.Invites {
+		if invite.Used || past(invite.ExpiresAt) {
+			e.invites = append(e.invites, key)
+		}
+	}
 	return e
 }
 
@@ -96,16 +115,20 @@ func (a *App) maintenanceSweep(at time.Time) error {
 	if e.empty() {
 		return nil
 	}
-	backup, err := json.Marshal(a.state)
-	if err != nil {
-		return fmt.Errorf("snapshot state: %w", err)
-	}
-
 	for _, key := range e.sessions {
 		delete(a.state.Sessions, key)
 	}
 	for _, key := range e.messages {
 		delete(a.state.Messages, key)
+	}
+	for _, key := range e.calls {
+		delete(a.state.StudentCalls, key)
+	}
+	for _, key := range e.audit {
+		delete(a.state.Audit, key)
+	}
+	for _, key := range e.invites {
+		delete(a.state.Invites, key)
 	}
 	var receipts []func()
 	for _, key := range e.stale {
@@ -126,11 +149,9 @@ func (a *App) maintenanceSweep(at time.Time) error {
 	}
 
 	if err := a.Save(); err != nil {
-		var restored State
-		if restoreErr := json.Unmarshal(backup, &restored); restoreErr != nil {
+		if restoreErr := a.rollback(); restoreErr != nil {
 			return fmt.Errorf("save state: %v; restore state: %w", err, restoreErr)
 		}
-		a.state = restored
 		return err
 	}
 	for _, path := range files {

@@ -250,7 +250,7 @@ function App() {
                   <Link2 size={25} />
                 </div>
                 <div className="card-heading">
-                  <span className="overline">READY TO CONNECT</span>
+                  <span className="card-overline">READY TO CONNECT</span>
                   <h2>绑定到班级</h2>
                   <p>打开教师端「班级」，获取 6 位绑定码</p>
                 </div>
@@ -373,16 +373,25 @@ function App() {
               </Card>
               <div className="dashboard-side">
                 <Card className="student-call-card">
-                  <h3>需要老师来教室？</h3>
-                  <p>向本班所有关联老师发送呼叫。Windows 关闭主窗口后仍可使用桌面悬浮入口。</p>
+                  <span className="call-icon">
+                    <BellRing size={26} />
+                  </span>
+                  <div>
+                    <h3>需要老师来教室？</h3>
+                    <p>向本班所有关联老师发送呼叫。关闭主窗口后，桌面上的橙色悬浮球仍可呼叫。</p>
+                    {state.studentCallMessage && (
+                      <p className="call-status" role="status">
+                        {state.studentCallMessage}
+                      </p>
+                    )}
+                  </div>
                   <Button
-                    variant="secondary"
+                    className="call-button"
                     onClick={() => setCallOpen(true)}
                     disabled={state.studentCallSending}
                   >
-                    <BellRing size={16} /> 呼叫老师
+                    <BellRing size={18} /> 呼叫老师
                   </Button>
-                  {state.studentCallMessage && <p role="status">{state.studentCallMessage}</p>}
                 </Card>
                 <Dialog open={callOpen && state.bound} onOpenChange={setCallOpen}>
                   <DialogContent>

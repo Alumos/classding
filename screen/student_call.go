@@ -171,6 +171,31 @@ func studentCallAcknowledged(previous, next studentCallView, sentRevision int) b
 		(next.Revision > sentRevision && (next.Sending || next.Message != ""))
 }
 
+// Sizes are in 96-DPI pixels. The ball is large enough to read from a desk and
+// to hit on a touch board; the confirmation leaves room for two big buttons.
+const (
+	studentCallBallWidth, studentCallBallHeight   = 112, 92
+	studentCallPanelWidth, studentCallPanelHeight = 480, 280
+	studentCallBallFont, studentCallTitleFont     = 26, 28
+	studentCallBodyFont, studentCallButtonFont    = 21, 22
+	studentCallButtonHeight, studentCallMargin    = 54, 24
+)
+
+// The ball is a vivid orange so students find it at a glance; text is white.
+var (
+	studentCallBallFill = [3]uint8{249, 115, 22}
+	studentCallBallEdge = [3]uint8{194, 65, 12}
+	studentCallAccent   = [3]uint8{194, 65, 12}
+)
+
+// studentCallButtons lays out the cancel and confirm buttons side by side along
+// the bottom of the panel, with equal outer margins and one gap between them.
+func studentCallButtons(width, height, margin, gap, buttonHeight int) [2][4]int {
+	buttonWidth := max(1, (width-2*margin-gap)/2)
+	top := height - margin - buttonHeight
+	return [2][4]int{{margin, top, buttonWidth, buttonHeight}, {width - margin - buttonWidth, top, buttonWidth, buttonHeight}}
+}
+
 // Geometry is in physical pixels, including negative monitor origins.
 func studentCallClamp(x, y, width, height, left, top, right, bottom int) (int, int) {
 	return max(left, min(x, right-width)), max(top, min(y, bottom-height))

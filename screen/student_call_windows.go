@@ -157,9 +157,9 @@ func (m *nativeStudentCallWindow) place() {
 			m.dpi = int(dpi)
 		}
 	}
-	m.width, m.height = m.px(84), m.px(68)
+	m.width, m.height = m.px(studentCallBallWidth), m.px(studentCallBallHeight)
 	if m.expanded {
-		m.width, m.height = m.px(420), m.px(240)
+		m.width, m.height = m.px(studentCallPanelWidth), m.px(studentCallPanelHeight)
 	}
 	monitor, _, _ := user32.NewProc("MonitorFromWindow").Call(m.hwnd, 2)
 	info := monitorInfo{size: uint32(unsafe.Sizeof(monitorInfo{}))}
@@ -174,10 +174,14 @@ func (m *nativeStudentCallWindow) place() {
 	m.width = min(m.width, int(w.right-w.left))
 	m.height = min(m.height, int(w.bottom-w.top))
 	m.x, m.y = studentCallClamp(m.x, m.y, m.width, m.height, int(w.left), int(w.top), int(w.right), int(w.bottom))
-	setWindowPos.Call(m.hwnd, ^uintptr(0), uintptr(m.x), uintptr(m.y), uintptr(m.width), uintptr(m.height), 0x0010) // TOPMOST / NOACTIVATE
-	radius := m.px(24)
+	// The ball lives in the normal window layer: it sits on the desktop and
+	// stays visible beside ordinary windows, but a PowerPoint slide show or any
+	// maximised window covers it. NOZORDER keeps the periodic re-layout from
+	// ever raising it; only a click on the ball brings the confirmation forward.
+	setWindowPos.Call(m.hwnd, 0, uintptr(m.x), uintptr(m.y), uintptr(m.width), uintptr(m.height), 0x0004|0x0010) // NOZORDER / NOACTIVATE
+	radius := m.height / 2
 	if m.expanded {
-		radius = m.px(12)
+		radius = m.px(16)
 	}
 	region, _, _ := hwRoundRegion.Call(0, 0, uintptr(m.width+1), uintptr(m.height+1), uintptr(radius*2), uintptr(radius*2))
 	if region != 0 {
@@ -186,7 +190,7 @@ func (m *nativeStudentCallWindow) place() {
 		}
 	}
 	if m.fontDPI != m.dpi {
-		if font := hwFont(m.px(18), 500); font != 0 {
+		if font := hwFont(m.px(studentCallButtonFont), 600); font != 0 {
 			previous := m.buttonFont
 			m.buttonFont, m.fontDPI = font, m.dpi
 			for _, button := range []uintptr{m.cancel, m.confirm} {
@@ -197,9 +201,10 @@ func (m *nativeStudentCallWindow) place() {
 			}
 		}
 	}
+	layout := studentCallButtons(m.width, m.height, m.px(studentCallMargin), m.px(12), m.px(studentCallButtonHeight))
 	for i, button := range []uintptr{m.cancel, m.confirm} {
-		buttonWidth := max(1, (m.width-m.px(48))/2)
-		setWindowPos.Call(button, 0, uintptr(m.px(20)+i*(buttonWidth+m.px(8))), uintptr(m.height-m.px(64)), uintptr(buttonWidth), uintptr(m.px(44)), 0x0004|0x0010)
+		b := layout[i]
+		setWindowPos.Call(button, 0, uintptr(b[0]), uintptr(b[1]), uintptr(b[2]), uintptr(b[3]), 0x0004|0x0010)
 		show := uintptr(0)
 		if m.expanded {
 			show = 4
@@ -225,6 +230,7 @@ func (m *nativeStudentCallWindow) expand() {
 	// Only this explicit user action activates the confirmation. Idle ball never steals focus.
 	user32.NewProc("SetWindowLongPtrW").Call(m.hwnd, ^uintptr(19), 0x80)
 	m.place()
+	setWindowPos.Call(m.hwnd, 0, 0, 0, 0, 0, 0x0001|0x0002) // HWND_TOP, keep size and position
 	setForegroundWindow.Call(m.hwnd)
 	user32.NewProc("SetFocus").Call(m.cancel) // Cancel is the safe default.
 }
@@ -352,29 +358,57 @@ func (m *nativeStudentCallWindow) paint() {
 	}
 	defer hwEndPaint.Call(m.hwnd, uintptr(unsafe.Pointer(&paint)))
 	full := displayRect{0, 0, int32(m.width), int32(m.height)}
-	fill := [3]uint8{243, 249, 245}
-	ink := [3]uint8{25, 94, 67}
-	brush, _, _ := hwCreateBrush.Call(hwRGB(fill))
-	hwFillRect.Call(dc, uintptr(unsafe.Pointer(&full)), brush)
-	hwDeleteObject.Call(brush)
 	hwSetBkMode.Call(dc, 1)
-	hwSetTextColor.Call(dc, hwRGB(ink))
-	font := hwFont(m.px(18), 600)
-	old, _, _ := hwSelectObject.Call(dc, font)
-	defer func() { hwSelectObject.Call(dc, old); hwDeleteObject.Call(font) }()
 	if !m.expanded {
-		hwText(dc, "呼叫\n老师", &full, 0x0001|0x0010)
+		m.paintBall(dc, full)
 		return
 	}
-	title := displayRect{int32(m.px(20)), int32(m.px(16)), int32(m.width - m.px(20)), int32(m.px(48))}
-	hwText(dc, "呼叫老师", &title, 0x0020)
-	body := displayRect{title.left, int32(m.px(58)), title.right, int32(m.height - m.px(72))}
-	text := m.view.ClassName + "：确定呼叫本班所有关联老师吗？\n取消不会发送。"
+	background := [3]uint8{255, 250, 245}
+	brush, _, _ := hwCreateBrush.Call(hwRGB(background))
+	hwFillRect.Call(dc, uintptr(unsafe.Pointer(&full)), brush)
+	hwDeleteObject.Call(brush)
+	// An orange band on top ties the panel to the ball that opened it.
+	band := displayRect{0, 0, int32(m.width), int32(m.px(8))}
+	hwFillRound(dc, band, 0, studentCallBallFill)
+
+	margin := m.px(studentCallMargin)
+	title := displayRect{int32(margin), int32(m.px(24)), int32(m.width - margin), int32(m.px(24 + 40))}
+	titleFont := hwFont(m.px(studentCallTitleFont), 700)
+	old, _, _ := hwSelectObject.Call(dc, titleFont)
+	hwSetTextColor.Call(dc, hwRGB(studentCallAccent))
+	hwText(dc, "呼叫老师", &title, 0x0020|0x0004) // SINGLELINE / VCENTER
+	bodyFont := hwFont(m.px(studentCallBodyFont), 500)
+	hwSelectObject.Call(dc, bodyFont)
+	hwDeleteObject.Call(titleFont)
+	defer func() { hwSelectObject.Call(dc, old); hwDeleteObject.Call(bodyFont) }()
+	hwSetTextColor.Call(dc, hwRGB([3]uint8{41, 37, 36}))
+	body := displayRect{title.left, title.bottom + int32(m.px(12)), title.right, int32(m.height - margin - m.px(studentCallButtonHeight) - m.px(12))}
+	text := m.view.ClassName + "：确定呼叫本班所有关联老师吗？\n点“取消”不会发送。"
 	if !m.view.Online {
 		text = "连接中断，呼叫未发送。请恢复网络后重试。"
 	}
 	if m.view.Message != "" {
 		text = m.view.Message
 	}
-	hwText(dc, text, &body, 0x0010)
+	hwText(dc, text, &body, 0x0010) // WORDBREAK
+}
+
+// paintBall draws the collapsed ball: an orange pill with a darker rim and two
+// centred lines of bold white text.
+func (m *nativeStudentCallWindow) paintBall(dc uintptr, full displayRect) {
+	radius := int(full.bottom) / 2
+	hwFillRound(dc, full, radius, studentCallBallEdge)
+	rim := int32(max(2, m.px(3)))
+	inner := displayRect{full.left + rim, full.top + rim, full.right - rim, full.bottom - rim}
+	hwFillRound(dc, inner, radius-int(rim), studentCallBallFill)
+	font := hwFont(m.px(studentCallBallFont), 700)
+	old, _, _ := hwSelectObject.Call(dc, font)
+	defer func() { hwSelectObject.Call(dc, old); hwDeleteObject.Call(font) }()
+	hwSetTextColor.Call(dc, hwRGB([3]uint8{255, 255, 255}))
+	line := int32(m.px(studentCallBallFont) * 5 / 4)
+	top := (full.bottom - 2*line) / 2
+	for i, label := range []string{"呼叫", "老师"} {
+		row := displayRect{full.left, top + int32(i)*line, full.right, top + int32(i+1)*line}
+		hwText(dc, label, &row, 0x0001|0x0020|0x0004) // CENTER / SINGLELINE / VCENTER
+	}
 }

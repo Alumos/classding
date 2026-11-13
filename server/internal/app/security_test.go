@@ -97,7 +97,9 @@ func (f *securityFixture) request(t *testing.T, method, path, token string, body
 	if cookie != nil {
 		r.AddCookie(cookie)
 	}
+	commitState(f.app)
 	w := httptest.NewRecorder()
+	commitState(f.app)
 	f.app.Handler().ServeHTTP(w, r)
 	return w
 }

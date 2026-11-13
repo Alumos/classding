@@ -129,3 +129,23 @@ func TestStudentCallPhysicalGeometry(t *testing.T) {
 		t.Fatal("DPI drag threshold")
 	}
 }
+
+func TestStudentCallButtonsAlignToPanelMargins(t *testing.T) {
+	for _, dpi := range []int{96, 144, 192} {
+		px := func(v int) int { return v * dpi / 96 }
+		width, height, margin, gap := px(studentCallPanelWidth), px(studentCallPanelHeight), px(studentCallMargin), px(12)
+		b := studentCallButtons(width, height, margin, gap, px(studentCallButtonHeight))
+		if b[0][0] != margin || b[1][0]+b[1][2] != width-margin {
+			t.Fatalf("dpi %d: buttons not inside equal margins: %v", dpi, b)
+		}
+		if b[0][2] != b[1][2] || b[0][1] != b[1][1] || b[0][1]+b[0][3] != height-margin {
+			t.Fatalf("dpi %d: buttons not aligned: %v", dpi, b)
+		}
+		if gotGap := b[1][0] - (b[0][0] + b[0][2]); gotGap < gap || gotGap > gap+1 {
+			t.Fatalf("dpi %d: gap %d, want %d", dpi, gotGap, gap)
+		}
+	}
+	if studentCallBallFont < 24 || studentCallBallWidth < 100 {
+		t.Fatal("ball text must stay large enough to read from a desk")
+	}
+}

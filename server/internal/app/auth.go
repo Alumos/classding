@@ -14,9 +14,6 @@ const (
 	refreshGrace = 30 * time.Second
 	minUIScale   = 85
 	maxUIScale   = 150
-
-	// legacyRefreshCookie was shared by both workspaces before 0.1.3.
-	legacyRefreshCookie = "classding_refresh"
 )
 
 // Each workspace keeps its own refresh cookie, so a teacher and an
@@ -44,23 +41,16 @@ func requestScope(r *http.Request) string {
 	}
 }
 
-// refreshCookie prefers the workspace's own cookie and falls back to the legacy
-// shared one. A request without a scope accepts either workspace's cookie.
+// refreshCookie reads the workspace's own cookie. A request without a scope
+// accepts either workspace's cookie.
 func refreshCookie(r *http.Request) (*http.Cookie, error) {
-	scope := requestScope(r)
-	if scope != "" {
-		if cookie, err := r.Cookie(refreshCookieName(scope)); err == nil {
+	candidates := []string{scopeTeacher, scopeAdmin}
+	if scope := requestScope(r); scope != "" {
+		candidates = []string{scope}
+	}
+	for _, candidate := range candidates {
+		if cookie, err := r.Cookie(refreshCookieName(candidate)); err == nil {
 			return cookie, nil
-		}
-	}
-	if cookie, err := r.Cookie(legacyRefreshCookie); err == nil {
-		return cookie, nil
-	}
-	if scope == "" {
-		for _, candidate := range []string{scopeTeacher, scopeAdmin} {
-			if cookie, err := r.Cookie(refreshCookieName(candidate)); err == nil {
-				return cookie, nil
-			}
 		}
 	}
 	return nil, http.ErrNoCookie
@@ -143,7 +133,7 @@ func (a *App) register(w http.ResponseWriter, r *http.Request, _ *User) (any, er
 	if _, taken := a.userByUsername(username); taken {
 		return nil, usernameTaken()
 	}
-	u := User{ID: id("u"), Username: username, DisplayName: name, Role: RoleTeacher, OrgID: id("org"), Status: AccountActive, PasswordHash: passwordHash(in.Password)}
+	u := User{ID: id("u"), Username: username, DisplayName: name, Role: RoleTeacher, OrgID: id("org"), Status: AccountActive, PasswordHash: freshHash(r, in.Password)}
 	a.state.Users[u.ID] = u
 	a.audit(&u, "auth.register", u.ID)
 	return a.issue(w, r, u), nil
@@ -175,7 +165,11 @@ func (a *App) login(w http.ResponseWriter, r *http.Request, _ *User) (any, error
 		return nil, tooMany("密码错误次数过多，请在 " + seconds + " 秒后重试，或联系管理员解除登录限制。")
 	}
 	u, found := a.userByUsername(username)
-	if !found || !passwordMatches(in.Password, u.PasswordHash) || !u.Active() {
+	encoded := dummyPasswordHash
+	if found {
+		encoded = u.PasswordHash
+	}
+	if !checkPassword(r, in.Password, encoded) || !found || !u.Active() {
 		a.limit(accountLoginKey(ip, username), accountLoginAttempts, time.Minute)
 		a.limit(addressLoginKey(ip), addressLoginAttempts, time.Minute)
 		return nil, fail(401, "INVALID_CREDENTIALS", "用户名或密码不正确，或账号已被停用。")
@@ -269,9 +263,6 @@ func (a *App) refresh(w http.ResponseWriter, r *http.Request, _ *User) (any, err
 		}
 	}
 	a.setRefreshCookie(w, r, refreshCookieName(scope), raw)
-	if cookie.Name == legacyRefreshCookie {
-		a.setRefreshCookie(w, r, legacyRefreshCookie, "")
-	}
 	return a.signedIn(u), nil
 }
 
@@ -299,13 +290,10 @@ func (a *App) logout(w http.ResponseWriter, r *http.Request, _ *User) (any, erro
 		a.state.Users[userID] = u
 	}
 	switch {
-	case cookieErr != nil:
-		if scope != "" {
-			a.setRefreshCookie(w, r, refreshCookieName(scope), "")
-		}
-	// Keep another account's legacy cookie when this scope signed nobody out.
-	case cookie.Name != legacyRefreshCookie || scope == "" || userID != "":
+	case cookieErr == nil:
 		a.setRefreshCookie(w, r, cookie.Name, "")
+	case scope != "":
+		a.setRefreshCookie(w, r, refreshCookieName(scope), "")
 	}
 	return ok(), nil
 }
@@ -349,13 +337,13 @@ func (a *App) changePassword(_ http.ResponseWriter, r *http.Request, u *User) (a
 	if !a.limit("password:"+u.ID, 5, time.Minute) {
 		return nil, tooMany("尝试过于频繁。")
 	}
-	if !passwordMatches(in.Current, u.PasswordHash) {
+	if !checkPassword(r, in.Current, u.PasswordHash) {
 		return nil, bad("当前密码不正确。")
 	}
 	if !validPassword(in.New) {
 		return nil, bad("新密码至少 10 位，且包含字母和数字。")
 	}
-	u.PasswordHash = passwordHash(in.New)
+	u.PasswordHash = freshHash(r, in.New)
 	a.revokeSessions(u)
 	a.state.Users[u.ID] = *u
 	a.audit(u, "auth.password", u.ID)

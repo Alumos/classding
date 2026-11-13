@@ -144,6 +144,7 @@ func TestStudentCallsStrictInputBindingAndLicenses(t *testing.T) {
 		req := httptest.NewRequest("POST", deviceCallsPath, strings.NewReader(raw))
 		req.Header.Set("Authorization", "Bearer token-a")
 		w := httptest.NewRecorder()
+		commitState(f.app)
 		f.app.Handler().ServeHTTP(w, req)
 		expectStatus(t, w, 400)
 	}
@@ -329,7 +330,7 @@ func TestStudentCallsPaginationCountsAndStableTimes(t *testing.T) {
 	}
 	fractional := StudentCall{ID: "frac", CreatedAt: "2026-01-01T00:00:00.1Z"}
 	whole := StudentCall{ID: "whole", CreatedAt: "2026-01-01T00:00:00Z"}
-	if compareStudentCalls(fractional, whole) >= 0 {
+	if newestFirst(fractional.key(), whole.key()) >= 0 {
 		t.Fatal("fractional timestamp sorted before whole second")
 	}
 	if got := listStudentCall(t, f, "school", ""); got.UnreadCount != 0 {

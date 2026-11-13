@@ -3,7 +3,7 @@ package app
 import "time"
 
 // Version is the release reported by the server and offered to classroom clients.
-const Version = "0.3.5"
+const Version = "0.4.0"
 
 // Role decides which workspace an account may sign in to and what it governs.
 type Role string
@@ -258,7 +258,6 @@ type Session struct {
 	UserID        string `json:"user_id"`
 	ExpiresAt     string `json:"expires_at"`
 	Version       int    `json:"version"`
-	AdminVerified bool   `json:"admin_verified,omitempty"` // Legacy field; no longer used for authentication.
 	RotationUntil string `json:"rotation_until,omitempty"`
 	Scope         string `json:"auth_scope,omitempty"`
 }

@@ -28,6 +28,8 @@ const LEDGER_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 const REQUEST_TIMEOUT_MS = 5000;
 const HEARTBEAT_MS = 25000;
 const SILENCE_MS = 60000;
+// A socket that neither opens nor receives its welcome in time is abandoned and retried.
+const CONNECT_TIMEOUT_MS = 10000;
 const MAX_PENDING = 4096;
 const CLIENT_OS = navigator.userAgent.includes('Windows') ? 'windows' : 'browser';
 interface StoredState {
@@ -205,6 +207,13 @@ export class ScreenService {
   private bindingEpoch = 0;
   private callController?: AbortController;
   private callID = '';
+  private connectTimer?: ReturnType<typeof setTimeout>;
+  // Reconnect at once when Windows reports the network is back, instead of waiting out the backoff.
+  private readonly onNetworkBack = () => {
+    if (this.view.connection === 'online' || !this.state.token || this.disposed) return;
+    this.attempts = 0;
+    this.connect();
+  };
   private callOff?: () => void;
   private callNativeQueue: Promise<void> = Promise.resolve();
   private callNativeKey = '';
@@ -268,6 +277,7 @@ export class ScreenService {
     }
   }
   async init() {
+    window.addEventListener?.('online', this.onNetworkBack);
     this.callOff = window.runtime?.EventsOnMultiple(
       'student-call:send',
       (id, binding) => {
@@ -386,6 +396,7 @@ export class ScreenService {
   private connect() {
     if (!this.state.token || this.disposed) return;
     clearTimeout(this.retry);
+    clearTimeout(this.connectTimer);
     clearInterval(this.heartbeat);
     const generation = ++this.generation;
     this.validated.clear();
@@ -401,6 +412,9 @@ export class ScreenService {
     this.emit({ connection: 'connecting' });
     try {
       const ws = (this.socket = new WebSocket(url));
+      this.connectTimer = setTimeout(() => {
+        if (generation === this.generation && this.view.connection !== 'online') ws.close();
+      }, CONNECT_TIMEOUT_MS);
       ws.onopen = () => {
         if (generation !== this.generation) return;
         this.lastFrame = Date.now();
@@ -426,6 +440,7 @@ export class ScreenService {
       };
       ws.onclose = () => {
         if (generation !== this.generation) return;
+        clearTimeout(this.connectTimer);
         clearInterval(this.heartbeat);
         this.emit({ connection: 'offline' });
         void this.verifyAfterClose(generation);
@@ -1062,6 +1077,8 @@ export class ScreenService {
   }
   dispose() {
     this.disposed = true;
+    window.removeEventListener?.('online', this.onNetworkBack);
+    clearTimeout(this.connectTimer);
     this.callOff?.();
     this.callOff = undefined;
     this.halt();

@@ -90,7 +90,7 @@ func TestRollbackRefreshCookie(t *testing.T) {
 	}
 	restore()
 	expectStatus(t, f.request(t, http.MethodPost, "/api/v1/auth/refresh", "", nil, cookies[0]), http.StatusOK)
-	invalid := f.request(t, http.MethodPost, "/api/v1/auth/refresh", "", nil, &http.Cookie{Name: "classding_refresh", Value: "invalid"})
+	invalid := f.request(t, http.MethodPost, "/api/v1/auth/refresh", "", nil, &http.Cookie{Name: "classding_refresh_teacher", Value: "invalid"})
 	expectStatus(t, invalid, http.StatusUnauthorized)
 	if len(invalid.Result().Cookies()) != 0 {
 		t.Fatal("invalid stale refresh must not erase a newer browser cookie")
@@ -181,6 +181,7 @@ func TestRollbackAudioFile(t *testing.T) {
 		r.Header.Set("Content-Type", multipartWriter.FormDataContentType())
 		r.Header.Set("Authorization", "Bearer "+f.token("owner"))
 		w := httptest.NewRecorder()
+		commitState(f.app)
 		f.app.Handler().ServeHTTP(w, r)
 		return w
 	}

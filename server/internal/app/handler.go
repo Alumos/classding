@@ -68,6 +68,7 @@ func (a *App) handle(level access, persist bool, fn endpoint) http.HandlerFunc {
 			writeError(w, err)
 			return
 		}
+		r = a.preparePasswords(r)
 
 		a.mu.Lock()
 		user, err := a.authorize(r, level)
@@ -78,11 +79,7 @@ func (a *App) handle(level access, persist bool, fn endpoint) http.HandlerFunc {
 		}
 		var tx *transaction
 		if persist {
-			if tx, err = a.begin(w); err != nil {
-				a.mu.Unlock()
-				writeError(w, err)
-				return
-			}
+			tx = a.begin(w)
 		}
 		a.jobs, a.rollbackJobs = nil, nil
 		result, err := fn(w, r, user)
@@ -139,23 +136,18 @@ func bearerToken(r *http.Request) string {
 }
 
 // transaction remembers everything a command may change so that a failed
-// command, or a failed save, leaves no trace.
+// command, or a failed save, leaves no trace. Persistent state is restored
+// from the store's last commit, so the success path takes no snapshot.
 type transaction struct {
 	app      *App
 	w        http.ResponseWriter
-	state    []byte
 	bindings map[string]binding
 	lastSent map[string]time.Time
 	headers  http.Header
 }
 
-func (a *App) begin(w http.ResponseWriter) (*transaction, error) {
-	state, err := json.Marshal(a.state)
-	if err != nil {
-		slog.Error("snapshot state", "error", err)
-		return nil, storageFailed()
-	}
-	return &transaction{a, w, state, maps.Clone(a.bindings), maps.Clone(a.lastSent), w.Header().Clone()}, nil
+func (a *App) begin(w http.ResponseWriter) *transaction {
+	return &transaction{a, w, maps.Clone(a.bindings), maps.Clone(a.lastSent), w.Header().Clone()}
 }
 
 // finish commits the command's changes, or restores the snapshot on failure.
@@ -171,11 +163,8 @@ func (tx *transaction) finish(err error) error {
 		clear(tx.w.Header())
 		maps.Copy(tx.w.Header(), tx.headers)
 	}
-	var restored State
-	if restoreErr := json.Unmarshal(tx.state, &restored); restoreErr != nil {
+	if restoreErr := a.rollback(); restoreErr != nil {
 		slog.Error("restore state", "error", restoreErr)
-	} else {
-		a.state = restored
 	}
 	a.bindings, a.lastSent = tx.bindings, tx.lastSent
 	return err

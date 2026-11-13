@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { api, getAccessToken } from '@classding/api';
+import { api, getAccessToken, refreshSession, tokenExpiresSoon } from '@classding/api';
 import type { Class, Homework, MessagePage, Phrase, StudentCallPage } from './models';
 import type { InfiniteData } from '@tanstack/react-query';
 import { toast } from 'sonner';
@@ -59,7 +59,11 @@ export function useTeacherSocket() {
         if (frame.t === 'welcome') {
           attempts = 0;
           setOnline(true);
+          // Anything may have changed while the socket was down.
           void cache.invalidateQueries({ queryKey: ['homeworks'] });
+          void cache.invalidateQueries({ queryKey: ['messages'] });
+          void cache.invalidateQueries({ queryKey: ['classes'] });
+          void cache.invalidateQueries({ queryKey: ['devices'] });
           if (!studentCallsUnavailable(cache.getQueryState(studentCallsKey(userId))?.error))
             void cache.invalidateQueries({ queryKey: studentCallsKey(userId) });
           clearInterval(ping);
@@ -68,7 +72,15 @@ export function useTeacherSocket() {
               socket?.close();
               return;
             }
-            if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ t: 'ping', d: {} }));
+            // Refresh shortly before the access token expires and hand the new one to the
+            // server, so the socket outlives the 15-minute token.
+            const renew = tokenExpiresSoon(getAccessToken())
+              ? refreshSession().catch(() => {})
+              : Promise.resolve();
+            void renew.then(() => {
+              if (!stopped && socket === current && current.readyState === WebSocket.OPEN)
+                current.send(JSON.stringify({ t: 'ping', d: { token: getAccessToken() } }));
+            });
           }, 25000);
         }
         if (frame.t === 'student_call') {

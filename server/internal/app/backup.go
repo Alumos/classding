@@ -582,7 +582,11 @@ func (a *App) restore(w http.ResponseWriter, r *http.Request) {
 		writeError(w, fail(500, "RESTORE_FAILED", "无法恢复录音。"))
 		return
 	}
-	if err = a.store.Replace(context.Background(), state); err != nil {
+	rows, err := state.rows()
+	if err == nil {
+		err = a.store.Replace(context.Background(), rows)
+	}
+	if err != nil {
 		if removeErr := os.RemoveAll(next); removeErr != nil {
 			slog.Error("remove failed restore audio", "error", removeErr)
 		}

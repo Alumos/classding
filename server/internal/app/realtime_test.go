@@ -48,6 +48,7 @@ func rtSetup(t *testing.T) (*App, *httptest.Server, string) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	commitState(a)
 	s := httptest.NewServer(a.Handler())
 	t.Cleanup(func() { s.Close(); a.Close() })
 	var auth struct {

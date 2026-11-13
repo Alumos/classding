@@ -65,7 +65,7 @@ func (a *App) adminCreateUser(_ http.ResponseWriter, r *http.Request, u *User) (
 	if _, taken := a.userByUsername(username); taken {
 		return nil, usernameTaken()
 	}
-	teacher := User{ID: id("u"), Username: username, DisplayName: name, Role: RoleTeacher, OrgID: orgID, Status: AccountActive, PasswordHash: passwordHash(in.Password)}
+	teacher := User{ID: id("u"), Username: username, DisplayName: name, Role: RoleTeacher, OrgID: orgID, Status: AccountActive, PasswordHash: freshHash(r, in.Password)}
 	a.state.Users[teacher.ID] = teacher
 	a.audit(u, "admin.user.create", teacher.ID)
 	return teacher.Public(), nil
@@ -139,7 +139,7 @@ func (a *App) adminUpdateUser(_ http.ResponseWriter, r *http.Request, u *User) (
 		if !validPassword(*in.Password) {
 			return nil, bad("密码至少 10 位，且包含字母和数字。")
 		}
-		teacher.PasswordHash = passwordHash(*in.Password)
+		teacher.PasswordHash = freshHash(r, *in.Password)
 		revoke = true
 	}
 	if revoke {
@@ -545,7 +545,7 @@ func (a *App) recallClass(classID string) {
 
 func (a *App) adminMessages(_ http.ResponseWriter, r *http.Request, u *User) (any, error) {
 	a.audit(u, "admin.message.read", r.URL.Query().Get("class_id"))
-	return a.messageList(governedBy(u), r.URL.Query().Get("class_id"), r.URL.Query().Get("cursor")), nil
+	return a.messageList(governedBy(u), r.URL.Query().Get("class_id"), r.URL.Query().Get("cursor"))
 }
 
 func (a *App) auditLogs(_ http.ResponseWriter, _ *http.Request, _ *User) (any, error) {
