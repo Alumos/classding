@@ -137,7 +137,7 @@ func clientRelease(_ http.ResponseWriter, _ *http.Request, _ *User) (any, error)
 		"version":       Version,
 		"url":           releaseBase + "/ClassDingScreen-amd64-installer.exe",
 		"sha256":        "",
-		"notes":         "v0.4.0：桌面呼叫悬浮球不再始终置顶、字号更大、颜色更醒目；主界面重新对齐；断网后更快恢复连接。SHA-256 校验文件见对应 GitHub Release。",
+		"notes":         "v0.4.1：大屏客户端界面更紧凑，默认窗口缩小到 920×640；含 v0.4.0 的悬浮球不置顶与网络稳定性改进。SHA-256 校验文件见对应 GitHub Release。",
 		"min_supported": "0.1.0",
 	}, nil
 }

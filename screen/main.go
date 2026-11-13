@@ -20,7 +20,7 @@ func main() {
 		log.Fatal(err)
 	}
 	err = wails.Run(&options.App{
-		Title: "课堂叮咚大屏端", Width: 1180, Height: 760, MinWidth: 420, MinHeight: 600,
+		Title: "课堂叮咚大屏端", Width: 920, Height: 640, MinWidth: 420, MinHeight: 520,
 		StartHidden:      app.hidden,
 		Windows:          &windows.Options{WindowClassName: "ClassDingMainWindow"},
 		BackgroundColour: options.NewRGB(247, 249, 244),
