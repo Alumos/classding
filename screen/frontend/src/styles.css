@@ -25,7 +25,7 @@ body {
 /* One page width for header, content and footer, so their edges line up. */
 :root {
   --cd-gutter: clamp(20px, 4vw, 56px);
-  --cd-page: min(1120px, calc(100vw - 2 * var(--cd-gutter)));
+  --cd-page: min(880px, calc(100vw - 2 * var(--cd-gutter)));
   --cd-page-inset: max(var(--cd-gutter), calc((100% - var(--cd-page)) / 2));
 }
 .shell {
@@ -35,7 +35,7 @@ body {
   background: #f7f9f4;
 }
 .topbar {
-  height: 88px;
+  height: 64px;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -44,12 +44,12 @@ body {
   background: #fbfcf9;
 }
 .topbar .cd-brand-mark {
-  width: 38px;
-  height: 38px;
+  width: 32px;
+  height: 32px;
   border-radius: 12px;
 }
 .topbar .cd-brand strong {
-  font-size: 19px;
+  font-size: 17px;
 }
 .topbar-right {
   display: flex;
@@ -74,7 +74,7 @@ body {
   display: flex;
   justify-content: space-between;
   gap: 20px;
-  padding: 25px var(--cd-page-inset);
+  padding: 14px var(--cd-page-inset);
   color: #a2afa1;
   font-size: 11px;
 }
@@ -85,10 +85,10 @@ body {
   width: var(--cd-page);
   margin: auto;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 490px;
-  gap: clamp(40px, 6vw, 110px);
+  grid-template-columns: minmax(0, 1fr) 400px;
+  gap: clamp(28px, 4vw, 56px);
   align-items: center;
-  padding: 60px 0;
+  padding: 28px 0;
 }
 .bind-intro {
   position: relative;
@@ -114,9 +114,9 @@ body {
 }
 .bind-intro h1,
 .dashboard-heading h1 {
-  margin-top: 23px;
+  margin-top: 14px;
   color: #244738;
-  font-size: clamp(38px, 4.4vw, 62px);
+  font-size: clamp(30px, 3.4vw, 44px);
   line-height: 1.24;
   letter-spacing: -0.04em;
   font-weight: 700;
@@ -127,16 +127,16 @@ body {
 }
 .bind-intro > p,
 .dashboard-heading p {
-  margin-top: 22px;
+  margin-top: 12px;
   max-width: 460px;
-  font-size: 16px;
+  font-size: 14px;
   line-height: 1.9;
   color: #87988a;
 }
 .intro-steps {
   display: grid;
-  gap: 20px;
-  margin-top: 49px;
+  gap: 12px;
+  margin-top: 26px;
   color: #6d8072;
   font-size: 15px;
 }
@@ -175,7 +175,7 @@ body {
   position: relative;
 }
 .binding-card {
-  padding: 36px 42px 28px;
+  padding: 24px 28px 20px;
   border-color: #e7eee4;
   box-shadow: 0 22px 70px #416b4010;
 }
@@ -189,7 +189,7 @@ body {
   color: #4d8c58;
 }
 .card-heading {
-  margin: 25px 0 27px;
+  margin: 16px 0 18px;
 }
 .card-overline,
 .section-label {
@@ -223,7 +223,7 @@ body {
   cursor: text;
 }
 .code-boxes span {
-  height: 58px;
+  height: 50px;
   display: grid;
   place-items: center;
   border: 1px solid #e2eae0;
@@ -251,7 +251,7 @@ body {
 }
 .advanced-toggle {
   width: 100%;
-  padding: 18px 0;
+  padding: 12px 0;
   border: 0;
   background: none;
   display: flex;
@@ -309,7 +309,7 @@ body {
   justify-content: center;
   align-items: center;
   gap: 6px;
-  margin-top: 21px;
+  margin-top: 14px;
   color: #abb8a9;
   font-size: 11px;
 }
@@ -318,36 +318,36 @@ body {
   align-items: center;
   justify-content: center;
   gap: 6px;
-  margin-top: 23px;
+  margin-top: 14px;
   color: #a2afa0;
   font-size: 12px;
 }
 .dashboard {
   width: var(--cd-page);
-  margin: auto;
-  padding: 56px 0;
+  margin: 0 auto;
+  padding: 22px 0;
 }
 .dashboard-heading {
   display: flex;
   justify-content: space-between;
   align-items: flex-end;
-  gap: 20px;
-  margin-bottom: 34px;
+  gap: 16px;
+  margin-bottom: 16px;
 }
 .dashboard-heading h1 {
-  font-size: 43px;
-  margin-top: 15px;
+  font-size: 28px;
+  margin-top: 8px;
 }
 .dashboard-heading h1 span {
   color: #82ac76;
 }
 .dashboard-heading p {
-  margin-top: 10px;
+  margin-top: 4px;
 }
 .dashboard-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
-  gap: 20px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 14px;
   align-items: stretch;
 }
 .class-card,
@@ -356,16 +356,13 @@ body {
   border-color: #e5ede1;
   box-shadow: 0 15px 50px #416b400b;
 }
+/* A full-width strip: class on the left, live status on the right. */
 .class-card {
-  padding: 30px;
-  min-height: 0;
+  grid-column: 1 / -1;
   display: flex;
-  flex-direction: column;
-}
-.class-card-top {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 20px;
 }
 .class-icon,
 .setting-icon {
@@ -378,34 +375,40 @@ body {
 .class-icon {
   width: 48px;
   height: 48px;
+  flex-shrink: 0;
 }
-.class-card .section-label {
-  margin-top: 38px;
+.class-info {
+  flex: 1;
+  min-width: 0;
+}
+.class-info-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 .class-card h2 {
-  font-size: 29px;
-  margin-top: 10px;
+  font-size: 26px;
+  margin-top: 2px;
   color: #2a4939;
 }
-.class-card > p {
-  font-size: 14px;
+.class-info > p {
+  font-size: 13px;
   color: #9ba99b;
-  margin-top: 7px;
-}
-.class-divider {
-  height: 1px;
-  background: #eaf0e7;
-  margin: 27px 0;
+  margin-top: 2px;
 }
 .class-summary {
-  display: flex;
-  gap: 45px;
-  margin-top: auto;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  flex: 0 0 300px;
 }
 .class-summary > div {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: #f4f8f1;
   color: #83a084;
 }
 .class-summary span {
@@ -418,18 +421,21 @@ body {
   color: #536c59;
   font-size: 15px;
 }
+/* The side cards join the dashboard grid directly: call and sound side by
+   side, settings across the full width. */
 .dashboard-side {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-  min-width: 0;
+  display: contents;
+}
+.dashboard-grid .settings-card {
+  grid-column: 1 / -1;
 }
 /* The call card uses the same orange as the desktop floating ball. */
+/* Same structure as the sound card below: icon column, then text and button. */
 .student-call-card {
   display: flex;
   align-items: center;
-  gap: 20px;
-  padding: 22px 26px;
+  gap: 16px;
+  padding: 16px 20px;
   border-color: #fed7aa;
   background: linear-gradient(135deg, #fff7ed, #ffffff 70%);
   box-shadow: 0 15px 50px #c2410c0d;
@@ -439,8 +445,10 @@ body {
   min-width: 0;
 }
 .call-icon {
-  width: 56px;
-  height: 56px;
+  /* 66px tile centred in the same 118px column as the sound card's bell. */
+  width: 48px;
+  height: 48px;
+  margin: 0 12px;
   flex-shrink: 0;
   display: grid;
   place-items: center;
@@ -450,7 +458,7 @@ body {
   box-shadow: 0 8px 20px #f9731633;
 }
 .student-call-card h3 {
-  font-size: 18px;
+  font-size: 16px;
   color: #9a3412;
 }
 .student-call-card p {
@@ -464,8 +472,8 @@ body {
   font-weight: 600;
 }
 .student-call-card .call-button {
-  flex-shrink: 0;
-  min-height: 46px;
+  margin-top: 10px;
+  min-height: 40px;
   padding: 0 22px;
   font-size: 16px;
   font-weight: 700;
@@ -480,13 +488,13 @@ body {
 .ready-card {
   display: flex;
   align-items: center;
-  gap: 28px;
-  padding: 24px 28px;
+  gap: 16px;
+  padding: 16px 20px;
 }
 .ready-visual {
   position: relative;
-  width: 118px;
-  height: 118px;
+  width: 72px;
+  height: 72px;
   display: grid;
   place-items: center;
   flex-shrink: 0;
@@ -494,11 +502,11 @@ body {
 .ready-bell {
   position: relative;
   z-index: 1;
-  width: 66px;
-  height: 66px;
+  width: 48px;
+  height: 48px;
   display: grid;
   place-items: center;
-  border-radius: 22px;
+  border-radius: 16px;
   background: #e7f2e2;
   color: #70a577;
 }
@@ -508,13 +516,13 @@ body {
   border-radius: 50%;
 }
 .orbit-one {
-  inset: 10px;
+  inset: 6px;
 }
 .orbit-two {
   inset: 0;
 }
 .ready-card h3 {
-  font-size: 18px;
+  font-size: 16px;
   color: #3a5b43;
 }
 .ready-card p,
@@ -525,25 +533,25 @@ body {
   margin-top: 6px;
 }
 .ready-card .cd-button {
-  margin-top: 13px;
+  margin-top: 10px;
   min-height: 40px;
   font-size: 14px;
 }
 .settings-card {
-  padding: 4px 24px;
+  padding: 2px 20px;
 }
 .setting-row {
   display: flex;
   align-items: center;
-  gap: 13px;
-  padding: 17px 0;
+  gap: 12px;
+  padding: 11px 0;
 }
 .setting-row + .setting-row {
   border-top: 1px solid #edf1ea;
 }
 .setting-icon {
-  width: 38px;
-  height: 38px;
+  width: 34px;
+  height: 34px;
   border-radius: 10px;
 }
 .setting-row > div {
@@ -567,7 +575,7 @@ body {
   display: flex;
   justify-content: space-between;
   gap: 20px;
-  margin-top: 24px;
+  margin-top: 14px;
   color: #a4b1a2;
   font-size: 13px;
 }
@@ -695,8 +703,11 @@ body {
   .intro-decoration {
     display: none;
   }
-  .student-call-card {
+  .class-card {
     flex-wrap: wrap;
+  }
+  .class-summary {
+    flex-basis: 100%;
   }
   .dashboard-grid {
     grid-template-columns: 1fr;
@@ -865,8 +876,8 @@ body {
 }
 
 .screen-homework-panel {
-  margin-top: 24px;
-  padding: 26px;
+  margin-top: 14px;
+  padding: 18px 20px;
 }
 .screen-homework-heading {
   display: flex;

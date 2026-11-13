@@ -344,18 +344,19 @@ function App() {
             </div>
             <div className="dashboard-grid">
               <Card className="class-card">
-                <div className="class-card-top">
-                  <span className="class-icon">
-                    <Monitor size={22} />
-                  </span>
-                  <Badge variant="success">
-                    <span className="status-dot" /> 已绑定
-                  </Badge>
+                <span className="class-icon">
+                  <Monitor size={22} />
+                </span>
+                <div className="class-info">
+                  <div className="class-info-top">
+                    <span className="section-label">当前班级</span>
+                    <Badge variant="success">
+                      <span className="status-dot" /> 已绑定
+                    </Badge>
+                  </div>
+                  <h2>{state.className}</h2>
+                  <p>{state.deviceName}</p>
                 </div>
-                <span className="section-label">当前班级</span>
-                <h2>{state.className}</h2>
-                <p>{state.deviceName}</p>
-                <div className="class-divider" />
                 <div className="class-summary">
                   <div>
                     <Radio size={18} />
@@ -374,24 +375,24 @@ function App() {
               <div className="dashboard-side">
                 <Card className="student-call-card">
                   <span className="call-icon">
-                    <BellRing size={26} />
+                    <BellRing size={22} />
                   </span>
                   <div>
                     <h3>需要老师来教室？</h3>
-                    <p>向本班所有关联老师发送呼叫。关闭主窗口后，桌面上的橙色悬浮球仍可呼叫。</p>
+                    <p>通知本班所有老师，也可点桌面橙色悬浮球。</p>
                     {state.studentCallMessage && (
                       <p className="call-status" role="status">
                         {state.studentCallMessage}
                       </p>
                     )}
+                    <Button
+                      className="call-button"
+                      onClick={() => setCallOpen(true)}
+                      disabled={state.studentCallSending}
+                    >
+                      <BellRing size={18} /> 呼叫老师
+                    </Button>
                   </div>
-                  <Button
-                    className="call-button"
-                    onClick={() => setCallOpen(true)}
-                    disabled={state.studentCallSending}
-                  >
-                    <BellRing size={18} /> 呼叫老师
-                  </Button>
                 </Card>
                 <Dialog open={callOpen && state.bound} onOpenChange={setCallOpen}>
                   <DialogContent>
@@ -425,7 +426,7 @@ function App() {
                     <span className="sound-orbit orbit-one" />
                     <span className="sound-orbit orbit-two" />
                     <span className="ready-bell">
-                      <BellRing size={37} />
+                      <BellRing size={24} />
                     </span>
                   </div>
                   <div>
