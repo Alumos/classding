@@ -1,6 +1,6 @@
 services:
   server:
-    image: ${CLASSDING_IMAGE:-ghcr.io/alumos/classding-server:v0.3.4}
+    image: ${CLASSDING_IMAGE:-ghcr.io/alumos/classding-server:v0.3.5}
     restart: unless-stopped
     environment:
       DATA_DIR: /data

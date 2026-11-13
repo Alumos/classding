@@ -19,6 +19,8 @@ type Peer struct {
 	ID      string // Device ID, for screens.
 	ClassID string // For screens.
 	UserID  string // For teachers.
+	// Immutable once registered; student-call broadcasts recheck the live session.
+	teacherSession claims
 }
 
 func newPeer(parent context.Context, conn *websocket.Conn) *Peer {

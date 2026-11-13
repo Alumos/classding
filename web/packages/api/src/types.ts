@@ -515,7 +515,58 @@ export interface paths {
         get: operations["get__messages_36"];
         put?: never;
         /** POST /messages */
-        post: operations["post__messages_37"];
+        post: operations["post__messages_40"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/device/student-calls": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** POST /device/student-calls */
+        post: operations["post__device_student_calls_37"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/student-calls": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** GET /student-calls */
+        get: operations["get__student_calls_38"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/student-calls/{id}/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** POST /student-calls/{id}/read */
+        post: operations["post__student_calls__id__read_39"];
         delete?: never;
         options?: never;
         head?: never;
@@ -530,11 +581,11 @@ export interface paths {
             cookie?: never;
         };
         /** GET /messages/{id} */
-        get: operations["get__messages__id__38"];
+        get: operations["get__messages__id__41"];
         put?: never;
         post?: never;
         /** DELETE /messages/{id} */
-        delete: operations["delete__messages__id__39"];
+        delete: operations["delete__messages__id__42"];
         options?: never;
         head?: never;
         patch?: never;
@@ -550,7 +601,7 @@ export interface paths {
         get?: never;
         put?: never;
         /** POST /messages/{id}/recall */
-        post: operations["post__messages__id__recall_40"];
+        post: operations["post__messages__id__recall_43"];
         delete?: never;
         options?: never;
         head?: never;
@@ -567,7 +618,7 @@ export interface paths {
         get?: never;
         put?: never;
         /** POST /messages/{id}/resend */
-        post: operations["post__messages__id__resend_41"];
+        post: operations["post__messages__id__resend_44"];
         delete?: never;
         options?: never;
         head?: never;
@@ -582,10 +633,10 @@ export interface paths {
             cookie?: never;
         };
         /** GET /phrases */
-        get: operations["get__phrases_42"];
+        get: operations["get__phrases_45"];
         put?: never;
         /** POST /phrases */
-        post: operations["post__phrases_43"];
+        post: operations["post__phrases_46"];
         delete?: never;
         options?: never;
         head?: never;
@@ -603,11 +654,11 @@ export interface paths {
         put?: never;
         post?: never;
         /** DELETE /phrases/{id} */
-        delete: operations["delete__phrases__id__45"];
+        delete: operations["delete__phrases__id__48"];
         options?: never;
         head?: never;
         /** PATCH /phrases/{id} */
-        patch: operations["patch__phrases__id__44"];
+        patch: operations["patch__phrases__id__47"];
         trace?: never;
     };
     "/classes/{id}/tools/countdown": {
@@ -620,7 +671,7 @@ export interface paths {
         get?: never;
         put?: never;
         /** POST /classes/{id}/tools/countdown */
-        post: operations["post__classes__id__tools_countdown_46"];
+        post: operations["post__classes__id__tools_countdown_49"];
         delete?: never;
         options?: never;
         head?: never;
@@ -637,7 +688,7 @@ export interface paths {
         get?: never;
         put?: never;
         /** POST /classes/{id}/tools/rollcall */
-        post: operations["post__classes__id__tools_rollcall_47"];
+        post: operations["post__classes__id__tools_rollcall_50"];
         delete?: never;
         options?: never;
         head?: never;
@@ -654,7 +705,7 @@ export interface paths {
         get?: never;
         put?: never;
         /** POST /classes/{id}/tools/stop */
-        post: operations["post__classes__id__tools_stop_48"];
+        post: operations["post__classes__id__tools_stop_51"];
         delete?: never;
         options?: never;
         head?: never;
@@ -671,7 +722,7 @@ export interface paths {
         get?: never;
         put?: never;
         /** POST /audio */
-        post: operations["post__audio_49"];
+        post: operations["post__audio_52"];
         delete?: never;
         options?: never;
         head?: never;
@@ -686,7 +737,7 @@ export interface paths {
             cookie?: never;
         };
         /** GET /admin/overview */
-        get: operations["get__admin_overview_50"];
+        get: operations["get__admin_overview_53"];
         put?: never;
         post?: never;
         delete?: never;
@@ -703,10 +754,10 @@ export interface paths {
             cookie?: never;
         };
         /** GET /admin/activation-codes */
-        get: operations["get__admin_activation_codes_51"];
+        get: operations["get__admin_activation_codes_54"];
         put?: never;
         /** POST /admin/activation-codes */
-        post: operations["post__admin_activation_codes_52"];
+        post: operations["post__admin_activation_codes_55"];
         delete?: never;
         options?: never;
         head?: never;
@@ -727,7 +778,7 @@ export interface paths {
         options?: never;
         head?: never;
         /** PATCH /admin/activation-codes/{code} */
-        patch: operations["patch__admin_activation_codes__code__53"];
+        patch: operations["patch__admin_activation_codes__code__56"];
         trace?: never;
     };
     "/admin/activation-codes/delete": {
@@ -740,7 +791,7 @@ export interface paths {
         get?: never;
         put?: never;
         /** POST /admin/activation-codes/delete */
-        post: operations["post__admin_activation_codes_delete_54"];
+        post: operations["post__admin_activation_codes_delete_57"];
         delete?: never;
         options?: never;
         head?: never;
@@ -755,10 +806,10 @@ export interface paths {
             cookie?: never;
         };
         /** GET /admin/schools */
-        get: operations["get__admin_schools_55"];
+        get: operations["get__admin_schools_58"];
         put?: never;
         /** POST /admin/schools */
-        post: operations["post__admin_schools_56"];
+        post: operations["post__admin_schools_59"];
         delete?: never;
         options?: never;
         head?: never;
@@ -776,11 +827,11 @@ export interface paths {
         put?: never;
         post?: never;
         /** DELETE /admin/schools/{id} */
-        delete: operations["delete__admin_schools__id__58"];
+        delete: operations["delete__admin_schools__id__61"];
         options?: never;
         head?: never;
         /** PATCH /admin/schools/{id} */
-        patch: operations["patch__admin_schools__id__57"];
+        patch: operations["patch__admin_schools__id__60"];
         trace?: never;
     };
     "/admin/users": {
@@ -791,10 +842,10 @@ export interface paths {
             cookie?: never;
         };
         /** GET /admin/users */
-        get: operations["get__admin_users_59"];
+        get: operations["get__admin_users_62"];
         put?: never;
         /** POST /admin/users */
-        post: operations["post__admin_users_60"];
+        post: operations["post__admin_users_63"];
         delete?: never;
         options?: never;
         head?: never;
@@ -812,11 +863,11 @@ export interface paths {
         put?: never;
         post?: never;
         /** DELETE /admin/users/{id} */
-        delete: operations["delete__admin_users__id__62"];
+        delete: operations["delete__admin_users__id__65"];
         options?: never;
         head?: never;
         /** PATCH /admin/users/{id} */
-        patch: operations["patch__admin_users__id__61"];
+        patch: operations["patch__admin_users__id__64"];
         trace?: never;
     };
     "/admin/users/{id}/unlock-login": {
@@ -829,7 +880,7 @@ export interface paths {
         get?: never;
         put?: never;
         /** POST /admin/users/{id}/unlock-login */
-        post: operations["post__admin_users__id__unlock_login_63"];
+        post: operations["post__admin_users__id__unlock_login_66"];
         delete?: never;
         options?: never;
         head?: never;
@@ -844,10 +895,10 @@ export interface paths {
             cookie?: never;
         };
         /** GET /admin/classes */
-        get: operations["get__admin_classes_64"];
+        get: operations["get__admin_classes_67"];
         put?: never;
         /** POST /admin/classes */
-        post: operations["post__admin_classes_65"];
+        post: operations["post__admin_classes_68"];
         delete?: never;
         options?: never;
         head?: never;
@@ -865,11 +916,11 @@ export interface paths {
         put?: never;
         post?: never;
         /** DELETE /admin/classes/{id} */
-        delete: operations["delete__admin_classes__id__67"];
+        delete: operations["delete__admin_classes__id__70"];
         options?: never;
         head?: never;
         /** PATCH /admin/classes/{id} */
-        patch: operations["patch__admin_classes__id__66"];
+        patch: operations["patch__admin_classes__id__69"];
         trace?: never;
     };
     "/admin/devices": {
@@ -880,7 +931,7 @@ export interface paths {
             cookie?: never;
         };
         /** GET /admin/devices */
-        get: operations["get__admin_devices_68"];
+        get: operations["get__admin_devices_71"];
         put?: never;
         post?: never;
         delete?: never;
@@ -897,7 +948,7 @@ export interface paths {
             cookie?: never;
         };
         /** GET /admin/messages */
-        get: operations["get__admin_messages_69"];
+        get: operations["get__admin_messages_72"];
         put?: never;
         post?: never;
         delete?: never;
@@ -917,7 +968,7 @@ export interface paths {
         put?: never;
         post?: never;
         /** DELETE /admin/messages/{id} */
-        delete: operations["delete__admin_messages__id__70"];
+        delete: operations["delete__admin_messages__id__73"];
         options?: never;
         head?: never;
         patch?: never;
@@ -931,7 +982,7 @@ export interface paths {
             cookie?: never;
         };
         /** GET /admin/audit-logs */
-        get: operations["get__admin_audit_logs_71"];
+        get: operations["get__admin_audit_logs_74"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1018,6 +1069,23 @@ export interface components {
             id: string;
             text: string;
             sort: number;
+        };
+        StudentCall: {
+            id: string;
+            class_id: string;
+            class_name: string;
+            device_id: string;
+            device_name: string;
+            /** Format: date-time */
+            created_at: string;
+            read_at: string;
+            read_by: string;
+            read_by_name: string;
+        };
+        StudentCallList: {
+            items: components["schemas"]["StudentCall"][];
+            unread_count: number;
+            next_cursor: string | null;
         };
         Homework: {
             id: string;
@@ -2458,7 +2526,7 @@ export interface operations {
             };
         };
     };
-    post__messages_37: {
+    post__messages_40: {
         parameters: {
             query?: never;
             header?: never;
@@ -2491,7 +2559,106 @@ export interface operations {
             };
         };
     };
-    get__messages__id__38: {
+    post__device_student_calls_37: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    request_id: string;
+                };
+            };
+        };
+        responses: {
+            /** @description 成功 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StudentCall"];
+                };
+            };
+            /** @description 业务错误 */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    get__student_calls_38: {
+        parameters: {
+            query?: {
+                class_id?: string;
+                cursor?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 成功 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StudentCallList"];
+                };
+            };
+            /** @description 业务错误 */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    post__student_calls__id__read_39: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 成功 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StudentCall"];
+                };
+            };
+            /** @description 业务错误 */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    get__messages__id__41: {
         parameters: {
             query?: never;
             header?: never;
@@ -2522,7 +2689,7 @@ export interface operations {
             };
         };
     };
-    delete__messages__id__39: {
+    delete__messages__id__42: {
         parameters: {
             query?: never;
             header?: never;
@@ -2553,7 +2720,7 @@ export interface operations {
             };
         };
     };
-    post__messages__id__recall_40: {
+    post__messages__id__recall_43: {
         parameters: {
             query?: never;
             header?: never;
@@ -2584,7 +2751,7 @@ export interface operations {
             };
         };
     };
-    post__messages__id__resend_41: {
+    post__messages__id__resend_44: {
         parameters: {
             query?: never;
             header?: never;
@@ -2615,7 +2782,7 @@ export interface operations {
             };
         };
     };
-    get__phrases_42: {
+    get__phrases_45: {
         parameters: {
             query?: never;
             header?: never;
@@ -2644,7 +2811,7 @@ export interface operations {
             };
         };
     };
-    post__phrases_43: {
+    post__phrases_46: {
         parameters: {
             query?: never;
             header?: never;
@@ -2679,7 +2846,7 @@ export interface operations {
             };
         };
     };
-    delete__phrases__id__45: {
+    delete__phrases__id__48: {
         parameters: {
             query?: never;
             header?: never;
@@ -2710,7 +2877,7 @@ export interface operations {
             };
         };
     };
-    patch__phrases__id__44: {
+    patch__phrases__id__47: {
         parameters: {
             query?: never;
             header?: never;
@@ -2747,7 +2914,7 @@ export interface operations {
             };
         };
     };
-    post__classes__id__tools_countdown_46: {
+    post__classes__id__tools_countdown_49: {
         parameters: {
             query?: never;
             header?: never;
@@ -2784,7 +2951,7 @@ export interface operations {
             };
         };
     };
-    post__classes__id__tools_rollcall_47: {
+    post__classes__id__tools_rollcall_50: {
         parameters: {
             query?: never;
             header?: never;
@@ -2821,7 +2988,7 @@ export interface operations {
             };
         };
     };
-    post__classes__id__tools_stop_48: {
+    post__classes__id__tools_stop_51: {
         parameters: {
             query?: never;
             header?: never;
@@ -2852,7 +3019,7 @@ export interface operations {
             };
         };
     };
-    post__audio_49: {
+    post__audio_52: {
         parameters: {
             query?: never;
             header?: never;
@@ -2888,7 +3055,7 @@ export interface operations {
             };
         };
     };
-    get__admin_overview_50: {
+    get__admin_overview_53: {
         parameters: {
             query?: never;
             header?: never;
@@ -2917,7 +3084,7 @@ export interface operations {
             };
         };
     };
-    get__admin_activation_codes_51: {
+    get__admin_activation_codes_54: {
         parameters: {
             query?: {
                 class_id?: string;
@@ -2951,7 +3118,7 @@ export interface operations {
             };
         };
     };
-    post__admin_activation_codes_52: {
+    post__admin_activation_codes_55: {
         parameters: {
             query?: never;
             header?: never;
@@ -2991,7 +3158,7 @@ export interface operations {
             };
         };
     };
-    patch__admin_activation_codes__code__53: {
+    patch__admin_activation_codes__code__56: {
         parameters: {
             query?: never;
             header?: never;
@@ -3031,7 +3198,7 @@ export interface operations {
             };
         };
     };
-    post__admin_activation_codes_delete_54: {
+    post__admin_activation_codes_delete_57: {
         parameters: {
             query?: never;
             header?: never;
@@ -3068,7 +3235,7 @@ export interface operations {
             };
         };
     };
-    get__admin_schools_55: {
+    get__admin_schools_58: {
         parameters: {
             query?: never;
             header?: never;
@@ -3097,7 +3264,7 @@ export interface operations {
             };
         };
     };
-    post__admin_schools_56: {
+    post__admin_schools_59: {
         parameters: {
             query?: never;
             header?: never;
@@ -3132,7 +3299,7 @@ export interface operations {
             };
         };
     };
-    delete__admin_schools__id__58: {
+    delete__admin_schools__id__61: {
         parameters: {
             query?: never;
             header?: never;
@@ -3163,7 +3330,7 @@ export interface operations {
             };
         };
     };
-    patch__admin_schools__id__57: {
+    patch__admin_schools__id__60: {
         parameters: {
             query?: never;
             header?: never;
@@ -3200,7 +3367,7 @@ export interface operations {
             };
         };
     };
-    get__admin_users_59: {
+    get__admin_users_62: {
         parameters: {
             query?: never;
             header?: never;
@@ -3229,7 +3396,7 @@ export interface operations {
             };
         };
     };
-    post__admin_users_60: {
+    post__admin_users_63: {
         parameters: {
             query?: never;
             header?: never;
@@ -3267,7 +3434,7 @@ export interface operations {
             };
         };
     };
-    delete__admin_users__id__62: {
+    delete__admin_users__id__65: {
         parameters: {
             query?: never;
             header?: never;
@@ -3298,7 +3465,7 @@ export interface operations {
             };
         };
     };
-    patch__admin_users__id__61: {
+    patch__admin_users__id__64: {
         parameters: {
             query?: never;
             header?: never;
@@ -3339,7 +3506,7 @@ export interface operations {
             };
         };
     };
-    post__admin_users__id__unlock_login_63: {
+    post__admin_users__id__unlock_login_66: {
         parameters: {
             query?: never;
             header?: never;
@@ -3370,7 +3537,7 @@ export interface operations {
             };
         };
     };
-    get__admin_classes_64: {
+    get__admin_classes_67: {
         parameters: {
             query?: never;
             header?: never;
@@ -3399,7 +3566,7 @@ export interface operations {
             };
         };
     };
-    post__admin_classes_65: {
+    post__admin_classes_68: {
         parameters: {
             query?: never;
             header?: never;
@@ -3438,7 +3605,7 @@ export interface operations {
             };
         };
     };
-    delete__admin_classes__id__67: {
+    delete__admin_classes__id__70: {
         parameters: {
             query?: never;
             header?: never;
@@ -3469,7 +3636,7 @@ export interface operations {
             };
         };
     };
-    patch__admin_classes__id__66: {
+    patch__admin_classes__id__69: {
         parameters: {
             query?: never;
             header?: never;
@@ -3510,7 +3677,7 @@ export interface operations {
             };
         };
     };
-    get__admin_devices_68: {
+    get__admin_devices_71: {
         parameters: {
             query?: never;
             header?: never;
@@ -3539,7 +3706,7 @@ export interface operations {
             };
         };
     };
-    get__admin_messages_69: {
+    get__admin_messages_72: {
         parameters: {
             query?: {
                 class_id?: string;
@@ -3573,7 +3740,7 @@ export interface operations {
             };
         };
     };
-    delete__admin_messages__id__70: {
+    delete__admin_messages__id__73: {
         parameters: {
             query?: never;
             header?: never;
@@ -3604,7 +3771,7 @@ export interface operations {
             };
         };
     };
-    get__admin_audit_logs_71: {
+    get__admin_audit_logs_74: {
         parameters: {
             query?: never;
             header?: never;

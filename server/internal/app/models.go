@@ -3,7 +3,7 @@ package app
 import "time"
 
 // Version is the release reported by the server and offered to classroom clients.
-const Version = "0.3.4"
+const Version = "0.3.5"
 
 // Role decides which workspace an account may sign in to and what it governs.
 type Role string
@@ -293,41 +293,63 @@ type Audit struct {
 	At     string `json:"at"`
 }
 
+// StudentCall is a shared classroom request. Names are immutable event snapshots.
+// Read fields deliberately have no omitempty: unread values are empty strings.
+type StudentCall struct {
+	ID         string `json:"id"`
+	ClassID    string `json:"class_id"`
+	ClassName  string `json:"class_name"`
+	DeviceID   string `json:"device_id"`
+	DeviceName string `json:"device_name"`
+	CreatedAt  string `json:"created_at"`
+	ReadAt     string `json:"read_at"`
+	ReadBy     string `json:"read_by"`
+	ReadByName string `json:"read_by_name"`
+}
+
+// studentCallRecord keeps replay keys in storage/backups, never in API responses.
+type studentCallRecord struct {
+	StudentCall
+	RequestID string `json:"request_id"`
+}
+
 // State is the whole database. It lives in memory under App.mu and is written
 // through to SQLite after every successful change.
 type State struct {
-	Users     map[string]User     `json:"users"`
-	Classes   map[string]Class    `json:"classes"`
-	Members   map[string]Member   `json:"class_members"`
-	Devices   map[string]Device   `json:"devices"`
-	Messages  map[string]Message  `json:"messages"`
-	Homeworks map[string]Homework `json:"homeworks"`
-	Codes     map[string]Code     `json:"activation_codes"`
-	Invites   map[string]Invite   `json:"collab_invites"`
-	Sessions  map[string]Session  `json:"sessions"`
-	Phrases   map[string]Phrase   `json:"phrases"`
-	Audio     map[string]Audio    `json:"audio"`
-	Audit     map[string]Audit    `json:"audit_logs"`
-	Settings  map[string]string   `json:"settings"`
-	Schools   map[string]School   `json:"schools"`
+	StudentCalls map[string]studentCallRecord `json:"student_calls"`
+	Users        map[string]User              `json:"users"`
+	Classes      map[string]Class             `json:"classes"`
+	Members      map[string]Member            `json:"class_members"`
+	Devices      map[string]Device            `json:"devices"`
+	Messages     map[string]Message           `json:"messages"`
+	Homeworks    map[string]Homework          `json:"homeworks"`
+	Codes        map[string]Code              `json:"activation_codes"`
+	Invites      map[string]Invite            `json:"collab_invites"`
+	Sessions     map[string]Session           `json:"sessions"`
+	Phrases      map[string]Phrase            `json:"phrases"`
+	Audio        map[string]Audio             `json:"audio"`
+	Audit        map[string]Audit             `json:"audit_logs"`
+	Settings     map[string]string            `json:"settings"`
+	Schools      map[string]School            `json:"schools"`
 }
 
 func newState() State {
 	return State{
-		Users:     map[string]User{},
-		Classes:   map[string]Class{},
-		Members:   map[string]Member{},
-		Devices:   map[string]Device{},
-		Messages:  map[string]Message{},
-		Homeworks: map[string]Homework{},
-		Codes:     map[string]Code{},
-		Invites:   map[string]Invite{},
-		Sessions:  map[string]Session{},
-		Phrases:   map[string]Phrase{},
-		Audio:     map[string]Audio{},
-		Audit:     map[string]Audit{},
-		Settings:  map[string]string{},
-		Schools:   map[string]School{},
+		StudentCalls: map[string]studentCallRecord{},
+		Users:        map[string]User{},
+		Classes:      map[string]Class{},
+		Members:      map[string]Member{},
+		Devices:      map[string]Device{},
+		Messages:     map[string]Message{},
+		Homeworks:    map[string]Homework{},
+		Codes:        map[string]Code{},
+		Invites:      map[string]Invite{},
+		Sessions:     map[string]Session{},
+		Phrases:      map[string]Phrase{},
+		Audio:        map[string]Audio{},
+		Audit:        map[string]Audit{},
+		Settings:     map[string]string{},
+		Schools:      map[string]School{},
 	}
 }
 

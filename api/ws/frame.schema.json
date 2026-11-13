@@ -740,6 +740,50 @@
         "t",
         "d"
       ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "t": {
+          "const": "student_call"
+        },
+        "id": {
+          "type": "string"
+        },
+        "seq": {
+          "type": "integer"
+        },
+        "ts": {
+          "type": "integer"
+        },
+        "d": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "class_id": {
+              "type": "string"
+            },
+            "kind": {
+              "type": "string",
+              "enum": [
+                "created",
+                "read"
+              ]
+            }
+          },
+          "required": [
+            "id",
+            "class_id",
+            "kind"
+          ]
+        }
+      },
+      "required": [
+        "t",
+        "d"
+      ]
     }
   ]
 }

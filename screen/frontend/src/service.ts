@@ -1,6 +1,6 @@
 import type { components, paths } from '@classding/api/types';
 import type { AckStatus, Notice, WSFrame } from '@classding/api/ws';
-import { configureServer, getLocalAddresses, loadState, normalizeServer, saveState } from './native';
+import { configureServer, getLocalAddresses, loadState, normalizeServer, saveState, native } from './native';
 import { readHomeworks, type Homework } from './homework';
 import { playChime, playNotice } from './audio';
 import { APP_VERSION } from '@classding/ui/version';
@@ -53,6 +53,8 @@ export type Tool =
   | { name: 'rollcall'; names: string[]; selected: string; ends: number }
   | null;
 export interface Snapshot {
+  studentCallSending: boolean;
+  studentCallMessage: string;
   homeworks: Homework[];
   ready: boolean;
   busy: boolean;
@@ -163,6 +165,8 @@ const remoteConfig = (value: unknown): RemoteConfig | undefined => {
 export class ScreenService {
   private state = fresh();
   private view: Snapshot = {
+    studentCallSending: false,
+    studentCallMessage: '',
     homeworks: [],
     ready: false,
     busy: false,
@@ -198,6 +202,12 @@ export class ScreenService {
   private suppressStarts = false;
   private generation = 0;
   private disposed = false;
+  private bindingEpoch = 0;
+  private callController?: AbortController;
+  private callID = '';
+  private callOff?: () => void;
+  private callNativeQueue: Promise<void> = Promise.resolve();
+  private callNativeKey = '';
   subscribe = (fn: () => void) => {
     this.listeners.add(fn);
     return () => {
@@ -219,6 +229,7 @@ export class ScreenService {
       pending: Math.max(0, this.state.queue.length - (current ? 1 : 0)),
     };
     this.listeners.forEach((fn) => fn());
+    this.syncStudentCall();
   }
   private mutate(change: () => void): Promise<void> {
     const operation = this.ops.then(async () => {
@@ -257,6 +268,19 @@ export class ScreenService {
     }
   }
   async init() {
+    this.callOff = window.runtime?.EventsOnMultiple(
+      'student-call:send',
+      (id, binding) => {
+        if (typeof id !== 'string' || binding !== this.bindingEpoch) return;
+        void this.sendStudentCall(id)
+          .then(
+            () => native()?.CompleteStudentCall(id, true, '呼叫已发送，本班老师打开网页即可收到提醒'),
+            (error) => native()?.CompleteStudentCall(id, false, errorText(error)),
+          )
+          .catch(() => {});
+      },
+      -1,
+    );
     try {
       const raw = await loadState();
       if (raw) {
@@ -331,6 +355,7 @@ export class ScreenService {
       )
         throw new Error('服务器返回的绑定信息不完整');
       serverAccepted = true;
+      this.resetStudentCall();
       await this.mutate(() => {
         this.state = {
           ...fresh(),
@@ -899,6 +924,96 @@ export class ScreenService {
     }
     return `${this.base}${url.startsWith('/') ? '' : '/'}${url}`;
   }
+  private syncStudentCall() {
+    if (this.disposed || !native()) return;
+    const { bound, connection, className } = this.view;
+    const online = connection === 'online';
+    const epoch = this.bindingEpoch;
+    const key = JSON.stringify([bound, online, className, epoch]);
+    if (key === this.callNativeKey) return;
+    this.callNativeKey = key;
+    this.callNativeQueue = this.callNativeQueue
+      .catch(() => {})
+      .then(async () => {
+        if (!this.disposed) await native()?.UpdateStudentCallStatus(bound, online, className, epoch);
+      })
+      .catch((error) => {
+        this.emit({ error: `学生呼叫入口更新失败：${errorText(error)}` });
+      });
+  }
+  private resetStudentCall() {
+    this.bindingEpoch++;
+    this.callController?.abort();
+    this.callController = undefined;
+    this.callID = '';
+    this.emit({ studentCallSending: false, studentCallMessage: '' });
+  }
+  // Retry an uncertain request with its original id, never queue calls offline.
+  async sendStudentCall(requestID?: string): Promise<void> {
+    if (this.disposed || !this.state.token) throw new Error('设备未绑定，请重新绑定后呼叫');
+    if (this.view.studentCallSending) throw new Error('呼叫正在发送，请勿重复点击');
+    if (this.view.connection !== 'online') throw new Error('连接中断，呼叫未发送。请恢复网络后重试');
+    const id = this.callID || requestID || crypto.randomUUID();
+    if (!/^[A-Za-z0-9_.:-]{1,128}$/.test(id)) throw new Error('呼叫编号无效');
+    this.callID = id;
+    const epoch = this.bindingEpoch;
+    const controller = new AbortController();
+    this.callController = controller;
+    this.emit({ studentCallSending: true, studentCallMessage: '正在发送，请稍候…' });
+    const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+    try {
+      const response = await this.request('/api/v1/device/student-calls', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${this.state.token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ request_id: id }),
+        signal: controller.signal,
+      });
+      const data = (await response.json().catch(() => ({}))) as Record<string, unknown>;
+      if (epoch !== this.bindingEpoch || this.disposed) throw new Error('设备绑定已变化，呼叫结果不再适用');
+      if (!response.ok) {
+        if (response.status === 401) {
+          await this.unbind();
+          throw new Error('设备已失效或被解绑，请重新绑定');
+        }
+        if (response.status === 403) throw new Error('设备授权不可用，请联系学校管理员');
+        if (response.status === 429) {
+          this.callID = '';
+          const seconds = response.headers?.get('Retry-After');
+          throw new Error(
+            seconds && /^\d+$/.test(seconds)
+              ? '本班刚刚发起过呼叫，请在 ' + seconds + ' 秒后重试'
+              : '本班刚刚发起过呼叫，请稍后重试',
+          );
+        }
+        if (response.status === 409) this.callID = '';
+        throw new Error(
+          typeof data.message === 'string' ? data.message : '发送失败（' + response.status + '），请重试',
+        );
+      }
+      if (
+        typeof data.id !== 'string' ||
+        !data.id ||
+        data.class_id !== this.state.classId ||
+        data.device_id !== this.state.deviceId ||
+        typeof data.created_at !== 'string' ||
+        !Number.isFinite(Date.parse(data.created_at))
+      )
+        throw new Error('服务器未确认有效呼叫，结果未知，请重试（不会重复创建同一呼叫）');
+      this.callID = '';
+      this.emit({ studentCallMessage: '呼叫已发送，本班老师打开网页即可收到提醒' });
+    } catch (error) {
+      const message =
+        abortError(error) || error instanceof TypeError
+          ? '网络异常，发送结果未确认，请重试（不会重复创建同一呼叫）'
+          : errorText(error);
+      if (epoch === this.bindingEpoch && !this.disposed) this.emit({ studentCallMessage: message });
+      throw new Error(message);
+    } finally {
+      clearTimeout(timeout);
+      if (this.callController === controller) this.callController = undefined;
+      if (epoch === this.bindingEpoch && !this.disposed) this.emit({ studentCallSending: false });
+    }
+  }
   async dismiss() {
     const id = this.view.current?.message_id;
     if (!id) return;
@@ -914,6 +1029,7 @@ export class ScreenService {
   }
   // Stops playback, timers and the socket; the next connect starts fresh.
   private halt() {
+    this.resetStudentCall();
     this.generation++;
     this.active?.abort();
     clearTimeout(this.retry);
@@ -946,6 +1062,8 @@ export class ScreenService {
   }
   dispose() {
     this.disposed = true;
+    this.callOff?.();
+    this.callOff = undefined;
     this.halt();
   }
 }

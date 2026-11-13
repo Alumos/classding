@@ -90,10 +90,13 @@ test('教师发布、修改、切换显示设置并删除作业，布局适应�
             return { top: rect.top, left: rect.left, right: rect.right };
           }),
         );
-        expect(positions).toHaveLength(5);
-        expect(new Set(positions.map((position) => position.top)).size).toBe(1);
-        for (let index = 1; index < positions.length; index++)
-          expect(positions[index].left).toBeGreaterThanOrEqual(positions[index - 1].right - 1);
+        expect(positions).toHaveLength(6);
+        expect(new Set(positions.map((position) => position.top)).size).toBe(2);
+        for (const row of [positions.slice(0, 3), positions.slice(3)]) {
+          expect(new Set(row.map((position) => position.top)).size).toBe(1);
+          for (let index = 1; index < row.length; index++)
+            expect(row[index].left).toBeGreaterThanOrEqual(row[index - 1].right - 1);
+        }
       }
       await expect(card).toBeVisible();
       await page.screenshot({ path: info.outputPath(`homework-${width}-${scheme}.png`), fullPage: true });

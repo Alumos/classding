@@ -11,7 +11,7 @@ import (
 	"path/filepath"
 )
 
-var tables = []string{"users", "classes", "class_members", "devices", "messages", "homeworks", "activation_codes", "collab_invites", "sessions", "phrases", "audio", "audit_logs", "settings", "schools"}
+var tables = []string{"users", "classes", "class_members", "devices", "messages", "homeworks", "student_calls", "activation_codes", "collab_invites", "sessions", "phrases", "audio", "audit_logs", "settings", "schools"}
 
 type Store struct {
 	db    *sql.DB
@@ -44,7 +44,7 @@ func Open(path string) (*Store, error) {
 		}
 		s.saved[table] = map[string]string{}
 	}
-	for _, q := range []string{`CREATE UNIQUE INDEX IF NOT EXISTS users_username ON users(json_extract(body,'$.username'))`, `CREATE INDEX IF NOT EXISTS classes_org ON classes(json_extract(body,'$.org_id'))`, `CREATE INDEX IF NOT EXISTS devices_class ON devices(json_extract(body,'$.class_id'))`, `CREATE INDEX IF NOT EXISTS messages_created ON messages(json_extract(body,'$.created_at'))`, `CREATE INDEX IF NOT EXISTS homeworks_class ON homeworks(json_extract(body,'$.class_id'))`, `CREATE INDEX IF NOT EXISTS members_class ON class_members(json_extract(body,'$.class_id'))`} {
+	for _, q := range []string{`CREATE UNIQUE INDEX IF NOT EXISTS users_username ON users(json_extract(body,'$.username'))`, `CREATE INDEX IF NOT EXISTS classes_org ON classes(json_extract(body,'$.org_id'))`, `CREATE INDEX IF NOT EXISTS devices_class ON devices(json_extract(body,'$.class_id'))`, `CREATE INDEX IF NOT EXISTS messages_created ON messages(json_extract(body,'$.created_at'))`, `CREATE UNIQUE INDEX IF NOT EXISTS student_calls_request ON student_calls(json_extract(body,'$.request_id'))`, `CREATE INDEX IF NOT EXISTS student_calls_class ON student_calls(json_extract(body,'$.class_id'))`, `CREATE INDEX IF NOT EXISTS homeworks_class ON homeworks(json_extract(body,'$.class_id'))`, `CREATE INDEX IF NOT EXISTS members_class ON class_members(json_extract(body,'$.class_id'))`} {
 		if _, err = db.Exec(q); err != nil {
 			db.Close()
 			return nil, err

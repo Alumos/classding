@@ -195,6 +195,11 @@ func (a *App) deleteClass(_ http.ResponseWriter, r *http.Request, u *User) (any,
 // removeClass deletes the class with everything that belongs to it and
 // releases its license for reuse.
 func (a *App) removeClass(c Class, u *User) {
+	for key, item := range a.state.StudentCalls {
+		if item.ClassID == c.ID {
+			delete(a.state.StudentCalls, key)
+		}
+	}
 	for key, item := range a.state.Homeworks {
 		if item.ClassID == c.ID {
 			delete(a.state.Homeworks, key)

@@ -199,6 +199,18 @@ export interface components {
                 device_id: string;
                 online: boolean;
             };
+        } | {
+            /** @constant */
+            t: "student_call";
+            id?: string;
+            seq?: number;
+            ts?: number;
+            d: {
+                id: string;
+                class_id: string;
+                /** @enum {string} */
+                kind: "created" | "read";
+            };
         };
     };
     responses: never;

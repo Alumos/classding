@@ -184,7 +184,7 @@ func (a *App) backup(w http.ResponseWriter, r *http.Request) {
 // Validate every relationship that is required for live entities. Historical
 // messages and audio can legitimately refer to since-deleted users/classes/devices.
 func validateBackupState(s State) error {
-	if s.Users == nil || s.Classes == nil || s.Members == nil || s.Devices == nil || s.Messages == nil || s.Homeworks == nil || s.Codes == nil || s.Invites == nil || s.Sessions == nil || s.Phrases == nil || s.Audio == nil || s.Audit == nil || s.Settings == nil {
+	if s.Users == nil || s.Classes == nil || s.Members == nil || s.Devices == nil || s.Messages == nil || s.Homeworks == nil || s.StudentCalls == nil || s.Codes == nil || s.Invites == nil || s.Sessions == nil || s.Phrases == nil || s.Audio == nil || s.Audit == nil || s.Settings == nil {
 		return errors.New("missing state collection")
 	}
 	if _, ok := s.Settings["site_name"]; !ok {
@@ -250,6 +250,27 @@ func validateBackupState(s State) error {
 		if classHomeworkCounts[item.ClassID] > maxClassHomeworks {
 			return errors.New("too many homeworks")
 		}
+	}
+	requestIDs := map[string]bool{}
+	for key, item := range s.StudentCalls {
+		_, classExists := s.Classes[item.ClassID]
+		created, createdOK := parseTime(item.CreatedAt)
+		if key == "" || item.ID != key || !classExists || strings.TrimSpace(item.ClassName) == "" || item.DeviceID == "" || strings.TrimSpace(item.DeviceName) == "" || !createdOK || !studentCallRequestID.MatchString(item.RequestID) || requestIDs[item.RequestID] {
+			return errors.New("invalid student call")
+		}
+		requestIDs[item.RequestID] = true
+		if item.ReadAt == "" {
+			if item.ReadBy != "" || item.ReadByName != "" {
+				return errors.New("invalid unread student call")
+			}
+		} else {
+			read, readOK := parseTime(item.ReadAt)
+			if !readOK || read.Before(created) || item.ReadBy == "" || strings.TrimSpace(item.ReadByName) == "" {
+				return errors.New("invalid read student call")
+			}
+		}
+		// Device and processing-teacher identities are historical snapshots: the
+		// device can be unbound/rebound elsewhere and the teacher can be deleted.
 	}
 	tokens := map[string]bool{}
 	for key, d := range s.Devices {
@@ -419,6 +440,27 @@ func prepareRestore(zipPath, stage string) (State, error) {
 			for _, key := range []string{"visible", "always_on_top"} {
 				if value, exists := fields[key]; !exists || string(value) == "null" {
 					return empty, errors.New("missing homework display option")
+				}
+			}
+		}
+	}
+	// Older version-1 archives predate student calls; only absence is compatible.
+	// A present collection and its records must not use null/missing fields to
+	// silently erase replay keys or turn a processed request back into unread.
+	if state.StudentCalls == nil {
+		if _, exists := collections["student_calls"]; exists {
+			return empty, errors.New("invalid student call collection")
+		}
+		state.StudentCalls = map[string]studentCallRecord{}
+	} else {
+		var items map[string]map[string]json.RawMessage
+		if json.Unmarshal(collections["student_calls"], &items) != nil {
+			return empty, errors.New("invalid student call collection")
+		}
+		for _, fields := range items {
+			for _, key := range []string{"id", "class_id", "class_name", "device_id", "device_name", "created_at", "read_at", "read_by", "read_by_name", "request_id"} {
+				if value, exists := fields[key]; !exists || bytes.Equal(bytes.TrimSpace(value), []byte("null")) {
+					return empty, errors.New("missing student call field")
 				}
 			}
 		}

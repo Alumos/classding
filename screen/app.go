@@ -42,7 +42,8 @@ type App struct {
 	audioMu  sync.Mutex
 	original *volumeSnapshot
 
-	homework homeworkState
+	homework    homeworkState
+	studentCall studentCallState
 }
 
 func NewApp() (*App, error) {
@@ -92,6 +93,9 @@ func (a *App) startup(ctx context.Context) {
 		}
 	}
 	if a.initErr == nil {
+		if err := a.startStudentCall(); err != nil {
+			log.Printf("学生呼叫悬浮入口初始化失败: %v", err)
+		}
 		if err := a.RestoreAudio(); err != nil {
 			log.Printf("恢复上次音量失败: %v", err)
 		}
@@ -159,6 +163,7 @@ func (a *App) trayUnavailable() {
 }
 
 func (a *App) shutdown(_ context.Context) {
+	a.closeStudentCall()
 	a.closeHomework()
 	a.windowMu.Lock()
 	tray := a.tray
@@ -192,6 +197,7 @@ func (a *App) SetPresentationActive(active bool) error {
 	}
 	<-a.initDone
 	a.suspendHomework(active)
+	a.suspendStudentCall(active)
 	if !active {
 		runtime.WindowUnfullscreen(a.ctx)
 		runtime.WindowSetAlwaysOnTop(a.ctx, false)

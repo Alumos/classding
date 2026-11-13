@@ -102,6 +102,9 @@ func New(c Config) (*App, error) {
 
 // upgradeState fills in data that databases written by older releases lack.
 func upgradeState(s *State) {
+	if s.StudentCalls == nil {
+		s.StudentCalls = map[string]studentCallRecord{}
+	}
 	initializeSettings(s)
 	if s.Schools == nil {
 		s.Schools = map[string]School{}

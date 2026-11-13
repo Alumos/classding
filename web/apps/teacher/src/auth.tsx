@@ -30,6 +30,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         revision.current++;
         setUser(null);
         cache.clear();
+        toast.dismiss();
         toast.error('登录状态已变化，请重新登录');
       }),
     [cache],
@@ -56,6 +57,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setAccessToken(response.access_token, response.user.id);
     setUser(response.user);
     cache.clear();
+    toast.dismiss();
     setReady(true);
   }
   async function logout() {
@@ -65,6 +67,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
     setReady(true);
     cache.clear();
+    toast.dismiss();
     try {
       await request;
     } catch {
