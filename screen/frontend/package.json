@@ -13,7 +13,7 @@
     "@classding/api": "workspace:*",
     "@classding/ui": "workspace:*",
     "class-variance-authority": "0.7.1",
-    "lucide-react": "1.70.0",
+    "lucide-react": "1.73.0",
     "react": "19.3.1",
     "react-dom": "19.3.1"
   },
@@ -21,8 +21,8 @@
     "@tailwindcss/vite": "4.3.5",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
-    "@vitejs/plugin-react": "6.2.1",
+    "@vitejs/plugin-react": "6.3.0",
     "typescript": "7.0.2",
-    "vite": "8.3.6"
+    "vite": "8.3.8"
   }
 }
